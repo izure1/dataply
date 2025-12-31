@@ -1,0 +1,464 @@
+import { NumericComparator, BPTreeAsync } from 'serializable-bptree'
+import { RowIdentifierStrategy } from './RowIndexStategy'
+import { PageFileSystem } from './PageFileSystem'
+import { Row } from './Row'
+import { KeyManager } from './KeyManager'
+import { DataPageManager, MetadataPageManager, OverflowPageManager, PageManagerFactory } from './Page'
+import type { DataPage } from '../types'
+import { numberToBytes, bytesToNumber } from '../utils'
+import { Transaction } from './transaction/Transaction'
+import { TxContext } from './transaction/TxContext'
+
+export class RowTableEngine {
+  protected readonly bptree: BPTreeAsync<number, number>
+  protected readonly order: number
+  private readonly factory: PageManagerFactory
+  private readonly metadataPageManager: MetadataPageManager
+  private readonly dataPageManager: DataPageManager
+  private readonly overflowPageManager: OverflowPageManager
+  private readonly keyManager: KeyManager
+  private readonly rowManager: Row
+  private readonly ridBuffer: Uint8Array
+  private readonly pageIdBuffer: Uint8Array
+  private readonly maxBodySize: number
+  private initialized = false
+
+  constructor(protected readonly pfs: PageFileSystem) {
+    this.factory = new PageManagerFactory()
+    this.metadataPageManager = this.factory.getManagerFromType(MetadataPageManager.CONSTANT.PAGE_TYPE_METADATA) as MetadataPageManager
+    this.dataPageManager = this.factory.getManagerFromType(DataPageManager.CONSTANT.PAGE_TYPE_DATA) as DataPageManager
+    this.overflowPageManager = this.factory.getManagerFromType(OverflowPageManager.CONSTANT.PAGE_TYPE_OVERFLOW) as OverflowPageManager
+    this.rowManager = new Row()
+    this.keyManager = new KeyManager()
+    this.ridBuffer = new Uint8Array(Row.CONSTANT.SIZE_RID)
+    this.pageIdBuffer = new Uint8Array(DataPageManager.CONSTANT.SIZE_PAGE_ID)
+    this.maxBodySize = this.pfs.pageSize - DataPageManager.CONSTANT.SIZE_PAGE_HEADER
+    this.order = this.getOptimalOrder(pfs.pageSize, Row.CONSTANT.SIZE_RID, Row.CONSTANT.SIZE_PK)
+    this.bptree = new BPTreeAsync(new RowIdentifierStrategy(this.order, pfs), new NumericComparator())
+  }
+
+  /**
+   * B+트리를 초기화합니다.
+   */
+  async init(): Promise<void> {
+    if (!this.initialized) {
+      await this.bptree.init()
+      this.initialized = true
+    }
+  }
+
+  /**
+   * 최적화된 order를 계산합니다.
+   * @param pageSize 페이지 크기
+   * @param keySize 키 크기
+   * @param pointerSize 포인터 크기
+   * @returns 최적의 order
+   */
+  private getOptimalOrder(pageSize: number, keySize: number, pointerSize: number): number {
+    return Math.floor((pageSize + keySize) / (keySize + pointerSize))
+  }
+
+  /**
+   * 데이터로부터 생성되는 실제 행의 크기를 반환합니다.
+   * @param rowBody 데이터
+   * @returns 생성되는 실제 행의 크기
+   */
+  private getRequiredRowSize(rowBody: Uint8Array): number {
+    return Row.CONSTANT.SIZE_HEADER + DataPageManager.CONSTANT.SIZE_SLOT_OFFSET + rowBody.length
+  }
+
+  /**
+   * RID를 버퍼에 설정합니다.
+   * @param pageId 페이지 ID
+   * @param slotIndex 슬롯 인덱스
+   * @returns 버퍼
+   */
+  private setRID(pageId: number, slotIndex: number): Uint8Array {
+    this.keyManager.setPageId(this.ridBuffer, pageId)
+    this.keyManager.setSlotIndex(this.ridBuffer, slotIndex)
+    return this.ridBuffer
+  }
+
+  /**
+   * 버퍼에서 RID를 반환합니다.
+   * @returns RID
+   */
+  private getRID(): number {
+    return this.keyManager.toNumericKey(this.ridBuffer)
+  }
+
+  /**
+   * 데이터를 삽입합니다.
+   * @param data 데이터
+   * @param tx 트랜잭션
+   * @returns 삽입된 데이터의 pk
+   */
+  async insert(data: Uint8Array, tx?: Transaction): Promise<number> {
+    const operation = async () => {
+      const metadataPage = await this.pfs.getMetadata(tx)
+      const pk = this.metadataPageManager.getLastRowPk(metadataPage) + 1
+      let lastInsertDataPageId = this.metadataPageManager.getLastInsertPageId(metadataPage)
+      let lastInsertDataPage = await this.pfs.get(lastInsertDataPageId, tx)
+
+      if (!this.factory.isDataPage(lastInsertDataPage)) {
+        throw new Error(`Last insert page is not data page`)
+      }
+
+      const willRowSize = this.getRequiredRowSize(data)
+
+      // overflow page를 생성해야하는 거대한 데이터라면 overflow page를 생성하고, 해당 페이지에 행을 삽입합니다.
+      if (willRowSize > this.maxBodySize) {
+        // overflow page를 생성합니다.
+        const overflowPageId = await this.pfs.appendNewPage(this.overflowPageManager.pageType, tx)
+
+        // overflow page로 이동하는 포인터 행을 생성합니다.
+        const row = new Uint8Array(Row.CONSTANT.SIZE_HEADER + 4)
+        this.rowManager.setPK(row, pk)
+        this.rowManager.setOverflowFlag(row, true)
+        this.rowManager.setBodySize(row, 4)
+        this.rowManager.setBody(row, numberToBytes(overflowPageId, this.pageIdBuffer))
+
+        // data page에 포인터 행을 추가합니다.
+        const nextSlotIndex = this.dataPageManager.getNextSlotIndex(lastInsertDataPage, row)
+        // 페이지에 삽입 가능하다면 페이지에 삽입합니다.
+        if (nextSlotIndex !== -1) {
+          this.setRID(lastInsertDataPageId, nextSlotIndex)
+          this.dataPageManager.insert(lastInsertDataPage, row)
+          await this.pfs.setPage(lastInsertDataPageId, lastInsertDataPage, tx)
+        }
+        // 페이지에 삽입 불가능하다면 새로운 data page를 생성 후 삽입합니다.
+        else {
+          const newPageId = await this.pfs.appendNewPage(this.dataPageManager.pageType, tx)
+          const newPage = await this.pfs.get(newPageId, tx) as DataPage
+          this.dataPageManager.insert(newPage, row)
+          this.setRID(newPageId, 0)
+          lastInsertDataPageId = newPageId
+          lastInsertDataPage = newPage
+          await this.pfs.setPage(newPageId, newPage, tx)
+        }
+
+        // overflow page에 실제 데이터를 삽입합니다
+        await this.pfs.writePageContent(overflowPageId, data, 0, tx)
+      }
+      // 거대 데이터가 아니라면 마지막 데이터 페이지에 삽입합니다.
+      else {
+        const row = new Uint8Array(Row.CONSTANT.SIZE_HEADER + data.length)
+        const slotIndex = this.dataPageManager.getNextSlotIndex(lastInsertDataPage, row)
+
+        this.rowManager.setBodySize(row, data.length)
+        this.rowManager.setBody(row, data)
+
+        // 마지막 데이터 페이지의 크기가 부족하다면 새로운 데이터 페이지를 생성합니다.
+        if (slotIndex === -1) {
+          const newPageId = await this.pfs.appendNewPage(this.dataPageManager.pageType, tx)
+          const newPage = await this.pfs.get(newPageId, tx) as DataPage
+          this.dataPageManager.insert(newPage, row)
+          this.setRID(newPageId, 0)
+          lastInsertDataPageId = newPageId
+          lastInsertDataPage = newPage
+          await this.pfs.setPage(newPageId, newPage, tx)
+        }
+        // 마지막 데이터 페이지의 크기가 충분하다면 마지막 데이터 페이지에 삽입합니다.
+        else {
+          this.dataPageManager.insert(lastInsertDataPage, row)
+          this.setRID(lastInsertDataPageId, slotIndex)
+          await this.pfs.setPage(lastInsertDataPageId, lastInsertDataPage, tx)
+        }
+      }
+
+      // 메타데이터를 업데이트합니다.
+      const freshMetadataPage = await this.pfs.getMetadata(tx)
+      this.metadataPageManager.setLastInsertPageId(freshMetadataPage, lastInsertDataPageId)
+      this.metadataPageManager.setLastRowPk(freshMetadataPage, pk)
+
+      await this.pfs.setMetadata(freshMetadataPage, tx)
+
+      // B+트리에 삽입합니다.
+      await this.bptree.insert(this.getRID(), pk)
+
+      return pk
+    }
+
+    if (tx) {
+      return TxContext.run(tx, operation)
+    } else {
+      return operation()
+    }
+  }
+
+  /**
+   * B+트리에서 pk에 해당하는 rid를 조회하여, 실제 행을 반환합니다
+   * @param pk 행의 고유값
+   * @param tx 트랜잭션
+   * @returns 행의 원시 데이터
+   */
+  /**
+   * 데이터를 수정합니다.
+   * @param pk 행의 고유값
+   * @param data 수정할 데이터
+   * @param tx 트랜잭션
+   */
+  async update(pk: number, data: Uint8Array, tx?: Transaction): Promise<void> {
+    const operation = async () => {
+      // B+트리에서 pk에 해당하는 rid를 조회합니다.
+      const keys = await this.bptree.keys({ equal: pk })
+      if (keys.size === 0) {
+        throw new Error(`Row not found for PK: ${pk}`)
+      }
+      const rid = keys.values().next().value!
+      this.keyManager.setBufferFromKey(rid, this.ridBuffer)
+
+      const pageId = this.keyManager.getPageId(this.ridBuffer)
+      const slotIndex = this.keyManager.getSlotIndex(this.ridBuffer)
+
+      const page = await this.pfs.get(pageId, tx)
+      if (!this.factory.isDataPage(page)) {
+        throw new Error(`RID not found for PK: ${pk}`)
+      }
+
+      const row = this.dataPageManager.getRow(page, slotIndex)
+
+      // 오버플로우 행인 경우: 오버플로우 페이지에 직접 데이터를 수정합니다.
+      if (this.rowManager.getOverflowFlag(row)) {
+        const overflowPageId = bytesToNumber(this.rowManager.getBody(row))
+        await this.pfs.writePageContent(overflowPageId, data, 0, tx)
+        return
+      }
+
+      // 일반 행인 경우
+      await this.updateNormalRow(page, pageId, slotIndex, row, pk, data, tx)
+    }
+
+    if (tx) {
+      return TxContext.run(tx, operation)
+    } else {
+      return operation()
+    }
+  }
+
+  /**
+   * 일반 행을 수정합니다.
+   * @param page 페이지 데이터
+   * @param pageId 페이지 아이디
+   * @param slotIndex 슬롯 인덱스
+   * @param row 행 데이터
+   * @param pk 행의 고유값
+   * @param data 수정할 데이터
+   * @param tx 트랜잭션
+   */
+  private async updateNormalRow(
+    page: Uint8Array,
+    pageId: number,
+    slotIndex: number,
+    row: Uint8Array,
+    pk: number,
+    data: Uint8Array,
+    tx?: Transaction
+  ): Promise<void> {
+    const oldBodySize = this.rowManager.getBodySize(row)
+    const newBodySize = data.length
+
+    // 새 데이터가 기존 데이터보다 짧거나 같은 경우: in-place 수정
+    if (newBodySize <= oldBodySize) {
+      console.log(`[Update In-Place] PID: ${pageId}, Slot: ${slotIndex}, OldSize: ${oldBodySize}, NewSize: ${newBodySize}`)
+      this.rowManager.setBodySize(row, newBodySize)
+      this.rowManager.setBody(row, data)
+      await this.pfs.setPage(pageId, page, tx)
+      return
+    }
+
+    // 새 데이터가 더 긴 경우: 기존 행을 삭제로 표시하고 새 행을 삽입 후 B+트리 RID 업데이트
+    const willRowSize = this.getRequiredRowSize(data)
+
+    // 거대 데이터인 경우: 오버플로우 페이지로 이동
+    if (willRowSize > this.maxBodySize) {
+      // 오버플로우 페이지를 생성하고 데이터를 삽입합니다.
+      const overflowPageId = await this.pfs.appendNewPage(this.overflowPageManager.pageType, tx)
+      await this.pfs.writePageContent(overflowPageId, data, 0, tx)
+
+      // 새로운 포인터 행 생성 (오버플로우 포인터)
+      const newRow = new Uint8Array(Row.CONSTANT.SIZE_HEADER + 4)
+      this.rowManager.setPK(newRow, pk)
+      this.rowManager.setOverflowFlag(newRow, true)
+      this.rowManager.setBodySize(newRow, 4)
+      this.rowManager.setBody(newRow, numberToBytes(overflowPageId, this.pageIdBuffer))
+
+      // 새 행을 삽입할 위치를 찾습니다.
+      const metadataPage = await this.pfs.getMetadata(tx)
+      let lastInsertDataPageId = this.metadataPageManager.getLastInsertPageId(metadataPage)
+      let lastInsertDataPage = await this.pfs.get(lastInsertDataPageId, tx) as DataPage
+
+      if (!this.factory.isDataPage(lastInsertDataPage)) {
+        throw new Error('Last insert page is not data page')
+      }
+
+      let newSlotIndex = this.dataPageManager.getNextSlotIndex(lastInsertDataPage, newRow)
+      if (newSlotIndex === -1) {
+        const newPageId = await this.pfs.appendNewPage(this.dataPageManager.pageType, tx)
+        lastInsertDataPage = await this.pfs.get(newPageId, tx) as DataPage
+        lastInsertDataPageId = newPageId
+        newSlotIndex = 0
+      }
+
+      this.dataPageManager.insert(lastInsertDataPage, newRow)
+      await this.pfs.setPage(lastInsertDataPageId, lastInsertDataPage, tx)
+
+      // 기존 행을 삭제로 표시합니다.
+      this.rowManager.setDeletedFlag(row, true)
+      await this.pfs.setPage(pageId, page, tx)
+
+      // B+트리에서 기존 RID를 삭제하고 새 RID를 삽입합니다.
+      this.setRID(pageId, slotIndex)
+      const oldRidNumeric = this.getRID()
+      this.setRID(lastInsertDataPageId, newSlotIndex)
+      const newRidNumeric = this.getRID()
+      await this.bptree.delete(oldRidNumeric, pk)
+      await this.bptree.insert(newRidNumeric, pk)
+
+      // 메타데이터 업데이트
+      const freshMetadataPage = await this.pfs.getMetadata(tx)
+      this.metadataPageManager.setLastInsertPageId(freshMetadataPage, lastInsertDataPageId)
+      await this.pfs.setMetadata(freshMetadataPage, tx)
+      return
+    }
+
+    // 일반 데이터인 경우: 새로운 행을 삽입
+    const newRow = new Uint8Array(Row.CONSTANT.SIZE_HEADER + newBodySize)
+    this.rowManager.setPK(newRow, pk)
+    this.rowManager.setBodySize(newRow, newBodySize)
+    this.rowManager.setBody(newRow, data)
+
+    // 새 행을 삽입할 위치를 찾습니다.
+    const metadataPage = await this.pfs.getMetadata(tx)
+    let lastInsertDataPageId = this.metadataPageManager.getLastInsertPageId(metadataPage)
+    let lastInsertDataPage = await this.pfs.get(lastInsertDataPageId, tx) as DataPage
+
+    if (!this.factory.isDataPage(lastInsertDataPage)) {
+      throw new Error('Last insert page is not data page')
+    }
+
+    let newSlotIndex = this.dataPageManager.getNextSlotIndex(lastInsertDataPage, newRow)
+    if (newSlotIndex === -1) {
+      const newPageId = await this.pfs.appendNewPage(this.dataPageManager.pageType, tx)
+      lastInsertDataPage = await this.pfs.get(newPageId, tx) as DataPage
+      lastInsertDataPageId = newPageId
+      newSlotIndex = 0
+    }
+
+    this.dataPageManager.insert(lastInsertDataPage, newRow)
+    await this.pfs.setPage(lastInsertDataPageId, lastInsertDataPage, tx)
+
+    // 페이지 재로딩: insert 과정에서 pageId와 lastInsertDataPageId가 같을 경우,
+    // page 변수는 insert 이전의 상태(복사본)를 가지고 있습니다.
+    // 따라서 page를 수정해서 저장하면 insert된 내용(슬롯 정보 등)이 유실될 수 있습니다.
+    // 안전을 위해 항상 페이지를 다시 로드하여 작업을 수행합니다.
+    const targetPage = await this.pfs.get(pageId, tx)
+    if (!this.factory.isDataPage(targetPage)) {
+      throw new Error('Target page is not data page')
+    }
+    const targetRow = this.dataPageManager.getRow(targetPage as DataPage, slotIndex)
+
+    // 기존 행을 삭제로 표시합니다.
+    this.rowManager.setDeletedFlag(targetRow, true)
+    await this.pfs.setPage(pageId, targetPage, tx)
+
+    // B+트리에서 기존 RID를 삭제하고 새 RID를 삽입합니다.
+    this.setRID(pageId, slotIndex)
+    const oldRidNumeric = this.getRID()
+    this.setRID(lastInsertDataPageId, newSlotIndex)
+    const newRidNumeric = this.getRID()
+
+    // B+트리 업데이트 (트랜잭션 격리 지원)
+    // 트랜잭션이 있는 경우 즉시 반영하지 않고, 커밋 시점으로 미룹니다.
+    // 이는 다른 트랜잭션이 커밋되지 않은 새 RID를 참조하는 것을 방지합니다.
+    if (tx) {
+      if (tx.getPendingIndexUpdates().size === 0) {
+        // 커밋 시 일괄 적용 hook 등록 (최초 1회)
+        tx.onCommit(async () => {
+          const updates = tx.getPendingIndexUpdates()
+          for (const [key, { newRid, oldRid }] of updates) {
+            console.log(`[TxHook] Deleting PK: ${key}, OldRID: ${oldRid}`)
+            try {
+              await this.bptree.delete(key, oldRid)
+              console.log(`[TxHook] Delete Success`)
+            } catch (e) { console.error(`[TxHook] Delete Failed`, e) }
+
+            console.log(`[TxHook] Inserting PK: ${key}, NewRID: ${newRid}`)
+            await this.bptree.insert(key, newRid)
+          }
+        })
+      }
+      tx.addPendingIndexUpdate(pk, newRidNumeric, oldRidNumeric)
+    } else {
+      // 트랜잭션이 없으면 즉시 반영 (Auto-commit)
+      // 트랜잭션이 없으면 즉시 반영 (Auto-commit)
+      console.log(`[AutoCommit] Deleting PK: ${pk}, OldRID: ${oldRidNumeric}`)
+      await this.bptree.delete(pk, oldRidNumeric)
+      console.log(`[AutoCommit] Inserting PK: ${pk}, NewRID: ${newRidNumeric}`)
+      await this.bptree.insert(pk, newRidNumeric)
+    }
+    const freshMetadataPage = await this.pfs.getMetadata(tx)
+    this.metadataPageManager.setLastInsertPageId(freshMetadataPage, lastInsertDataPageId)
+    await this.pfs.setMetadata(freshMetadataPage, tx)
+  }
+
+  /**
+   * B+트리에서 pk에 해당하는 rid를 조회하여, 실제 행을 반환합니다
+   * @param pk 행의 고유값
+   * @param tx 트랜잭션
+   * @returns 행의 원시 데이터
+   */
+  async selectByPK(pk: number, tx?: Transaction): Promise<Uint8Array | null> {
+    const operation = async () => {
+      // 1. 현재 트랜잭션의 Pending Updates 우선 확인 (Read Your Own Writes)
+      if (tx) {
+        const pendingUpdate = tx.getPendingIndexUpdate(pk)
+        if (pendingUpdate) {
+          return this.fetchRowByRid(pk, pendingUpdate.newRid, tx)
+        }
+      }
+
+      const keys = await this.bptree.keys({ equal: pk })
+      if (keys.size === 0) {
+        return null
+      }
+      const rid = keys.values().next().value!
+      return this.fetchRowByRid(pk, rid, tx)
+    }
+
+    if (tx) {
+      return TxContext.run(tx, operation)
+    } else {
+      return operation()
+    }
+  }
+
+  private async fetchRowByRid(pk: number, rid: number, tx?: Transaction): Promise<Uint8Array | null> {
+    this.keyManager.setBufferFromKey(rid, this.ridBuffer)
+
+    const pageId = this.keyManager.getPageId(this.ridBuffer)
+    const slotIndex = this.keyManager.getSlotIndex(this.ridBuffer)
+
+    const page = await this.pfs.get(pageId, tx)
+    if (!this.factory.isDataPage(page)) {
+      throw new Error(`RID not found for PK: ${pk}`)
+    }
+
+    const manager = this.factory.getManager(page)
+    const row = manager.getRow(page, slotIndex)
+
+    if (this.rowManager.getOverflowFlag(row)) {
+      const overflowPageId = bytesToNumber(this.rowManager.getBody(row))
+      const overflowPage = await this.pfs.get(overflowPageId, tx)
+      if (!this.factory.isOverflowPage(overflowPage)) {
+        throw new Error(`Overflow page not found for RID: ${rid}`)
+      }
+      return this.pfs.getBody(overflowPageId, true, tx)
+    }
+    else if (this.rowManager.getDeletedFlag(row)) {
+      return null
+    }
+
+    return this.rowManager.getBody(row)
+  }
+}

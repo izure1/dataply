@@ -1,0 +1,40 @@
+{
+  "name": "shard",
+  "version": "1.0.0",
+  "description": "",
+  "license": "MIT",
+  "author": "izure <admin@izure.org>",
+  "type": "commonjs",
+  "main": "./dist/cjs/index.js",
+  "types": "./dist/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/types/index.d.ts",
+      "require": "./dist/cjs/index.js"
+    }
+  },
+  "files": [
+    "dist/**/*"
+  ],
+  "scripts": {
+    "test": "jest --forceExit",
+    "build": "node build/index.js && tsc"
+  },
+  "keywords": [],
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/izure1/shard.git"
+  },
+  "devDependencies": {
+    "@types/jest": "^30.0.0",
+    "@types/node": "^25.0.3",
+    "esbuild": "^0.27.2",
+    "jest": "^30.2.0",
+    "ts-jest": "^29.4.6",
+    "typescript": "^5.9.3"
+  },
+  "dependencies": {
+    "ryoiki": "^1.2.0",
+    "serializable-bptree": "^5.1.6"
+  }
+}
