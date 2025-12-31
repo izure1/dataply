@@ -2,64 +2,59 @@ import { bytesToNumber, numberToBytes } from '../utils'
 import { Row } from './Row'
 
 /**
- * 키 관리자 클래스
+ * Key Manager class.
  */
 export class KeyManager {
   /**
-   * 버퍼에서 숫자 키를 반환합니다.
-   * @param buffer 버퍼
-   * @returns 숫자 키
+   * Returns a numeric key from the buffer.
+   * @param buffer Buffer
+   * @returns Numeric key
    */
   toNumericKey(buffer: Uint8Array): number {
     return bytesToNumber(buffer)
   }
 
   /**
-   * 숫자 키를 버퍼에 설정합니다.
-   * @param key 숫자 키
-   * @param buffer 버퍼
-   * @returns 버퍼
+   * Sets a numeric key in the buffer.
+   * @param key Numeric key
+   * @param buffer Buffer
+   * @returns Buffer
    */
   setBufferFromKey(key: number, buffer: Uint8Array): Uint8Array {
     return numberToBytes(key, buffer)
   }
 
   /**
-   * 버퍼에서 페이지 ID를 반환합니다.
-   * @param buffer 버퍼
-   * @returns 페이지 ID
-   */
-  /**
-   * 버퍼에서 페이지 ID를 반환합니다.
-   * @param buffer 버퍼
-   * @returns 페이지 ID
+   * Returns the Page ID from the buffer.
+   * @param buffer Buffer
+   * @returns Page ID
    */
   getPageId(buffer: Uint8Array): number {
     return bytesToNumber(buffer, 2, 4)
   }
 
   /**
-   * 버퍼에 페이지 ID를 설정합니다.
-   * @param buffer 버퍼
-   * @param pageId 페이지 ID
+   * Sets the Page ID in the buffer.
+   * @param buffer Buffer
+   * @param pageId Page ID
    */
   setPageId(buffer: Uint8Array, pageId: number): void {
     numberToBytes(pageId, buffer, 2, 4)
   }
 
   /**
-   * 버퍼에서 슬롯 인덱스를 반환합니다.
-   * @param buffer 버퍼
-   * @returns 슬롯 인덱스
+   * Returns the Slot Index from the buffer.
+   * @param buffer Buffer
+   * @returns Slot index
    */
   getSlotIndex(buffer: Uint8Array): number {
     return bytesToNumber(buffer, 0, 2)
   }
 
   /**
-   * 버퍼에 슬롯 인덱스를 설정합니다.
-   * @param buffer 버퍼
-   * @param slotIndex 슬롯 인덱스
+   * Sets the Slot Index in the buffer.
+   * @param buffer Buffer
+   * @param slotIndex Slot index
    */
   setSlotIndex(buffer: Uint8Array, slotIndex: number): void {
     numberToBytes(slotIndex, buffer, 0, 2)

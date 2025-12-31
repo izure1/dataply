@@ -3,7 +3,7 @@ import { bytesToNumber, numberToBytes } from '../utils'
 import { Row } from './Row'
 
 /**
- * 페이지의 종류마다 있는 공통적인 메소드를 관리합니다.
+ * Manages common methods for each type of page.
  */
 export abstract class PageManager {
   static readonly CONSTANT = {
@@ -29,9 +29,9 @@ export abstract class PageManager {
   } as const
 
   /**
-   * 페이지 타입을 반환합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 타입
+   * Returns the page type.
+   * @param page Page data
+   * @returns Page type
    */
   static GetPageType(page: Uint8Array): number {
     return bytesToNumber(
@@ -42,18 +42,18 @@ export abstract class PageManager {
   }
 
   /**
-   * 페이지 타입을 반환합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 타입
+   * Returns the page type.
+   * @param page Page data
+   * @returns Page type
    */
   getPageType(page: Uint8Array): number {
     return PageManager.GetPageType(page)
   }
 
   /**
-   * 페이지 아이디를 반환합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 아이디
+   * Returns the page ID.
+   * @param page Page data
+   * @returns Page ID
    */
   getPageId(page: Uint8Array): number {
     return bytesToNumber(
@@ -64,9 +64,9 @@ export abstract class PageManager {
   }
 
   /**
-   * 페이지 연결된 다음 아이디를 반환합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 연결된 다음 아이디
+   * Returns the ID of the next connected page.
+   * @param page Page data
+   * @returns Next connected page ID
    */
   getNextPageId(page: Uint8Array): number {
     const id = bytesToNumber(
@@ -78,9 +78,9 @@ export abstract class PageManager {
   }
 
   /**
-   * 페이지 남은 용량을 반환합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 남은 용량
+   * Returns the remaining capacity of the page.
+   * @param page Page data
+   * @returns Remaining capacity
    */
   getRemainingCapacity(page: Uint8Array): number {
     return bytesToNumber(
@@ -91,9 +91,9 @@ export abstract class PageManager {
   }
 
   /**
-   * 페이지 타입을 설정합니다.
-   * @param page 페이지 데이터
-   * @param pageType 페이지 타입
+   * Sets the page type.
+   * @param page Page data
+   * @param pageType Page type
    */
   setPageType(page: Uint8Array, pageType: number): void {
     numberToBytes(
@@ -105,9 +105,9 @@ export abstract class PageManager {
   }
 
   /**
-   * 페이지 아이디를 설정합니다.
-   * @param page 페이지 데이터
-   * @param pageId 페이지 아이디
+   * Sets the page ID.
+   * @param page Page data
+   * @param pageId Page ID
    */
   setPageId(page: Uint8Array, pageId: number): void {
     numberToBytes(
@@ -119,9 +119,9 @@ export abstract class PageManager {
   }
 
   /**
-   * 페이지 연결된 다음 아이디를 설정합니다.
-   * @param page 페이지 데이터
-   * @param nextPageId 페이지 연결된 다음 아이디
+   * Sets the ID of the next connected page.
+   * @param page Page data
+   * @param nextPageId Next connected page ID
    */
   setNextPageId(page: Uint8Array, nextPageId: number): void {
     numberToBytes(
@@ -133,9 +133,9 @@ export abstract class PageManager {
   }
 
   /**
-   * 페이지 남은 용량을 설정합니다.
-   * @param page 페이지 데이터
-   * @param remainingCapacity 페이지 남은 용량
+   * Sets the remaining capacity of the page.
+   * @param page Page data
+   * @param remainingCapacity Remaining capacity
    */
   setRemainingCapacity(page: Uint8Array, remainingCapacity: number): void {
     numberToBytes(
@@ -147,30 +147,30 @@ export abstract class PageManager {
   }
 
   /**
-   * 페이지 헤더를 설정합니다.
-   * @param page 페이지 데이터
-   * @param header 페이지 헤더
+   * Sets the page header.
+   * @param page Page data
+   * @param header Page header
    */
   setHeader(page: Uint8Array, header: Uint8Array): void {
     page.set(header)
   }
 
   /**
-   * 페이지 바디를 설정합니다.
-   * @param page 페이지 데이터
-   * @param body 페이지 바디
+   * Sets the page body.
+   * @param page Page data
+   * @param body Page body
    */
   setBody(page: Uint8Array, body: Uint8Array): void {
     page.set(body, PageManager.CONSTANT.SIZE_PAGE_HEADER)
   }
 
   /**
-   * 페이지를 초기화합니다.
-   * @param page 페이지 데이터
-   * @param pageType 페이지 타입
-   * @param pageId 페이지 아이디
-   * @param nextPageId 페이지 연결된 다음 아이디
-   * @param remainingCapacity 페이지 남은 용량
+   * Initializes the page.
+   * @param page Page data
+   * @param pageType Page type
+   * @param pageId Page ID
+   * @param nextPageId Next connected page ID
+   * @param remainingCapacity Remaining capacity
    */
   initial(
     page: Uint8Array,
@@ -186,24 +186,24 @@ export abstract class PageManager {
   }
 
   /**
-   * 페이지의 본문을 반환합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지의 본문
+   * Returns the body of the page.
+   * @param page Page data
+   * @returns Page body
    */
   getBody(page: Uint8Array): Uint8Array {
     return page.subarray(PageManager.CONSTANT.SIZE_PAGE_HEADER)
   }
 
   /**
-   * 페이지 타입을 반환합니다.
+   * Returns the page type.
    */
   abstract get pageType(): number
 
   /**
-   * 새로운 페이지를 생성합니다.
-   * @param pageSize 페이지 크기
-   * @param pageId 페이지 아이디
-   * @returns 생성된 페이지 데이터
+   * Creates a new page.
+   * @param pageSize Page size
+   * @param pageId Page ID
+   * @returns Created page data
    */
   create(pageSize: number, pageId: number): Uint8Array {
     const page = new Uint8Array(pageSize)
@@ -222,7 +222,7 @@ export abstract class PageManager {
 }
 
 /**
- * 페이지가 비어있다는 것을 나타냅니다.
+ * Represents that a page is empty.
  */
 export class EmptyPageManager extends PageManager {
   get pageType() {
@@ -230,18 +230,18 @@ export class EmptyPageManager extends PageManager {
   }
 
   /**
-   * 페이지 타입이 `EmptyPage`인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 타입이 `EmptyPage`인지 나타내는 boolean 값
+   * Checks if the page type is `EmptyPage`.
+   * @param page Page data
+   * @returns boolean indicating if the page type is `EmptyPage`
    */
   static IsEmptyPage(page: Uint8Array): page is EmptyPage {
     return PageManager.GetPageType(page) === PageManager.CONSTANT.PAGE_TYPE_EMPTY
   }
 
   /**
-   * 페이지 타입이 `EmptyPage`인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 타입이 `EmptyPage`인지 나타내는 boolean 값
+   * Checks if the page type is `EmptyPage`.
+   * @param page Page data
+   * @returns boolean indicating if the page type is `EmptyPage`
    */
   isEmptyPage(page: Uint8Array): page is EmptyPage {
     return EmptyPageManager.IsEmptyPage(page)
@@ -249,13 +249,14 @@ export class EmptyPageManager extends PageManager {
 }
 
 /**
- * 데이터 페이지를 나타냅니다.
- * 데이터 페이지는 실제 데이터를 저장하는 페이지입니다.
- * 데이터페이지에는 행(Row)이 저장됩니다. 행이 저장되는 위치는 slot offset에 의해 결정됩니다.
- * slot offset은 페이지의 마지막에서부터 2바이트씩 차지합니다.
+ * Represents a data page.
+ * A data page is where actual data is stored.
+ * Rows are stored in data pages. The position where a row is stored is determined by the slot offset.
+ * Slot offsets occupy 2 bytes each starting from the end of the page.
  * 
- * 행의 크기가 페이지의 남은 용량보다 크다면 새로운 페이지를 생성하여 저장합니다.
- * 만일 행의 크기가 페이지의 크기보다 크다면 오버플로우 페이지에 저장합니다. 이 때 행은 헤더의 오버플로우 플래그를 설정하고, 본문에 오버플로우 페이지의 아이디를 저장합니다.
+ * If the row size is larger than the remaining capacity of the page, a new page is created and used.
+ * If the row size is larger than the page size itself, it is stored in an overflow page. 
+ * In this case, the row has its overflow flag set in the header, and the body stores the ID of the overflow page.
  */
 export class DataPageManager extends PageManager {
   get pageType() {
@@ -265,28 +266,28 @@ export class DataPageManager extends PageManager {
   protected readonly row = new Row()
 
   /**
-   * 페이지 타입이 `DataPage`인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 타입이 `DataPage`인지 나타내는 boolean 값
+   * Checks if the page type is `DataPage`.
+   * @param page Page data
+   * @returns boolean indicating if the page type is `DataPage`
    */
   static IsDataPage(page: Uint8Array): page is DataPage {
     return PageManager.GetPageType(page) === PageManager.CONSTANT.PAGE_TYPE_DATA
   }
 
   /**
-   * 페이지 타입이 `DataPage`인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 타입이 `DataPage`인지 나타내는 boolean 값
+   * Checks if the page type is `DataPage`.
+   * @param page Page data
+   * @returns boolean indicating if the page type is `DataPage`
    */
   isDataPage(page: Uint8Array): page is DataPage {
     return DataPageManager.IsDataPage(page)
   }
 
   /**
-   * 페이지 내에 행의 위치를 반환합니다.
-   * @param page 페이지 데이터
-   * @param slotIndex slot 인덱스
-   * @returns 페이지 내의 행의 위치
+   * Returns the offset of a row within the page.
+   * @param page Page data
+   * @param slotIndex Slot index
+   * @returns Row offset within the page
    */
   getRowOffset(page: DataPage, slotIndex: number): number {
     return bytesToNumber(
@@ -297,10 +298,10 @@ export class DataPageManager extends PageManager {
   }
 
   /**
-   * 페이지의 행을 반환합니다.
-   * @param page 페이지 데이터
-   * @param slotIndex slot 인덱스
-   * @returns 페이지 내의 행 데이터
+   * Returns the row from the page.
+   * @param page Page data
+   * @param slotIndex Slot index
+   * @returns Row data within the page
    */
   getRow(page: DataPage, slotIndex: number): Uint8Array {
     const offset = this.getRowOffset(page, slotIndex)
@@ -311,9 +312,9 @@ export class DataPageManager extends PageManager {
   }
 
   /**
-   * 페이지 삽입된 행 개수를 반환합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 삽입된 행 개수
+   * Returns the number of rows inserted into the page.
+   * @param page Page data
+   * @returns Number of rows inserted
    */
   getInsertedRowCount(page: Uint8Array): number {
     return bytesToNumber(
@@ -324,10 +325,10 @@ export class DataPageManager extends PageManager {
   }
 
   /**
-   * 페이지의 행의 위치를 설정합니다.
-   * @param page 페이지 데이터
-   * @param slotIndex slot 인덱스
-   * @param offset 페이지 내에 행의 위치
+   * Sets the offset of a row within the page.
+   * @param page Page data
+   * @param slotIndex Slot index
+   * @param offset Row offset within the page
    */
   setRowOffset(page: DataPage, slotIndex: number, offset: number): void {
     numberToBytes(
@@ -340,9 +341,9 @@ export class DataPageManager extends PageManager {
   }
 
   /**
-   * 페이지 삽입된 행 개수를 설정합니다.
-   * @param page 페이지 데이터
-   * @param insertedRowCount 페이지 삽입된 행 개수
+   * Sets the number of rows inserted into the page.
+   * @param page Page data
+   * @param insertedRowCount Number of rows inserted
    */
   setInsertedRowCount(page: Uint8Array, insertedRowCount: number): void {
     numberToBytes(
@@ -354,12 +355,12 @@ export class DataPageManager extends PageManager {
   }
 
   /**
-   * 페이지에 행이 들어갈 공간이 있는지를 계산하고 삽입 가능 여부를 판단합니다.
-   * 삽입 가능하다면 페이지에 삽입될 slot 인덱스를 반환합니다.
-   * 삽입 불가능하다면 -1을 반환합니다.
-   * @param page 페이지 데이터
-   * @param row 행 데이터
-   * @returns 페이지에 삽입될 slot 인덱스
+   * Calculates if there is space for a row in the page and determines insertability.
+   * If insertable, returns the slot index to be inserted.
+   * If not, returns -1.
+   * @param page Page data
+   * @param row Row data
+   * @returns Slot index for the row
    */
   getNextSlotIndex(page: DataPage, row: Uint8Array): number {
     const slotOffsetSize = PageManager.CONSTANT.SIZE_SLOT_OFFSET
@@ -369,9 +370,9 @@ export class DataPageManager extends PageManager {
   }
 
   /**
-   * 페이지에 삽입될 행의 위치를 반환합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지에 삽입될 행의 위치
+   * Returns the position for the next row to be inserted.
+   * @param page Page data
+   * @returns Next insert position
    */
   getNextInsertPosition(page: DataPage): number {
     const insertedRowCount = this.getInsertedRowCount(page)
@@ -386,9 +387,9 @@ export class DataPageManager extends PageManager {
   }
 
   /**
-   * 페이지에 행을 삽입합니다. 삽입 전에 `getNextSlotIndex`를 호출하여 삽입 가능 여부를 확인해야 합니다.
-   * @param page 페이지 데이터
-   * @param row 행 데이터
+   * Inserts a row into the page. `getNextSlotIndex` should be called beforehand to verify availability.
+   * @param page Page data
+   * @param row Row data
    */
   insert(page: DataPage, row: Uint8Array): void {
     const slotOffsetSize = PageManager.CONSTANT.SIZE_SLOT_OFFSET
@@ -407,8 +408,8 @@ export class DataPageManager extends PageManager {
 }
 
 /**
- * 인덱스 페이지를 나타냅니다.
- * 인덱스 페이지는 페이지의 인덱스를 저장하는 페이지입니다.
+ * Represents an index page.
+ * An index page is used to store page indices.
  */
 export class IndexPageManager extends PageManager {
   get pageType() {
@@ -416,18 +417,18 @@ export class IndexPageManager extends PageManager {
   }
 
   /**
-   * 페이지 타입이 `IndexPage`인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 타입이 `IndexPage`인지 나타내는 boolean 값
+   * Checks if the page type is `IndexPage`.
+   * @param page Page data
+   * @returns boolean indicating if the page type is `IndexPage`
    */
   static IsIndexPage(page: Uint8Array): page is IndexPage {
     return PageManager.GetPageType(page) === PageManager.CONSTANT.PAGE_TYPE_INDEX
   }
 
   /**
-   * 페이지 타입이 `IndexPage`인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 타입이 `IndexPage`인지 나타내는 boolean 값
+   * Checks if the page type is `IndexPage`.
+   * @param page Page data
+   * @returns boolean indicating if the page type is `IndexPage`
    */
   isIndexPage(page: Uint8Array): page is IndexPage {
     return IndexPageManager.IsIndexPage(page)
@@ -435,8 +436,8 @@ export class IndexPageManager extends PageManager {
 }
 
 /**
- * 메타데이터 페이지를 나타냅니다.
- * 메타데이터 페이지는 데이터베이스의 메타데이터를 저장하는 페이지입니다.
+ * Represents a metadata page.
+ * A metadata page stores database metadata.
  */
 export class MetadataPageManager extends PageManager {
   get pageType() {
@@ -456,27 +457,27 @@ export class MetadataPageManager extends PageManager {
   } as const
 
   /**
-   * 페이지 타입이 `MetadataPage`인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 타입이 `MetadataPage`인지 나타내는 boolean 값
+   * Checks if the page type is `MetadataPage`.
+   * @param page Page data
+   * @returns boolean indicating if the page type is `MetadataPage`
    */
   static IsMetadataPage(page: Uint8Array): page is MetadataPage {
     return PageManager.GetPageType(page) === PageManager.CONSTANT.PAGE_TYPE_METADATA
   }
 
   /**
-   * 페이지 타입이 `MetadataPage`인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 타입이 `MetadataPage`인지 나타내는 boolean 값
+   * Checks if the page type is `MetadataPage`.
+   * @param page Page data
+   * @returns boolean indicating if the page type is `MetadataPage`
    */
   isMetadataPage(page: Uint8Array): page is MetadataPage {
     return MetadataPageManager.IsMetadataPage(page)
   }
 
   /**
-   * 페이지가 올바른 메타데이터 페이지인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 메타데이터 페이지 여부
+   * Verifies if the page is a valid metadata page.
+   * @param page Page data
+   * @returns Whether it is a metadata page
    */
   static Verify(page: MetadataPage): boolean {
     const start = MetadataPageManager.CONSTANT.OFFSET_MAGIC_STRING
@@ -489,9 +490,9 @@ export class MetadataPageManager extends PageManager {
   }
 
   /**
-   * 데이터베이스에 저장된 페이지 수를 반환합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 수
+   * Returns the number of pages stored in the database.
+   * @param page Page data
+   * @returns Number of pages
    */
   getPageCount(page: MetadataPage): number {
     return bytesToNumber(
@@ -502,9 +503,9 @@ export class MetadataPageManager extends PageManager {
   }
 
   /**
-   * 데이터베이스의 페이지 크기를 반환합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 크기
+   * Returns the database page size.
+   * @param page Page data
+   * @returns Page size
    */
   getPageSize(page: MetadataPage): number {
     return bytesToNumber(
@@ -515,9 +516,9 @@ export class MetadataPageManager extends PageManager {
   }
 
   /**
-   * 데이터베이스의 루트 인덱스 페이지 ID를 반환합니다.
-   * @param page 페이지 데이터
-   * @returns 루트 인덱스 페이지 ID
+   * Returns the Root Index Page ID of the database.
+   * @param page Page data
+   * @returns Root Index Page ID
    */
   getRootIndexPageId(page: MetadataPage): number {
     const id = bytesToNumber(
@@ -529,9 +530,9 @@ export class MetadataPageManager extends PageManager {
   }
 
   /**
-   * 데이터베이스의 루트 인덱스 페이지의 order를 반환합니다.
-   * @param page 페이지 데이터
-   * @returns 루트 인덱스 페이지의 order
+   * Returns the order of the database Root Index Page.
+   * @param page Page data
+   * @returns Root Index Page order
    */
   getRootIndexOrder(page: MetadataPage): number {
     return bytesToNumber(
@@ -542,9 +543,9 @@ export class MetadataPageManager extends PageManager {
   }
 
   /**
-   * 데이터베이스의 마지막 삽입 페이지 ID를 반환합니다.
-   * @param page 페이지 데이터
-   * @returns 마지막 삽입 페이지 ID
+   * Returns the ID of the last insertion page.
+   * @param page Page data
+   * @returns Last insert page ID
    */
   getLastInsertPageId(page: MetadataPage): number {
     return bytesToNumber(
@@ -555,9 +556,9 @@ export class MetadataPageManager extends PageManager {
   }
 
   /**
-   * 데이터베이스의 마지막 삽입된 행의 PK를 반환합니다.
-   * @param page 페이지 데이터
-   * @returns 마지막 삽입된 행의 PK
+   * Returns the PK of the last inserted row in the database.
+   * @param page Page data
+   * @returns Last inserted row PK
    */
   getLastRowPk(page: MetadataPage): number {
     return bytesToNumber(
@@ -568,9 +569,9 @@ export class MetadataPageManager extends PageManager {
   }
 
   /**
-   * 데이터베이스에 저장된 페이지 수를 설정합니다.
-   * @param page 페이지 데이터
-   * @param pageCount 페이지 수
+   * Sets the number of pages stored in the database.
+   * @param page Page data
+   * @param pageCount Number of pages
    */
   setPageCount(page: MetadataPage, pageCount: number): void {
     numberToBytes(
@@ -582,9 +583,9 @@ export class MetadataPageManager extends PageManager {
   }
 
   /**
-   * 데이터베이스의 페이지 크기를 설정합니다.
-   * @param page 페이지 데이터
-   * @param pageSize 페이지 크기
+   * Sets the database page size.
+   * @param page Page data
+   * @param pageSize Page size
    */
   setPageSize(page: MetadataPage, pageSize: number): void {
     numberToBytes(
@@ -596,9 +597,9 @@ export class MetadataPageManager extends PageManager {
   }
 
   /**
-   * 데이터베이스의 루트 인덱스 페이지 ID를 설정합니다.
-   * @param page 페이지 데이터
-   * @param rootIndexPageId 루트 인덱스 페이지 ID
+   * Sets the Root Index Page ID of the database.
+   * @param page Page data
+   * @param rootIndexPageId Root Index Page ID
    */
   setRootIndexPageId(page: MetadataPage, rootIndexPageId: number): void {
     numberToBytes(
@@ -610,9 +611,9 @@ export class MetadataPageManager extends PageManager {
   }
 
   /**
-   * 데이터베이스의 루트 인덱스 페이지의 order를 설정합니다.
-   * @param page 페이지 데이터
-   * @param order 루트 인덱스 페이지의 order
+   * Sets the order of the database Root Index Page.
+   * @param page Page data
+   * @param order Root Index Page order
    */
   setRootIndexOrder(page: MetadataPage, order: number): void {
     numberToBytes(
@@ -624,8 +625,8 @@ export class MetadataPageManager extends PageManager {
   }
 
   /**
-   * 페이지의 매직 문자열을 설정합니다.
-   * @param page 페이지 데이터
+   * Sets the magic string of the page.
+   * @param page Page data
    */
   setMagicString(page: MetadataPage): void {
     const encoding = new TextEncoder()
@@ -634,9 +635,9 @@ export class MetadataPageManager extends PageManager {
   }
 
   /**
-   * 데이터베이스의 마지막 삽입 페이지 ID를 설정합니다.
-   * @param page 페이지 데이터
-   * @param lastInsertPageId 마지막 삽입 페이지 ID
+   * Sets the ID of the last insertion page.
+   * @param page Page data
+   * @param lastInsertPageId Last insert page ID
    */
   setLastInsertPageId(page: MetadataPage, lastInsertPageId: number): void {
     numberToBytes(
@@ -648,9 +649,9 @@ export class MetadataPageManager extends PageManager {
   }
 
   /**
-   * 데이터베이스의 마지막 삽입된 행의 PK를 설정합니다.
-   * @param page 페이지 데이터
-   * @param lastRowPk 마지막 삽입된 행의 PK
+   * Sets the PK of the last inserted row in the database.
+   * @param page Page data
+   * @param lastRowPk Last inserted row PK
    */
   setLastRowPk(page: MetadataPage, lastRowPk: number): void {
     numberToBytes(
@@ -663,8 +664,8 @@ export class MetadataPageManager extends PageManager {
 }
 
 /**
- * 비트맵 페이지를 나타냅니다.
- * 비트맵 페이지는 페이지의 비트맵을 저장하는 페이지입니다.
+ * Represents a bitmap page.
+ * A bitmap page stores a bitmap of pages.
  */
 export class BitmapPageManager extends PageManager {
   get pageType() {
@@ -672,28 +673,28 @@ export class BitmapPageManager extends PageManager {
   }
 
   /**
-   * 페이지 타입이 `BitmapPage`인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 타입이 `BitmapPage`인지 나타내는 boolean 값
+   * Checks if the page type is `BitmapPage`.
+   * @param page Page data
+   * @returns boolean indicating if the page type is `BitmapPage`
    */
   static IsBitmapPage(page: Uint8Array): page is BitmapPage {
     return PageManager.GetPageType(page) === PageManager.CONSTANT.PAGE_TYPE_BITMAP
   }
 
   /**
-   * 페이지 타입이 `BitmapPage`인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 타입이 `BitmapPage`인지 나타내는 boolean 값
+   * Checks if the page type is `BitmapPage`.
+   * @param page Page data
+   * @returns boolean indicating if the page type is `BitmapPage`
    */
   isBitmapPage(page: Uint8Array): page is BitmapPage {
     return BitmapPageManager.IsBitmapPage(page)
   }
 
   /**
-   * 페이지가 비어있는지 확인합니다.
-   * @param page 페이지 데이터
-   * @param index 비트맵 인덱스
-   * @returns 페이지가 비어있는지 나타내는 boolean 값
+   * Checks if a page is empty.
+   * @param page Page data
+   * @param index Bitmap index
+   * @returns boolean indicating if the page is empty
    */
   isEmptyPage(page: BitmapPage, index: number): boolean {
     return bytesToNumber(page, index, 1) === 0
@@ -701,9 +702,9 @@ export class BitmapPageManager extends PageManager {
 }
 
 /**
- * 오버플로우 페이지를 나타냅니다.
- * 오버플로우 페이지는 페이지의 오버플로우 데이터를 저장하는 페이지입니다.
- * 오버플로우 페이지는 데이터 페이지의 오버플로우 플래그가 설정된 행의 데이터를 저장합니다.
+ * Represents an overflow page.
+ * An overflow page stores overflow data of pages.
+ * Overflow pages store data of rows in data pages where the overflow flag is set.
  */
 export class OverflowPageManager extends PageManager {
   get pageType() {
@@ -711,18 +712,18 @@ export class OverflowPageManager extends PageManager {
   }
 
   /**
-   * 페이지 타입이 `OverflowPage`인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 타입이 `OverflowPage`인지 나타내는 boolean 값
+   * Checks if the page type is `OverflowPage`.
+   * @param page Page data
+   * @returns boolean indicating if the page type is `OverflowPage`
    */
   static IsOverflowPage(page: Uint8Array): page is OverflowPage {
     return PageManager.GetPageType(page) === PageManager.CONSTANT.PAGE_TYPE_OVERFLOW
   }
 
   /**
-   * 페이지 타입이 `OverflowPage`인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 타입이 `OverflowPage`인지 나타내는 boolean 값
+   * Checks if the page type is `OverflowPage`.
+   * @param page Page data
+   * @returns boolean indicating if the page type is `OverflowPage`
    */
   isOverflowPage(page: Uint8Array): page is OverflowPage {
     return OverflowPageManager.IsOverflowPage(page)
@@ -735,18 +736,18 @@ export class UnknownPageManager extends PageManager {
   }
 
   /**
-   * 페이지 타입이 `UnknownPage`인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 타입이 `UnknownPage`인지 나타내는 boolean 값
+   * Checks if the page type is `UnknownPage`.
+   * @param page Page data
+   * @returns boolean indicating if the page type is `UnknownPage`
    */
   static IsUnknownPage(page: Uint8Array): page is UnknownPage {
     return PageManager.GetPageType(page) === PageManager.CONSTANT.PAGE_TYPE_UNKNOWN
   }
 
   /**
-   * 페이지가 `UnknownPage`인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지가 `UnknownPage`라면 `true`, 그렇지 않다면 `false`
+   * Checks if the page is `UnknownPage`.
+   * @param page Page data
+   * @returns `true` if the page is `UnknownPage`, otherwise `false`
    */
   isUnknownPage(page: Uint8Array): page is UnknownPage {
     return UnknownPageManager.IsUnknownPage(page)
@@ -763,81 +764,81 @@ export class PageManagerFactory {
   protected static readonly UnknownPage = new UnknownPageManager()
 
   /**
-   * 페이지 타입을 반환합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 타입
+   * Returns the page type.
+   * @param page Page data
+   * @returns Page type
    */
   protected getPageType(page: Uint8Array): number {
     return bytesToNumber(page, PageManager.CONSTANT.OFFSET_PAGE_TYPE, PageManager.CONSTANT.SIZE_PAGE_TYPE)
   }
 
   /**
-   * 페이지가 `EmptyPage`인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지가 `EmptyPage`라면 `true`, 그렇지 않다면 `false`
+   * Checks if the page is `EmptyPage`.
+   * @param page Page data
+   * @returns `true` if the page is `EmptyPage`, otherwise `false`
    */
   isEmptyPage(page: Uint8Array): page is EmptyPage {
     return EmptyPageManager.IsEmptyPage(page)
   }
 
   /**
-   * 페이지가 `DataPage`인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지가 `DataPage`라면 `true`, 그렇지 않다면 `false`
+   * Checks if the page is `DataPage`.
+   * @param page Page data
+   * @returns `true` if the page is `DataPage`, otherwise `false`
    */
   isDataPage(page: Uint8Array): page is DataPage {
     return DataPageManager.IsDataPage(page)
   }
 
   /**
-   * 페이지가 `IndexPage`인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지가 `IndexPage`라면 `true`, 그렇지 않다면 `false`
+   * Checks if the page is `IndexPage`.
+   * @param page Page data
+   * @returns `true` if the page is `IndexPage`, otherwise `false`
    */
   isIndexPage(page: Uint8Array): page is IndexPage {
     return IndexPageManager.IsIndexPage(page)
   }
 
   /**
-   * 페이지가 `MetadataPage`인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지가 `MetadataPage`라면 `true`, 그렇지 않다면 `false`
+   * Checks if the page is `MetadataPage`.
+   * @param page Page data
+   * @returns `true` if the page is `MetadataPage`, otherwise `false`
    */
   isMetadataPage(page: Uint8Array): page is MetadataPage {
     return MetadataPageManager.IsMetadataPage(page)
   }
 
   /**
-   * 페이지가 `BitmapPage`인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지가 `BitmapPage`라면 `true`, 그렇지 않다면 `false`
+   * Checks if the page is `BitmapPage`.
+   * @param page Page data
+   * @returns `true` if the page is `BitmapPage`, otherwise `false`
    */
   isBitmapPage(page: Uint8Array): page is BitmapPage {
     return BitmapPageManager.IsBitmapPage(page)
   }
 
   /**
-   * 페이지가 `OverflowPage`인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지가 `OverflowPage`라면 `true`, 그렇지 않다면 `false`
+   * Checks if the page is `OverflowPage`.
+   * @param page Page data
+   * @returns `true` if the page is `OverflowPage`, otherwise `false`
    */
   isOverflowPage(page: Uint8Array): page is OverflowPage {
     return OverflowPageManager.IsOverflowPage(page)
   }
 
   /**
-   * 페이지가 `UnknownPage`인지 확인합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지가 `UnknownPage`라면 `true`, 그렇지 않다면 `false`
+   * Checks if the page is `UnknownPage`.
+   * @param page Page data
+   * @returns `true` if the page is `UnknownPage`, otherwise `false`
    */
   isUnknownPage(page: Uint8Array): page is UnknownPage {
     return UnknownPageManager.IsUnknownPage(page)
   }
 
   /**
-   * 페이지 타입에 따라 페이지 관리자를 반환합니다.
-   * @param page 페이지 데이터
-   * @returns 페이지 관리자
+   * Returns a page manager based on the page type.
+   * @param page Page data
+   * @returns Page manager
    */
   getManager(page: EmptyPage): EmptyPageManager
   getManager(page: MetadataPage): MetadataPageManager

@@ -38,7 +38,7 @@ export class RowTableEngine {
   }
 
   /**
-   * B+트리를 초기화합니다.
+   * Initializes the B+ Tree.
    */
   async init(): Promise<void> {
     if (!this.initialized) {
@@ -48,30 +48,30 @@ export class RowTableEngine {
   }
 
   /**
-   * 최적화된 order를 계산합니다.
-   * @param pageSize 페이지 크기
-   * @param keySize 키 크기
-   * @param pointerSize 포인터 크기
-   * @returns 최적의 order
+   * Calculates the optimized order.
+   * @param pageSize Page size
+   * @param keySize Key size
+   * @param pointerSize Pointer size
+   * @returns Optimal order
    */
   private getOptimalOrder(pageSize: number, keySize: number, pointerSize: number): number {
     return Math.floor((pageSize + keySize) / (keySize + pointerSize))
   }
 
   /**
-   * 데이터로부터 생성되는 실제 행의 크기를 반환합니다.
-   * @param rowBody 데이터
-   * @returns 생성되는 실제 행의 크기
+   * Returns the actual row size generated from the data.
+   * @param rowBody Data
+   * @returns Actual row size generated
    */
   private getRequiredRowSize(rowBody: Uint8Array): number {
     return Row.CONSTANT.SIZE_HEADER + DataPageManager.CONSTANT.SIZE_SLOT_OFFSET + rowBody.length
   }
 
   /**
-   * RID를 버퍼에 설정합니다.
-   * @param pageId 페이지 ID
-   * @param slotIndex 슬롯 인덱스
-   * @returns 버퍼
+   * Sets the RID in the buffer.
+   * @param pageId Page ID
+   * @param slotIndex Slot index
+   * @returns Buffer
    */
   private setRID(pageId: number, slotIndex: number): Uint8Array {
     this.keyManager.setPageId(this.ridBuffer, pageId)
@@ -80,7 +80,7 @@ export class RowTableEngine {
   }
 
   /**
-   * 버퍼에서 RID를 반환합니다.
+   * Returns the RID from the buffer.
    * @returns RID
    */
   private getRID(): number {
@@ -88,10 +88,10 @@ export class RowTableEngine {
   }
 
   /**
-   * 데이터를 삽입합니다.
-   * @param data 데이터
-   * @param tx 트랜잭션
-   * @returns 삽입된 데이터의 pk
+   * Inserts data.
+   * @param data Data
+   * @param tx Transaction
+   * @returns PK of the inserted data
    */
   async insert(data: Uint8Array, tx?: Transaction): Promise<number> {
     const operation = async () => {
@@ -187,10 +187,10 @@ export class RowTableEngine {
   }
 
   /**
-   * PK로 RID를 조회합니다.
-   * 트랜잭션이 있는 경우 Pending Update를 먼저 확인합니다.
+   * Looks up the RID by PK.
+   * Checks Pending Updates first if a transaction exists.
    * @param pk PK
-   * @param tx 트랜잭션
+   * @param tx Transaction
    * @returns RID or null (if not found)
    */
   private async getRidByPK(pk: number, tx?: Transaction): Promise<number | null> {
@@ -211,16 +211,16 @@ export class RowTableEngine {
   }
 
   /**
-   * B+트리에서 pk에 해당하는 rid를 조회하여, 실제 행을 반환합니다
-   * @param pk 행의 고유값
-   * @param tx 트랜잭션
-   * @returns 행의 원시 데이터
+   * Looks up the RID corresponding to the PK in the B+ Tree and returns the actual row.
+   * @param pk Primary key of the row
+   * @param tx Transaction
+   * @returns Raw data of the row
    */
   /**
-   * 데이터를 수정합니다.
-   * @param pk 행의 고유값
-   * @param data 수정할 데이터
-   * @param tx 트랜잭션
+   * Updates data.
+   * @param pk Primary key of the row
+   * @param data Data to update
+   * @param tx Transaction
    */
   async update(pk: number, data: Uint8Array, tx?: Transaction): Promise<void> {
     const operation = async () => {
@@ -260,14 +260,14 @@ export class RowTableEngine {
   }
 
   /**
-   * 일반 행을 수정합니다.
-   * @param page 페이지 데이터
-   * @param pageId 페이지 아이디
-   * @param slotIndex 슬롯 인덱스
-   * @param row 행 데이터
-   * @param pk 행의 고유값
-   * @param data 수정할 데이터
-   * @param tx 트랜잭션
+   * Updates a normal row.
+   * @param page Page data
+   * @param pageId Page ID
+   * @param slotIndex Slot index
+   * @param row Row data
+   * @param pk Primary key of the row
+   * @param data Data to update
+   * @param tx Transaction
    */
   private async updateNormalRow(
     page: Uint8Array,
@@ -361,9 +361,9 @@ export class RowTableEngine {
   }
 
   /**
-   * 데이터를 삭제합니다.
-   * @param pk 삭제할 데이터의 PK
-   * @param tx 트랜잭션
+   * Deletes data.
+   * @param pk PK of the data to delete
+   * @param tx Transaction
    */
   async delete(pk: number, tx?: Transaction): Promise<void> {
     const operation = async () => {
@@ -399,10 +399,10 @@ export class RowTableEngine {
   }
 
   /**
-   * B+트리에서 pk에 해당하는 rid를 조회하여, 실제 행을 반환합니다
-   * @param pk 행의 고유값
-   * @param tx 트랜잭션
-   * @returns 행의 원시 데이터
+   * Looks up the RID corresponding to the PK in the B+ Tree and returns the actual row.
+   * @param pk Primary key of the row
+   * @param tx Transaction
+   * @returns Raw data of the row
    */
   async selectByPK(pk: number, tx?: Transaction): Promise<Uint8Array | null> {
     const operation = async () => {

@@ -1,7 +1,7 @@
 import { bytesToNumber, numberToBytes, setBit, getBit } from '../utils'
 
 /**
- * 행은 헤더와 바디로 구성됩니다. 헤더는 3바이트, 바디는 최대 65535바이트입니다.
+ * A row consists of a header and a body. The header is 3 bytes, and the body can be up to 65535 bytes.
  */
 export class Row {
   static readonly CONSTANT = {
@@ -18,90 +18,90 @@ export class Row {
   } as const
 
   /**
-   * 삭제 여부를 반환합니다.
-   * @param row 행 데이터
-   * @returns 삭제 여부
+   * Returns whether the row is deleted.
+   * @param row Row data
+   * @returns Whether deleted
    */
   getDeletedFlag(row: Uint8Array): boolean {
     return getBit(row[Row.CONSTANT.OFFSET_FLAG], Row.CONSTANT.FLAG_DELETED)
   }
 
   /**
-   * 오버플로우 여부를 반환합니다.
-   * @param row 행 데이터
-   * @returns 오버플로우 여부
+   * Returns whether the row is overflowed.
+   * @param row Row data
+   * @returns Whether overflowed
    */
   getOverflowFlag(row: Uint8Array): boolean {
     return getBit(row[Row.CONSTANT.OFFSET_FLAG], Row.CONSTANT.FLAG_OVERFLOW)
   }
 
   /**
-   * 행의 크기를 반환합니다. 이는 순수하게 행의 데이터 크기만을 의미합니다.
-   * @param row 행 데이터
-   * @returns 행의 크기
+   * Returns the size of the row body. This represents purely the data size of the row.
+   * @param row Row data
+   * @returns Body size
    */
   getBodySize(row: Uint8Array): number {
     return bytesToNumber(row, Row.CONSTANT.OFFSET_BODY_SIZE, Row.CONSTANT.SIZE_BODY)
   }
 
   /**
-   * 행의 고유값(PK)를 반환합니다.
-   * @param row 행 데이터
-   * @returns 행의 고유값(PK)
+   * Returns the primary key (PK) of the row.
+   * @param row Row data
+   * @returns Primary key (PK)
    */
   getPK(row: Uint8Array): number {
     return bytesToNumber(row, Row.CONSTANT.OFFSET_PK, Row.CONSTANT.SIZE_PK)
   }
 
   /**
-   * 행의 바디를 반환합니다.
-   * @param row 행 데이터
-   * @returns 행의 바디
+   * Returns the row body.
+   * @param row Row data
+   * @returns Row body
    */
   getBody(row: Uint8Array): Uint8Array {
     return row.subarray(Row.CONSTANT.SIZE_HEADER)
   }
 
   /**
-   * 삭제 여부를 설정합니다.
-   * @param row 행 데이터
-   * @param deleted 삭제 여부
+   * Sets whether the row is deleted.
+   * @param row Row data
+   * @param deleted Whether deleted
    */
   setDeletedFlag(row: Uint8Array, deleted: boolean): void {
     row[Row.CONSTANT.OFFSET_FLAG] = setBit(row[Row.CONSTANT.OFFSET_FLAG], Row.CONSTANT.FLAG_DELETED, deleted)
   }
 
   /**
-   * 오버플로우 여부를 설정합니다.
-   * @param row 행 데이터
-   * @param overflow 오버플로우 여부
+   * Sets whether the row is overflowed.
+   * @param row Row data
+   * @param overflow Whether overflowed
    */
   setOverflowFlag(row: Uint8Array, overflow: boolean): void {
     row[Row.CONSTANT.OFFSET_FLAG] = setBit(row[Row.CONSTANT.OFFSET_FLAG], Row.CONSTANT.FLAG_OVERFLOW, overflow)
   }
 
   /**
-   * 행의 크기를 설정합니다.
-   * @param row 행 데이터
-   * @param rowSize 행의 크기
+   * Sets the size of the row body.
+   * @param row Row data
+   * @param rowSize Body size
    */
   setBodySize(row: Uint8Array, rowSize: number): void {
     numberToBytes(rowSize, row, Row.CONSTANT.OFFSET_BODY_SIZE, Row.CONSTANT.SIZE_BODY)
   }
 
   /**
-   * 행의 고유값(PK)를 설정합니다.
-   * @param row 행 데이터
-   * @param pk 행의 고유값(PK)
+   * Sets the primary key (PK) of the row.
+   * @param row Row data
+   * @param pk Primary key (PK)
    */
   setPK(row: Uint8Array, pk: number): void {
     numberToBytes(pk, row, Row.CONSTANT.OFFSET_PK, Row.CONSTANT.SIZE_PK)
   }
 
   /**
-   * 행의 바디를 설정합니다.
-   * @param row 행 데이터
-   * @param body 행의 바디
+   * Sets the row body.
+   * @param row Row data
+   * @param body Row body
    */
   setBody(row: Uint8Array, body: Uint8Array): void {
     row.set(body, Row.CONSTANT.SIZE_HEADER)

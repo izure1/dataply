@@ -3,29 +3,29 @@ import { LogManager } from './LogManager'
 import type { Transaction } from './transaction/Transaction'
 
 /**
- * 페이지 단위로 파일을 관리하고 캐싱하는 가상 파일 시스템 클래스
+ * Virtual File System class that manages and caches files in page units.
  */
 export class VirtualFileSystem {
-  /** 캐시 리스트 (페이지 번호 -> 데이터 버퍼) */
+  /** Cache list (Page ID -> Data Buffer) */
   protected cache: Map<number, Uint8Array> = new Map()
-  /** 변경사항이 있어 디스크 동기화가 필요한 페이지 번호들 */
+  /** Page IDs that have changes and need disk synchronization */
   protected dirtyPages: Set<number> = new Set()
-  /** 논리적 파일 크기 추적 */
+  /** Track logical file size */
   protected fileSize: number
-  /** 페이지 크기의 비트 시프트 값 */
+  /** Bit shift value for page size */
   protected pageShift: number
-  /** 페이지 크기의 비트 마스크 값 */
+  /** Bit mask value for page size */
   protected pageMask: number
 
-  // Transaction Support
+  // 트랜잭션 지원
   protected logManager?: LogManager
-  // PageID -> Owner Transaction
+  // PageID -> 소유 트랜잭션
   protected dirtyPageOwners: Map<number, Transaction> = new Map()
-  // TxID -> Transaction (Active Transactions)
+  // TxID -> Transaction (활성 트랜잭션 목록)
   protected activeTransactions: Map<number, Transaction> = new Map()
 
   constructor(protected fileHandle: number, protected pageSize: number, walPath?: string | undefined | null) {
-    // 페이지 크기는 2의 제곱수여야 비트 연산 최적화가 가능함
+    // 페이지 크기는 비트 연산 최적화를 위해 2의 거듭제곱이어야 함
     if ((pageSize & (pageSize - 1)) !== 0) {
       throw new Error('Page size must be a power of 2')
     }
@@ -35,7 +35,7 @@ export class VirtualFileSystem {
     // 중요: 초기 파일 크기 로드
     this.fileSize = fs.fstatSync(fileHandle).size
 
-    // WAL 파일 경로가 제공된 경우에만 LogManager 초기화 및 복구 수행
+    // WAL 경로가 제공된 경우에만 LogManager 초기화 및 복구 수행
     if (walPath) {
       this.logManager = new LogManager(walPath, pageSize)
       this.recover()
@@ -43,9 +43,9 @@ export class VirtualFileSystem {
   }
 
   /**
-   * WAL 로그를 이용하여 복구(Redo)를 수행합니다.
-   * 생성자에서 호출되므로 동기적으로 처리하며, 데이터는 캐시에만 반영합니다.
-   * 실제 디스크 반영(Sync)과 로그 비우기는 이후 트랜잭션이나 종료 시 수행됩니다.
+   * Performs recovery (Redo) using WAL logs.
+   * Called in constructor, so it's a synchronous process and data is only reflected in cache.
+   * Actual disk sync and log clearing are performed during future transactions or closure.
    */
   private recover() {
     if (!this.logManager) return
@@ -57,10 +57,10 @@ export class VirtualFileSystem {
       return
     }
 
-    // 복구된 페이지들을 캐시에 적용하고 dirty로 표시
+    // 복구된 페이지들을 캐시에 반영하고 dirty로 표시
     for (const [pageId, data] of restoredPages) {
-      // [Safety Fix] WAL 데이터 오염으로 인한 초대형 파일(Sparse File) 생성 방지
-      // PageID가 비정상적으로 크다면 무시 (예: 1GB 이상 오프셋)
+      // [안전 장치] 손상된 WAL 데이터로 인해 거대한 스파스 파일이 생성되는 것을 방지
+      // PageID가 비정상적으로 큰 경우(예: 1GB 이상의 오프셋) 무시
       if (pageId > 1000000) {
         console.warn(`[VFS] Ignoring suspicious PageID ${pageId} during recovery.`)
         continue
@@ -69,21 +69,21 @@ export class VirtualFileSystem {
       this.cache.set(pageId, data)
       this.dirtyPages.add(pageId)
 
-      // 파일 사이즈 갱신 (복구된 페이지가 기존 파일 범위를 넘어서면)
+      // 복구된 페이지가 기존 파일 범위를 벗어나면 파일 크기 업데이트
       const endPos = (pageId + 1) * this.pageSize
       if (endPos > this.fileSize) {
         this.fileSize = endPos
       }
     }
 
-    // 주의: 생성자이므로 비동기 sync/clear를 호출하지 않음.
-    // WAL 파일은 그대로 유지되며, 나중에 commit이나 close 호출 시 처리됨.
-    // 이는 Idempotent하므로 안전함.
+    // 주의: 생성자 내에서 실행되므로 비동기 sync/clear를 호출하지 않음.
+    // WAL 파일은 그대로 유지되며 이후 트랜잭션 커밋이나 종료 시 처리됨.
+    // 이는 멱등성(Idempotent)이 보장되므로 안전함.
   }
 
   /**
-   * 트랜잭션을 커밋합니다.
-   * @param tx 트랜잭션
+   * Commits the transaction.
+   * @param tx Transaction
    */
   async commit(tx: Transaction): Promise<void> {
     const dirtyPages = tx.getDirtyPages()
@@ -92,7 +92,7 @@ export class VirtualFileSystem {
       return
     }
 
-    // 1. 변경된 페이지(Dirty Pages)를 WAL에 기록
+    // 1. 변경된 페이지들을 WAL에 기록
     const dirtyPageMap = new Map<number, Uint8Array>()
     for (const pageId of dirtyPages) {
       const page = this.cache.get(pageId)
@@ -102,11 +102,11 @@ export class VirtualFileSystem {
     }
 
     if (this.logManager && dirtyPageMap.size > 0) {
-      // WAL에 기록 (Atomic하게)
+      // WAL에 기록 (원자적)
       await this.logManager.append(dirtyPageMap)
     }
 
-    // 2. 디스크 동기화 (Checkpoint) - 해당 트랜잭션의 페이지만
+    // 2. 디스크 동기화 (Checkpoint) - 해당 트랜잭션의 페이지만 반영
     // 최적화를 위해 정렬
     const sortedPages = Array.from(dirtyPages).sort((a, b) => a - b)
     const promises: Promise<number>[] = []
@@ -127,27 +127,27 @@ export class VirtualFileSystem {
     await Promise.all(promises)
 
     // 3. 로그 비우기
-    // 주의: 멀티 트랜잭션 환경에서는 다른 트랜잭션의 로그도 있을 수 있으므로 신중해야 함.
-    // 하지만 현재 구조에서는 commit 시 바로 sync하므로 WAL은 항상 비워도 되는 상태가 됨 (해당 tx에 한해).
-    // 만약 다른 트랜잭션의 WAL 로그가 섞여있다면?
+    // 주의: 다중 트랜잭션 환경에서는 다른 트랜잭션의 로그가 섞여 있을 수 있음.
+    // 하지만 현재 구조는 커밋 시 즉시 동기화를 수행하므로 (해당 tx에 대해) WAL은 비워도 되는 상태가 됨.
+    // 다른 트랜잭션의 WAL 로그가 섞여 있다면? 
     // LogManager.append는 파일 끝에 추가함.
     // LogManager.clear()는 파일을 비움.
-    // 만약 Tx A 커밋 중에 Tx B가 로그를 썼다면? -> LockManager가 페이지 단위 락을 걸고 있지만, WAL 파일 자체에 대한 락은?
-    // LogManager가 내부적으로 append 시 파일 락을 쓰거나, append 순서가 보장되어야 함.
-    // 일단 여기서는 clear()를 호출하면 안될 수도 있음 (다른 tx의 redo log가 날아감).
-    // *해결책*: WAL은 Crash Recovery용이므로, Sync가 완료된 데이터에 대한 로그는 필요 없음.
-    // 하지만 Sync되지 않은 다른 Tx의 로그가 있다면 지우면 안됨.
-    // 따라서, 모든 Active Transaction이 없을 때만 Clear 하거나, Checkpoint 매커니즘 필요.
-    // 간단하게: 여기서 clear() 하지 않음. (나중에 vacuum 하거나, 시작 시 recover 후 clear 하므로).
-    // 하지만 파일이 무한정 커지는 것 방지 필요.
-    // -> 일단은 Commit 시 Sync하므로, WAL은 "현재 진행중인 트랜잭션"들의 로그만 중요함.
-    // Tx A Commit -> Sync A -> A의 로그 필요 없음.
-    // Tx B Active -> B의 로그 필요함.
-    // B의 로그가 A보다 뒤에 있다면? A 로그 지워도 됨?
-    // WAL 파일 앞부분을 잘라내는 Truncate 기능이 필요.
-    // 여기서는 복잡도를 낮추기 위해 'active transaction count === 0' 일 때 clear 하는 식으로 타협 가능.
+    // 만약 Tx A 커밋 중 Tx B가 로그를 썼다면? -> LockManager가 페이지 단위 락을 걸지만 WAL 파일 자체는?
+    // LogManager가 내부적으로 파일 락을 쓰거나 Append 시 순서를 보장해야 함.
+    // 일단 현재는 clear()를 함부로 하면 위험할 수 있음 (다른 트랜잭션의 Redo 로그 유실 가능).
+    // *해결책*: WAL은 Crash Recovery용이므로, 동기화가 완료된 데이터에 대한 로그는 더 이상 필요 없음.
+    // 다만 아직 동기화되지 않은 다른 활성 트랜잭션의 로그는 지우면 안 됨.
+    // 따라서 활성 트랜잭션이 하나도 없을 때만 비우거나, 체크포인트 메커니즘이 필요함.
+    // 간단한 타협: 활성 트랜잭션 수가 0일 때 비우기.
+    // 하지만 파일이 무한히 커지는 것을 막아야 함.
+    // -> 커밋 시마다 동기화를 하므로, WAL은 "현재 진행 중인 트랜잭션들"의 로그만 관리하면 됨.
+    // Tx A 커밋 -> 동기화 A -> A의 로그 필요 없음.
+    // Tx B 활성 -> B의 로그 필요함.
+    // B의 로그가 A 뒤에 있다면? A 로그만 지울 수 있나?
+    // WAL 파일의 앞부분을 잘라내는 Truncate 기능이 필요함.
+    // 현재는 복잡성을 낮추기 위해 '활성 트랜잭션 수 0'일 때 비우는 것으로 타협.
 
-    if (this.activeTransactions.size <= 1) { // 나 자신만 남았을 때 (이제 0이 될 예정)
+    if (this.activeTransactions.size <= 1) { // 본인(self)만 남은 경우 (곧 0이 됨)
       if (this.logManager) {
         await this.logManager.clear()
       }
@@ -157,14 +157,14 @@ export class VirtualFileSystem {
   }
 
   /**
-   * 트랜잭션을 롤백합니다.
-   * @param tx 트랜잭션
+   * Rolls back the transaction.
+   * @param tx Transaction
    */
   async rollback(tx: Transaction): Promise<void> {
     const dirtyPages = tx.getDirtyPages()
 
     if (dirtyPages) {
-      // Undo Buffer를 통해 이전 상태로 복구
+      // Undo 버퍼를 사용하여 이전 상태로 복구
       for (const pageId of dirtyPages) {
         const undoData = tx.getUndoPage(pageId)
         if (undoData) {
@@ -173,19 +173,19 @@ export class VirtualFileSystem {
       }
     }
 
-    // 새로 생성된 페이지 처리 (dirtyPages 에는 있지만 undoBuffer에는 없는 페이지 = 신규 할당?)
-    // 신규 할당된 페이지는 undoBuffer에 '빈 페이지' 혹은 '이전 상태 없음'으로 기록되어야 할까?
-    // VFS 레벨에서는 '파일 크기'를 줄이는 것이 까다로움.
-    // 페이지 내용은 Undo로 복구되지만, 파일 크기가 늘어난 것은 줄어들지 않을 수 있음 (Sparse).
-    // 파일 크기 줄이기: ftruncate?
-    // 트랜잭션이 파일 크기를 늘렸는지 추적 필요. 
-    // 여기서는 복잡도상 파일 크기 축소는 생략 (내용은 복구됨).
+    // 새로 생성된 페이지 처리 (dirtyPages에는 있지만 undoBuffer에는 없는 경우 = 신규 할당?)
+    // 신규 할당된 페이지는 undoBuffer에 '빈 페이지' 혹은 '이전 상태 없음'을 기록해야 함.
+    // VFS 레벨에서 파일 크기를 줄이기는 까다로움. 
+    // Undo로 페이지 내용은 복구되지만, 파일 크기가 늘어난 것은 그대로 유지될 수 있음 (Sparse).
+    // 파일 크기 축소: ftruncate? 
+    // 트랜잭션이 파일 크기를 늘렸는지 여부를 추적해야 함.
+    // 여기서는 단순성을 위해 파일 크기 축소는 생략함 (내용은 복구됨).
 
     this.cleanupTransaction(tx)
   }
 
   private cleanupTransaction(tx: Transaction) {
-    // Dirty Page Owner 정리
+    // Dirty Page 소유권 해제
     const pages = tx.getDirtyPages()
     if (pages) {
       for (const pageId of pages) {
@@ -196,13 +196,13 @@ export class VirtualFileSystem {
   }
 
   /**
-   * 파일의 특정 위치에서 데이터를 읽어옵니다.
-   * @param handle 파일 핸들
-   * @param buffer 읽을 데이터 버퍼
-   * @param offset 읽기 시작 위치
-   * @param length 읽을 데이터의 길이
-   * @param position 읽기 시작 위치
-   * @returns 읽은 데이터의 길이
+   * Reads data from a specific position in the file.
+   * @param handle File handle
+   * @param buffer Data buffer to read into
+   * @param offset Start position in buffer
+   * @param length Length of data to read
+   * @param position Start position in file
+   * @returns Length of data read
    */
   protected _readAsync(handle: number, buffer: Uint8Array, offset: number, length: number, position: number): Promise<number> {
     return new Promise((resolve, reject) => {
@@ -214,15 +214,15 @@ export class VirtualFileSystem {
   }
 
   /**
-   * 파일의 특정 위치에 데이터를 씁니다.
-   * @param handle 파일 핸들
-   * @param buffer 쓰일 데이터 버퍼
-   * @param offset 쓰기 시작 위치
-   * @param length 쓰일 데이터의 길이
-   * @param position 쓰기 시작 위치
+   * Writes data to a specific position in the file.
+   * @param handle File handle
+   * @param buffer Data buffer to write
+   * @param offset Start position in buffer
+   * @param length Length of data to write
+   * @param position Start position in file
    */
   protected _writeAsync(handle: number, buffer: Uint8Array, offset: number, length: number, position: number): Promise<number> {
-    // [Safety Fix] 파일 크기 폭증 방지 (100MB 제한)
+    // [안전 장치] 파일 크기 폭발 방지 (100MB 제한)
     if (position + length > 100 * 1024 * 1024) {
       return Promise.reject(new Error(`[Safety Limit] File write exceeds 100MB limit at position ${position}`))
     }
@@ -236,11 +236,11 @@ export class VirtualFileSystem {
   }
 
   /**
-   * 파일의 끝에 데이터를 추가합니다.
-   * @param buffer 추가할 데이터 버퍼
+   * Appends data to the end of the file.
+   * @param buffer Data buffer to append
    */
   protected _appendAsync(handle: number, buffer: Uint8Array): Promise<void> {
-    // [Safety Fix] 파일 크기 폭증 방지 (100MB 제한)
+    // [안전 장치] 파일 크기 폭발 방지 (100MB 제한)
     if (this.fileSize + buffer.length > 100 * 1024 * 1024) {
       return Promise.reject(new Error(`[Safety Limit] File append exceeds 100MB limit`))
     }
@@ -254,15 +254,15 @@ export class VirtualFileSystem {
   }
 
   protected async _readPage(pageIndex: number, tx?: Transaction): Promise<Uint8Array> {
-    // [MVCC] Check if this page is dirty by another transaction
+    // [MVCC] 다른 트랜잭션이 수정한 페이지(Dirty)인지 확인
     if (this.activeTransactions.size > 0) {
       const ownerTx = this.dirtyPageOwners.get(pageIndex)
       if (ownerTx) {
-        // If I am the owner, I see the dirty version (Cache)
+        // 내가 소유자라면 수정한 데이터(캐시)를 그대로 봄
         if (tx && tx.id === ownerTx.id) {
           // pass (read cache)
         } else {
-          // Someone else owns it -> read Undo (Snapshot)
+          // 타인이 소유 중 -> Undo 데이터(Snapshot)를 읽음
           const undoPage = ownerTx.getUndoPage(pageIndex)
           if (undoPage) {
             const snapshot = new Uint8Array(this.pageSize)
@@ -273,7 +273,7 @@ export class VirtualFileSystem {
       }
     }
 
-    // Normal Read (Cache or Disk)
+    // 일반 읽기 (캐시 혹은 디스크)
     if (this.cache.has(pageIndex)) {
       return this.cache.get(pageIndex)!.slice()
     }
@@ -290,24 +290,24 @@ export class VirtualFileSystem {
   }
 
   /**
-   * 파일의 특정 위치에서 데이터를 읽어옵니다.
-   * @param offset 읽기 시작 위치
-   * @param length 읽을 데이터의 길이
-   * @param tx 트랜잭션 (MVCC용)
-   * @returns 읽은 데이터 버퍼
+   * Reads data from a specific position in the file.
+   * @param offset Start position
+   * @param length Length of data to read
+   * @param tx Transaction (for MVCC)
+   * @returns Read data buffer
    */
   async read(offset: number, length: number, tx?: Transaction): Promise<Uint8Array> {
     const startPage = offset >> this.pageShift // 최적화: 비트 시프트 사용
     const endPage = (offset + length - 1) >> this.pageShift
     const result = new Uint8Array(length) // 결과 버퍼
 
-    // 읽어야 할 페이지들을 파악
+    // 읽어야 할 페이지들 식별
     const pagePromises: Promise<Uint8Array>[] = []
     for (let pageIndex = startPage; pageIndex <= endPage; pageIndex++) {
       pagePromises.push(this._readPage(pageIndex, tx))
     }
 
-    // 모든 페이지 로딩까지 대기 (병렬 처리)
+    // 모든 페이지 로드 대기 (병렬 처리)
     const pages = await Promise.all(pagePromises)
 
     let infoOffset = 0
@@ -329,27 +329,27 @@ export class VirtualFileSystem {
   }
 
   /**
-   * 파일의 끝에 데이터를 추가합니다.
-   * @param buffer 추가할 데이터 버퍼
-   * @returns 추가된 데이터의 길이
+   * Appends data to the end of the file.
+   * @param buffer Data buffer to append
+   * @returns Length of appended data
    */
   async append(buffer: Uint8Array, tx?: Transaction): Promise<number> {
-    // fs.appendFile 대신 write를 사용하여 캐시를 경유하도록 함
-    // 주의: fs.write는 파일 끝을 넘어서 쓸 경우 자동으로 파일을 확장해줍니다. (테스트 검증 완료)
+    // 캐시를 거치도록 fs.appendFile 대신 write 사용
+    // 참고: fs.write는 끝을 넘어서 쓰면 자동으로 파일을 확장함. (테스트로 검증됨)
     return await this.write(this.fileSize, buffer, tx)
   }
 
   /**
-   * 파일의 특정 위치에 데이터를 씁니다.
-   * @param offset 쓰기 시작 위치
-   * @param buffer 쓰일 데이터 버퍼
-   * @returns 쓰인 데이터의 길이
+   * Writes data to a specific position in the file.
+   * @param offset Start position
+   * @param buffer Data buffer to write
+   * @returns Length of data written
    */
   async write(offset: number, buffer: Uint8Array, tx?: Transaction): Promise<number> {
     const startPage = Math.floor(offset / this.pageSize)
     const endPage = Math.floor((offset + buffer.length - 1) / this.pageSize)
 
-    // 필요한 페이지들을 병렬로 로드
+    // 필요한 페이지들 병렬 로드
     const pagePromises: Promise<Uint8Array>[] = []
     for (let pageIndex = startPage; pageIndex <= endPage; pageIndex++) {
       pagePromises.push(this._readPage(pageIndex, tx))
@@ -362,21 +362,19 @@ export class VirtualFileSystem {
       const pageIndex = startPage + i
       const page = pages[i]
 
-      // [UndoLog] 트랜잭션 중이라면 변경 전 상태 백업
-      // Auto-commit(tx 없음)일 경우 백업 불필요
-      // [UndoLog] 트랜잭션 중이라면 변경 전 상태 백업
-      // Auto-commit(tx 없음)일 경우 백업 불필요
+      // [UndoLog] 트랜잭션 내 작업인 경우 이전 상태 스냅샷 저장
+      // Auto-commit(tx 없음)은 스냅샷 필요 없음
       if (tx) {
-        // Active Transaction 등록
+        // 활성 트랜잭션 등록
         if (!this.activeTransactions.has(tx.id)) {
           this.activeTransactions.set(tx.id, tx)
         }
 
-        // Owner 등록
+        // 소유자 등록
         this.dirtyPageOwners.set(pageIndex, tx)
 
-        // Snapshot 저장 (이미 있으면 덮어쓰지 않음 - Transaction 객체가 처리)
-        // 현재 페이지 상태 백업 (Deep Copy)
+        // 스냅샷 저장 (이미 있으면 Transaction 객체가 판단하여 무시)
+        // 현재 페이지의 상태 백업 (Deep Copy)
         const snapshot = new Uint8Array(this.pageSize)
         snapshot.set(page)
         tx.addUndoPage(pageIndex, snapshot)
@@ -386,11 +384,11 @@ export class VirtualFileSystem {
       const writeStart = Math.max(0, offset - pageStartOffset)
       const writeEnd = Math.min(this.pageSize, offset + buffer.length - pageStartOffset)
 
-      // 버퍼 내용을 페이지에 덮어씀
+      // 페이지에 버퍼 내용 덮어쓰기
       page.set(buffer.subarray(bufferOffset, bufferOffset + (writeEnd - writeStart)), writeStart)
       bufferOffset += writeEnd - writeStart
 
-      // [Important] _readPage가 복사본을 반환하므로, 수정된 페이지를 캐시에 다시 반영해야 함
+      // [중요] _readPage가 복사본을 반환하므로 수정한 페이지를 캐시에 다시 반영
       this.cache.set(pageIndex, page)
 
       if (tx) {
@@ -399,13 +397,13 @@ export class VirtualFileSystem {
         // Auto-commit: 즉시 디스크 반영
         // 단순히 dirtyPages에 넣고 sync 호출
         this.dirtyPages.add(pageIndex)
-        // 성능상 비효율적일 수 있으나 Auto-commit 안전성 보장
+        // 성능상 비효율적일 수 있으나 auto-commit의 안전성 보장
         await this._writeAsync(this.fileHandle, page, 0, this.pageSize, pageIndex * this.pageSize)
         this.dirtyPages.delete(pageIndex)
       }
     }
 
-    // 파일 크기 갱신 (더 큰 경우에만 늘어남)
+    // 파일 크기 업데이트 (확장된 경우에만)
     const endPosition = offset + buffer.length
     if (endPosition > this.fileSize) {
       this.fileSize = endPosition
@@ -415,12 +413,12 @@ export class VirtualFileSystem {
   }
 
   /**
-   * 변경된 페이지를 디스크에 동기화합니다.
+   * Synchronizes dirty pages to disk.
    */
   async sync(): Promise<void> {
     const promises: Promise<number>[] = []
 
-    // 디스크 접근 최적화를 위해 페이지 인덱스 순서대로 정렬하여 쓰기 수행
+    // 디스크 액세스 최적화를 위해 페이지 인덱스 정렬
     const sortedPages = Array.from(this.dirtyPages).sort((a, b) => a - b)
 
     for (const pageIndex of sortedPages) {
@@ -441,7 +439,7 @@ export class VirtualFileSystem {
   }
 
   /**
-   * 파일을 닫습니다.
+   * Closes the file.
    */
   async close(): Promise<void> {
     await this.sync()

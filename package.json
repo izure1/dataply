@@ -1,7 +1,7 @@
 {
   "name": "shard",
-  "version": "1.0.0",
-  "description": "",
+  "version": "0.0.1",
+  "description": "A lightweight storage engine for Node.js with support for MVCC, WAL, and Sharding.",
   "license": "MIT",
   "author": "izure <admin@izure.org>",
   "type": "commonjs",
@@ -20,7 +20,15 @@
     "test": "jest --forceExit",
     "build": "node build/index.js && tsc"
   },
-  "keywords": [],
+  "keywords": [
+    "storage-engine",
+    "mvcc",
+    "wal",
+    "sharding",
+    "database",
+    "bplus-tree",
+    "typescript"
+  ],
   "repository": {
     "type": "git",
     "url": "https://github.com/izure1/shard.git"

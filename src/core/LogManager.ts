@@ -1,8 +1,8 @@
 import fs from 'node:fs'
 
 /**
- * 로그 관리자 클래스
- * 데이터베이스의 원자성을 보장하기 위해 변경사항을 로그 파일(WAL)에 기록하고 관리합니다.
+ * Log Manager class.
+ * Records changes to a log file (WAL) and manages them to ensure atomicity of the database.
  */
 export class LogManager {
   private fd: number | null = null
@@ -13,9 +13,9 @@ export class LogManager {
   private view: DataView
 
   /**
-   * 생성자
-   * @param walFilePath WAL 파일 경로
-   * @param pageSize 페이지 크기
+   * Constructor
+   * @param walFilePath WAL file path
+   * @param pageSize Page size
    */
   constructor(walFilePath: string, pageSize: number) {
     this.walFilePath = walFilePath
@@ -27,7 +27,7 @@ export class LogManager {
   }
 
   /**
-   * 로그 파일을 엽니다.
+   * Opens the log file.
    */
   open(): void {
     // 'a+': 읽기 및 추가 모드로 열기. 파일이 없으면 생성.
@@ -36,9 +36,9 @@ export class LogManager {
   }
 
   /**
-   * 변경된 페이지들을 로그 파일에 추가합니다.
-   * 페이지 아이디 순서대로 정렬하여 기록합니다.
-   * @param pages 변경된 페이지 맵 (페이지 ID -> 데이터)
+   * Appends changed pages to the log file.
+   * Records them sorted by page ID.
+   * @param pages Map of changed pages (Page ID -> Data)
    */
   async append(pages: Map<number, Uint8Array>): Promise<void> {
     if (this.fd === null) {
@@ -76,9 +76,9 @@ export class LogManager {
   }
 
   /**
-   * 로그 파일을 읽어 페이지 맵을 복구합니다.
-   * VFS 생성자에서 호출되므로 동기로 작동합니다.
-   * @returns 복구된 페이지 맵
+   * Reads the log file to recover the page map.
+   * Runs synchronously as it is called by the VFS constructor.
+   * @returns Recovered page map
    */
   readAllSync(): Map<number, Uint8Array> {
     if (this.fd === null) {
@@ -107,8 +107,8 @@ export class LogManager {
   }
 
   /**
-   * 로그 파일을 초기화(비움)합니다.
-   * 체크포인트 후에 호출되어야 합니다.
+   * Initializes (clears) the log file.
+   * Should be called after a checkpoint.
    */
   async clear(): Promise<void> {
     // Windows에서 a+ 모드로 열린 파일에 대해 ftruncate가 EPERM 에러를 발생시킬 수 있음.
@@ -128,7 +128,7 @@ export class LogManager {
   }
 
   /**
-   * 리소스를 정리합니다.
+   * Cleans up resources.
    */
   close(): void {
     if (this.fd !== null) {

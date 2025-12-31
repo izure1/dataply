@@ -4,8 +4,8 @@ import { VirtualFileSystem } from './VirtualFileSystem'
 import type { Transaction } from './transaction/Transaction'
 
 /**
- * 페이지 파일 시스템 클래스
- * vps와 page factory를 사용하여 페이지를 관리합니다.
+ * Page File System class.
+ * Manages pages using VFS and page factory.
  */
 export class PageFileSystem {
   protected readonly pageFactory = new PageManagerFactory()
@@ -28,7 +28,7 @@ export class PageFileSystem {
 
   /**
    * VFS 인스턴스를 반환합니다.
-   * Transaction 생성을 위해 사용됩니다.
+   * Transaction 생성 시 사용됩니다.
    */
   get vfsInstance(): VirtualFileSystem {
     return this.vfs
@@ -44,10 +44,10 @@ export class PageFileSystem {
   }
 
   /**
-   * 페이지 헤더를 읽어옵니다.
-   * @param pageIndex 페이지 인덱스
-   * @param tx 트랜잭션
-   * @returns 페이지 헤더 버퍼
+   * Reads the page header.
+   * @param pageIndex Page index
+   * @param tx Transaction
+   * @returns Page header buffer
    */
   async getHeader(pageIndex: number, tx?: Transaction): Promise<Uint8Array> {
     const page = await this.get(pageIndex, tx)
@@ -55,11 +55,11 @@ export class PageFileSystem {
   }
 
   /**
-   * 페이지 바디를 읽어옵니다.
-   * @param pageIndex 페이지 인덱스
-   * @param recursive 재귀적으로 페이지를 읽을지 여부
-   * @param tx 트랜잭션
-   * @returns 페이지 바디 버퍼
+   * Reads the page body.
+   * @param pageIndex Page index
+   * @param recursive Whether to read pages recursively
+   * @param tx Transaction
+   * @returns Page body buffer
    */
   async getBody(pageIndex: number, recursive = false, tx?: Transaction): Promise<Uint8Array> {
     const page = await this.get(pageIndex, tx)
@@ -83,13 +83,9 @@ export class PageFileSystem {
   }
 
   /**
-   * 메타데이터 페이지를 반환합니다.
-   * @returns 메타데이터 페이지
-   */
-  /**
-   * 메타데이터 페이지를 반환합니다.
-   * @param tx 트랜잭션
-   * @returns 메타데이터 페이지
+   * Returns the metadata page.
+   * @param tx Transaction
+   * @returns Metadata page
    */
   async getMetadata(tx?: Transaction): Promise<MetadataPage> {
     const page = await this.get(0, tx)
@@ -100,9 +96,9 @@ export class PageFileSystem {
   }
 
   /**
-   * 데이터베이스에 저장된 페이지 개수를 반환합니다.
-   * @param tx 트랜잭션
-   * @returns 페이지 개수
+   * Returns the number of pages stored in the database.
+   * @param tx Transaction
+   * @returns Number of pages
    */
   async getPageCount(tx?: Transaction): Promise<number> {
     const metadata = await this.getMetadata(tx)
@@ -111,9 +107,9 @@ export class PageFileSystem {
   }
 
   /**
-   * 루트 인덱스 페이지를 반환합니다.
-   * @param tx 트랜잭션
-   * @returns 루트 인덱스 페이지
+   * Returns the root index page.
+   * @param tx Transaction
+   * @returns Root index page
    */
   async getRootIndex(tx?: Transaction): Promise<IndexPage> {
     const metadata = await this.getMetadata(tx)
@@ -127,19 +123,19 @@ export class PageFileSystem {
   }
 
   /**
-   * 메타데이터 페이지를 설정합니다.
-   * @param metadataPage 메타데이터 페이지
-   * @param tx 트랜잭션
+   * Sets the metadata page.
+   * @param metadataPage Metadata page
+   * @param tx Transaction
    */
   async setMetadata(metadataPage: MetadataPage, tx?: Transaction): Promise<void> {
     await this.setPage(0, metadataPage, tx)
   }
 
   /**
-   * 페이지를 설정합니다.
-   * @param pageIndex 페이지 인덱스
-   * @param page 페이지 데이터
-   * @param tx 트랜잭션
+   * Sets the page.
+   * @param pageIndex Page index
+   * @param page Page data
+   * @param tx Transaction
    */
   async setPage(pageIndex: number, page: Uint8Array, tx?: Transaction): Promise<void> {
     if (tx) {
@@ -149,10 +145,10 @@ export class PageFileSystem {
   }
 
   /**
-   * 페이지 헤더를 설정합니다.
-   * @param pageIndex 페이지 인덱스
-   * @param header 페이지 헤더
-   * @param tx 트랜잭션
+   * Sets the page header.
+   * @param pageIndex Page index
+   * @param header Page header
+   * @param tx Transaction
    */
   async setPageHeader(pageIndex: number, header: Uint8Array, tx?: Transaction): Promise<void> {
     const page = await this.get(pageIndex, tx)
@@ -162,10 +158,10 @@ export class PageFileSystem {
   }
 
   /**
-   * 페이지 바디를 설정합니다.
-   * @param pageIndex 페이지 인덱스
-   * @param body 페이지 바디
-   * @param tx 트랜잭션
+   * Sets the page body.
+   * @param pageIndex Page index
+   * @param body Page body
+   * @param tx Transaction
    */
   async setPageBody(pageIndex: number, body: Uint8Array, tx?: Transaction): Promise<void> {
     const page = await this.get(pageIndex, tx)
@@ -175,8 +171,8 @@ export class PageFileSystem {
   }
 
   /**
-   * 새로운 페이지를 생성하고 삽입합니다.
-   * @returns 생성된 페이지 아이디
+   * Appends and inserts a new page.
+   * @returns Created page ID
    */
   async appendNewPage(pageType: number = PageManager.CONSTANT.PAGE_TYPE_EMPTY, tx?: Transaction): Promise<number> {
     const metadata = await this.getMetadata(tx)
@@ -197,11 +193,11 @@ export class PageFileSystem {
   }
 
   /**
-   * 페이지에 데이터를 작성합니다. 만일 오버플로우된다면 다음 페이지를 생성하고, 이어서 작성합니다.
-   * @param pageId 페이지 아이디
-   * @param data 작성할 데이터
-   * @param offset 작성할 위치 (기본값: 0)
-   * @param tx 트랜잭션
+   * Writes data to a page. If it overflows, creates the next page and continues writing.
+   * @param pageId Page ID
+   * @param data Data to write
+   * @param offset Position to write (default: 0)
+   * @param tx Transaction
    */
   async writePageContent(pageId: number, data: Uint8Array, offset: number = 0, tx?: Transaction): Promise<void> {
     let currentPageId = pageId
@@ -214,7 +210,7 @@ export class PageFileSystem {
       const bodyStart = PageManager.CONSTANT.SIZE_PAGE_HEADER
       const bodySize = this.pageSize - bodyStart
 
-      // 오프셋이 현재 페이지 범위를 벗어나는 경우 다음 페이지로 이동
+      // 오프셋이 현재 페이지 범위를 넘어가면 다음 페이지로 이동
       if (currentOffset >= bodySize) {
         currentOffset -= bodySize
         const nextPageId = manager.getNextPageId(page)
@@ -231,11 +227,11 @@ export class PageFileSystem {
         continue
       }
 
-      // 현재 페이지에 작성할 수 있는 크기 계산
+      // 현재 페이지에 쓸 수 있는 크기 계산
       const writeSize = Math.min(data.length - dataOffset, bodySize - currentOffset)
       const chunk = data.subarray(dataOffset, dataOffset + writeSize)
 
-      // 페이지에 데이터 쓰기
+      // 데이터 쓰기
       page.set(chunk, bodyStart + currentOffset)
 
       // 남은 용량 업데이트 (더 많이 썼을 경우에만 줄어듦)
@@ -250,7 +246,7 @@ export class PageFileSystem {
       await this.setPage(currentPageId, page, tx)
 
       dataOffset += writeSize
-      currentOffset = 0 // 다음 페이지부터는 처음부터 작성
+      currentOffset = 0 // 다음 페이지부터는 앞에서부터 채움
 
       // 데이터가 남았는데 현재 페이지가 꽉 찼다면 다음 페이지 연결 준비
       if (dataOffset < data.length) {
@@ -268,7 +264,7 @@ export class PageFileSystem {
   }
 
   /**
-   * 페이지 파일 시스템을 닫습니다.
+   * Closes the page file system.
    */
   async close(): Promise<void> {
     await this.vfs.close()

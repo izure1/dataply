@@ -1,9 +1,9 @@
 import { Ryoiki } from 'ryoiki'
 
 /**
- * 락 매니저 클래스
- * 페이지 접근에 대한 동시성을 제어합니다.
- * Ryoiki 라이브러리를 사용하여 구현합니다.
+ * Lock Manager class.
+ * Controls concurrency for page access.
+ * Implemented using the Ryoiki library.
  */
 export class LockManager {
   private ryoiki: Ryoiki
@@ -15,10 +15,10 @@ export class LockManager {
   }
 
   /**
-   * 페이지에 대한 읽기(Shared) 락을 요청합니다.
-   * Ryoiki는 콜백이 종료되어도 명시적으로 해제하기 전까지 락을 유지합니다.
-   * @param pageId 페이지 ID
-   * @returns 락 해제 시 사용할 Lock ID
+   * Requests a read (Shared) lock for a page.
+   * Ryoiki maintains the lock until explicitly released, even if the callback ends.
+   * @param pageId Page ID
+   * @returns Lock ID to be used for releasing the lock
    */
   async acquireRead(pageId: number): Promise<string> {
     return new Promise<string>((resolve) => {
@@ -30,9 +30,9 @@ export class LockManager {
   }
 
   /**
-   * 페이지에 대한 쓰기(Exclusive) 락을 요청합니다.
-   * @param pageId 페이지 ID
-   * @returns 락 해제 시 사용할 Lock ID
+   * Requests a write (Exclusive) lock for a page.
+   * @param pageId Page ID
+   * @returns Lock ID to be used for releasing the lock
    */
   async acquireWrite(pageId: number): Promise<string> {
     return new Promise<string>((resolve) => {
@@ -44,8 +44,8 @@ export class LockManager {
   }
 
   /**
-   * 락을 해제합니다.
-   * @param lockId 해제할 락 ID
+   * Releases a lock.
+   * @param lockId Lock ID to release
    */
   release(lockId: string): void {
     const unlockFn = this.unlockMap.get(lockId)

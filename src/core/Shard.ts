@@ -8,7 +8,7 @@ import { LockManager } from './transaction/LockManager'
 import { Transaction } from './transaction/Transaction'
 
 /**
- * Shard 파일을 관리하는 클래스
+ * Class for managing Shard files.
  */
 export class Shard {
   protected readonly options: Required<ShardOptions>
@@ -33,10 +33,10 @@ export class Shard {
   }
 
   /**
-   * 페이지 파일이 올바른 Shard 파일인지 확인합니다.
-   * 메타데이터 페이지는 Shard 파일의 시작 위치에 위치해야 합니다.
-   * @param fileHandle 파일 핸들
-   * @returns 페이지 파일이 올바른 Shard 파일인지
+   * Verifies if the page file is a valid Shard file.
+   * The metadata page must be located at the beginning of the Shard file.
+   * @param fileHandle File handle
+   * @returns Whether the page file is a valid Shard file
    */
   static Verify(fileHandle: number): boolean {
     const size = MetadataPageManager.CONSTANT.OFFSET_MAGIC_STRING + MetadataPageManager.CONSTANT.MAGIC_STRING.length
@@ -49,19 +49,19 @@ export class Shard {
   }
 
   /**
-   * 누락된 옵션을 기본값으로 채웁니다.
-   * @param options 옵션
-   * @returns 누락없이 채워진 옵션
+   * Fills missing options with default values.
+   * @param options Options
+   * @returns Options filled without omissions
    */
   protected static VerboseOptions(options?: ShardOptions): Required<ShardOptions> {
     return Object.assign({ pageSize: 8192, wal: null }, options)
   }
 
   /**
-   * 데이터베이스 파일을 초기화합니다.
-   * 맨 처음 페이지는 메타데이터 페이지로 초기화됩니다.
-   * 두 번째 페이지는 최초의 데이터 페이지로 초기화됩니다.
-   * @param fileHandle 파일 핸들
+   * Initializes the database file.
+   * The first page is initialized as the metadata page.
+   * The second page is initialized as the first data page.
+   * @param fileHandle File handle
    */
   protected static Initialize(fileHandle: number, options: Required<ShardOptions>): void {
     const metadataPageManager = new MetadataPageManager()
@@ -69,7 +69,7 @@ export class Shard {
     const metadataPage = new Uint8Array(options.pageSize) as MetadataPage
     const dataPage = new Uint8Array(options.pageSize) as DataPage
 
-    // 첫 번째 메타데이터 페이지 초기화
+    // Initialize the first metadata page
     metadataPageManager.initial(
       metadataPage,
       MetadataPageManager.CONSTANT.PAGE_TYPE_METADATA,
@@ -79,10 +79,11 @@ export class Shard {
     )
     metadataPageManager.setMagicString(metadataPage)
     metadataPageManager.setPageCount(metadataPage, 2)
+    metadataPageManager.setPageSize(metadataPage, options.pageSize)
     metadataPageManager.setRootIndexPageId(metadataPage, -1)
     metadataPageManager.setLastInsertPageId(metadataPage, 1)
 
-    // 두 번째 데이터 페이지 초기화
+    // Initialize the second data page
     dataPageManager.initial(
       dataPage,
       DataPageManager.CONSTANT.PAGE_TYPE_DATA,
@@ -96,22 +97,36 @@ export class Shard {
   }
 
   /**
-   * 데이터베이스 파일을 엽니다. 파일이 존재하지 않는다면 초기화합니다.
-   * @param file 데이터베이스 파일
-   * @param options 옵션
-   * @returns 데이터베이스 파일
+   * Opens the database file. If the file does not exist, it initializes it.
+   * @param file Database file path
+   * @param options Options
+   * @returns Shard instance
    */
   static Open(file: string, options?: ShardOptions): Shard {
     const verboseOption = this.VerboseOptions(options)
     let fileHandle: number
     if (!fs.existsSync(file)) {
+      if (verboseOption.pageSize < 4096) {
+        throw new Error('Page size must be at least 4096 bytes')
+      }
       fileHandle = fs.openSync(file, 'w+')
-      // 파일이 존재하지 않는다면 생성하고 메타데이터 페이지를 추가합니다.
+      // 파일이 없으면 생성하고 메타데이터 페이지를 추가합니다.
       this.Initialize(fileHandle, verboseOption)
     } else {
       fileHandle = fs.openSync(file, 'r+')
+      // 메타데이터 페이지에서 페이지 크기를 읽어옵니다.
+      // 메타데이터 헤더 + 페이지 크기 필드(4바이트)까지 읽기 위해 충분한 크기를 읽습니다.
+      const buffer = new Uint8Array(128)
+      fs.readSync(fileHandle, buffer, 0, 128, 0)
+      const metadataManager = new MetadataPageManager()
+      if (metadataManager.isMetadataPage(buffer)) {
+        const storedPageSize = metadataManager.getPageSize(buffer)
+        if (storedPageSize > 0) {
+          verboseOption.pageSize = storedPageSize
+        }
+      }
     }
-    // 메타데이터를 확인하여 shard 파일인지 확인합니다.
+    // 메타데이터 확인을 통해 Shard 파일인지 체크합니다.
     if (!this.Verify(fileHandle)) {
       throw new Error('Invalid shard file')
     }
@@ -119,9 +134,9 @@ export class Shard {
   }
 
   /**
-   * shard 인스턴스를 초기화합니다.
-   * 반드시 shard 인스턴스를 사용하기 전에 호출해야 합니다.
-   * 호출하지 않는다면 shard 인스턴스를 사용할 수 없습니다.
+   * Initializes the shard instance.
+   * Must be called before using the shard instance.
+   * If not called, the shard instance cannot be used.
    */
   async init(): Promise<void> {
     if (this.initialized) {
@@ -132,10 +147,10 @@ export class Shard {
   }
 
   /**
-   * 트랜잭션을 생성합니다.
-   * 생성된 트랜잭션 객체를 사용하여 데이터를 추가하거나 수정할 수 있습니다.
-   * 트랜잭션은 반드시 `commit` 또는 `rollback`을 호출하여 종료해야 합니다.
-   * @returns 트랜잭션 객체
+   * Creates a transaction.
+   * The created transaction object can be used to add or modify data.
+   * A transaction must be terminated by calling either `commit` or `rollback`.
+   * @returns Transaction object
    */
   async createTransaction(): Promise<Transaction> {
     if (!this.initialized) {
@@ -145,10 +160,10 @@ export class Shard {
   }
 
   /**
-   * 데이터를 추가합니다. 추가된 행의 PK를 반환합니다.
-   * @param data 추가할 데이터
-   * @param tx 트랜잭션
-   * @returns 추가된 데이터의 PK
+   * Inserts data. Returns the PK of the added row.
+   * @param data Data to add
+   * @param tx Transaction
+   * @returns PK of the added data
    */
   async insert(data: string | Uint8Array, tx?: Transaction): Promise<number> {
     if (!this.initialized) {
@@ -179,11 +194,11 @@ export class Shard {
   }
 
   /**
-   * 여러 데이터를 배치로 추가합니다.
-   * 트랜잭션이 전달되지 않으면 내부적으로 단일 트랜잭션을 생성하여 처리합니다.
-   * @param dataList 추가할 데이터 배열
-   * @param tx 트랜잭션
-   * @returns 추가된 데이터들의 PK 배열
+   * Inserts multiple data in batch.
+   * If a transaction is not provided, it internally creates a single transaction to process.
+   * @param dataList Array of data to add
+   * @param tx Transaction
+   * @returns Array of PKs of the added data
    */
   async insertBatch(dataList: (string | Uint8Array)[], tx?: Transaction): Promise<number[]> {
     if (!this.initialized) {
@@ -203,13 +218,13 @@ export class Shard {
         const pk = await this.rowTableEngine.insert(encoded, tx)
         pks.push(pk)
       }
-      // 내부 트랜잭션인 경우에만 commit
+      // 내부 트랜잭션인 경우에만 커밋
       if (isInternalTx) {
         await tx.commit()
       }
       return pks
     } catch (error) {
-      // 내부 트랜잭션인 경우에만 rollback
+      // 내부 트랜잭션인 경우에만 롤백
       if (isInternalTx) {
         await tx.rollback()
       }
@@ -218,10 +233,10 @@ export class Shard {
   }
 
   /**
-   * 데이터를 수정합니다.
-   * @param pk 수정할 데이터의 PK
-   * @param data 수정할 데이터
-   * @param tx 트랜잭션
+   * Updates data.
+   * @param pk PK of the data to update
+   * @param data Data to update
+   * @param tx Transaction
    */
   async update(pk: number, data: string | Uint8Array, tx?: Transaction): Promise<void> {
     if (!this.initialized) {
@@ -249,9 +264,9 @@ export class Shard {
   }
 
   /**
-   * 데이터를 삭제합니다.
-   * @param pk 삭제할 데이터의 PK
-   * @param tx 트랜잭션
+   * Deletes data.
+   * @param pk PK of the data to delete
+   * @param tx Transaction
    */
   async delete(pk: number, tx?: Transaction): Promise<void> {
     if (!this.initialized) {
@@ -277,11 +292,11 @@ export class Shard {
   }
 
   /**
-   * 데이터를 조회합니다.
-   * @param pk 조회할 데이터의 PK
-   * @param asRaw 조회할 데이터를 원본으로 반환할지
-   * @param tx 트랜잭션
-   * @returns 조회된 데이터
+   * Selects data.
+   * @param pk PK of the data to select
+   * @param asRaw Whether to return the selected data as raw
+   * @param tx Transaction
+   * @returns Selected data
    */
   async select(pk: number, asRaw: true, tx?: Transaction): Promise<Uint8Array | null>
   async select(pk: number, asRaw: false, tx?: Transaction): Promise<string | null>
@@ -301,7 +316,7 @@ export class Shard {
   }
 
   /**
-   * shard 파일을 닫습니다.
+   * Closes the shard file.
    */
   async close(): Promise<void> {
     if (!this.initialized) {
