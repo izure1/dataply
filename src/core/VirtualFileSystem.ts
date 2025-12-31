@@ -168,9 +168,7 @@ export class VirtualFileSystem {
       for (const pageId of dirtyPages) {
         const undoData = tx.getUndoPage(pageId)
         if (undoData) {
-          const restored = new Uint8Array(this.pageSize)
-          restored.set(undoData)
-          this.cache.set(pageId, restored)
+          this.cache.set(pageId, undoData)
         }
       }
     }

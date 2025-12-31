@@ -45,11 +45,11 @@ describe('Concurrency (MVCC)', () => {
     await shard.init()
 
     // Sequential inserts to verify correct PK increment
-    const tx1 = await shard.beginTransaction()
+    const tx1 = await shard.createTransaction()
     const pk1 = await shard.insert('data1', tx1)
     await tx1.commit()
 
-    const tx2 = await shard.beginTransaction()
+    const tx2 = await shard.createTransaction()
     const pk2 = await shard.insert('data2', tx2)
     await tx2.commit()
 
@@ -69,12 +69,12 @@ describe('Concurrency (MVCC)', () => {
     await shard.init()
 
     // Insert initial data and commit
-    const tx1 = await shard.beginTransaction()
+    const tx1 = await shard.createTransaction()
     await shard.insert('initial_data', tx1)
     await tx1.commit()
 
     // Start a write transaction, modify, but rollback
-    const writeTx = await shard.beginTransaction()
+    const writeTx = await shard.createTransaction()
     await shard.insert('new_data', writeTx)
     await writeTx.rollback()
 
@@ -92,7 +92,7 @@ describe('Concurrency (MVCC)', () => {
 
     // Multiple sequential transactions
     for (let i = 0; i < insertCount; i++) {
-      const tx = await shard.beginTransaction()
+      const tx = await shard.createTransaction()
       const pk = await shard.insert(`data-${i}`, tx)
       await tx.commit()
       pks.push(pk)
@@ -113,17 +113,17 @@ describe('Concurrency (MVCC)', () => {
     await shard.init()
 
     // First transaction: commit
-    const tx1 = await shard.beginTransaction()
+    const tx1 = await shard.createTransaction()
     const pk1 = await shard.insert('committed-1', tx1)
     await tx1.commit()
 
     // Second transaction: rollback
-    const tx2 = await shard.beginTransaction()
+    const tx2 = await shard.createTransaction()
     await shard.insert('rolled-back', tx2)
     await tx2.rollback()
 
     // Third transaction: commit
-    const tx3 = await shard.beginTransaction()
+    const tx3 = await shard.createTransaction()
     const pk3 = await shard.insert('committed-2', tx3)
     await tx3.commit()
 
@@ -137,7 +137,7 @@ describe('Concurrency (MVCC)', () => {
     await shard.init()
 
     const batchSize = 50
-    const tx = await shard.beginTransaction()
+    const tx = await shard.createTransaction()
     const pks: number[] = []
 
     // Insert many rows in a single transaction
@@ -163,12 +163,12 @@ describe('Concurrency (MVCC)', () => {
     await shard.init()
 
     // Insert and commit initial data
-    const tx1 = await shard.beginTransaction()
+    const tx1 = await shard.createTransaction()
     await shard.insert('visible-data', tx1)
     await tx1.commit()
 
     // Start a new write transaction
-    const tx2 = await shard.beginTransaction()
+    const tx2 = await shard.createTransaction()
     await shard.insert('pending-data', tx2)
 
     // Read committed data (should see 'visible-data')
@@ -188,12 +188,12 @@ describe('Concurrency (MVCC)', () => {
     await shard.init()
 
     // First, insert some committed data
-    const tx1 = await shard.beginTransaction()
+    const tx1 = await shard.createTransaction()
     await shard.insert('base-data', tx1)
     await tx1.commit()
 
     // Start a large batch insert and rollback
-    const tx2 = await shard.beginTransaction()
+    const tx2 = await shard.createTransaction()
     for (let i = 0; i < 20; i++) {
       await shard.insert(`rollback-${i}`, tx2)
     }
@@ -204,7 +204,7 @@ describe('Concurrency (MVCC)', () => {
     expect(baseResult).toBe('base-data')
 
     // Insert new data after rollback (should work correctly)
-    const tx3 = await shard.beginTransaction()
+    const tx3 = await shard.createTransaction()
     const pk = await shard.insert('after-rollback', tx3)
     await tx3.commit()
 

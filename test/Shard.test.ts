@@ -112,5 +112,40 @@ describe('Shard', () => {
       const result = await shard.select(999999)
       expect(result).toBeNull()
     })
+
+    test('should delete a row', async () => {
+      const data = 'To be deleted'
+      const pk = await shard.insert(data)
+
+      // Ensure it exists
+      expect(await shard.select(pk)).toBe(data)
+
+      // Delete it
+      await shard.delete(pk)
+
+      // Ensure it is gone
+      const result = await shard.select(pk)
+      expect(result).toBeNull()
+
+      // Delete again should not throw
+      await expect(shard.delete(pk)).resolves.not.toThrow()
+    })
+
+    test('should delete large data (overflow)', async () => {
+      // Create data larger than one page (8192 bytes)
+      const data = new Uint8Array(10000).fill(66) // 'B'
+      const pk = await shard.insert(data)
+
+      // Ensure it exists
+      const result = await shard.select(pk, true)
+      expect(result).toEqual(data)
+
+      // Delete it
+      await shard.delete(pk)
+
+      // Ensure it is gone (returns null)
+      const resultDeleted = await shard.select(pk, true)
+      expect(resultDeleted).toBeNull()
+    })
   })
 })

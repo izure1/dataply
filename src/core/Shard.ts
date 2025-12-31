@@ -132,10 +132,12 @@ export class Shard {
   }
 
   /**
-   * 트랜잭션을 시작합니다.
+   * 트랜잭션을 생성합니다.
+   * 생성된 트랜잭션 객체를 사용하여 데이터를 추가하거나 수정할 수 있습니다.
+   * 트랜잭션은 반드시 `commit` 또는 `rollback`을 호출하여 종료해야 합니다.
    * @returns 트랜잭션 객체
    */
-  async beginTransaction(): Promise<Transaction> {
+  async createTransaction(): Promise<Transaction> {
     if (!this.initialized) {
       throw new Error('Shard instance is not initialized')
     }
@@ -152,13 +154,28 @@ export class Shard {
     if (!this.initialized) {
       throw new Error('Shard instance is not initialized')
     }
-    if (!tx) {
-      tx = await this.beginTransaction()
-    }
+
     if (typeof data === 'string') {
       data = this.textCodec.encode(data)
     }
-    return this.rowTableEngine.insert(data, tx)
+
+    const isInternalTx = !tx
+    if (!tx) {
+      tx = await this.createTransaction()
+    }
+
+    try {
+      const pk = await this.rowTableEngine.insert(data, tx)
+      if (isInternalTx) {
+        await tx.commit()
+      }
+      return pk
+    } catch (error) {
+      if (isInternalTx) {
+        await tx.rollback()
+      }
+      throw error
+    }
   }
 
   /**
@@ -175,7 +192,7 @@ export class Shard {
 
     const isInternalTx = !tx
     if (!tx) {
-      tx = await this.beginTransaction()
+      tx = await this.createTransaction()
     }
 
     const pks: number[] = []
@@ -210,11 +227,53 @@ export class Shard {
     if (!this.initialized) {
       throw new Error('Shard instance is not initialized')
     }
-    if (!tx) {
-      tx = await this.beginTransaction()
-    }
+
     const encoded = typeof data === 'string' ? this.textCodec.encode(data) : data
-    await this.rowTableEngine.update(pk, encoded, tx)
+
+    const isInternalTx = !tx
+    if (!tx) {
+      tx = await this.createTransaction()
+    }
+
+    try {
+      await this.rowTableEngine.update(pk, encoded, tx)
+      if (isInternalTx) {
+        await tx.commit()
+      }
+    } catch (error) {
+      if (isInternalTx) {
+        await tx.rollback()
+      }
+      throw error
+    }
+  }
+
+  /**
+   * 데이터를 삭제합니다.
+   * @param pk 삭제할 데이터의 PK
+   * @param tx 트랜잭션
+   */
+  async delete(pk: number, tx?: Transaction): Promise<void> {
+    if (!this.initialized) {
+      throw new Error('Shard instance is not initialized')
+    }
+
+    const isInternalTx = !tx
+    if (!tx) {
+      tx = await this.createTransaction()
+    }
+
+    try {
+      await this.rowTableEngine.delete(pk, tx)
+      if (isInternalTx) {
+        await tx.commit()
+      }
+    } catch (error) {
+      if (isInternalTx) {
+        await tx.rollback()
+      }
+      throw error
+    }
   }
 
   /**

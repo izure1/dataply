@@ -36,11 +36,10 @@ export class PageFileSystem {
 
   /**
    * @param pageIndex 페이지 인덱스
-   * @param tx 트랜잭션 (MVCC용: 스냅샷 격리)
+   * @param tx 트랜잭션
    * @returns 페이지 버퍼
    */
   async get(pageIndex: number, tx?: Transaction): Promise<Uint8Array> {
-    // [MVCC] Reads don't acquire locks - snapshot isolation via UndoBuffer
     return await this.vfs.read(pageIndex * this.pageSize, this.pageSize, tx)
   }
 

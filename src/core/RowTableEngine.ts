@@ -187,6 +187,30 @@ export class RowTableEngine {
   }
 
   /**
+   * PK로 RID를 조회합니다.
+   * 트랜잭션이 있는 경우 Pending Update를 먼저 확인합니다.
+   * @param pk PK
+   * @param tx 트랜잭션
+   * @returns RID or null (if not found)
+   */
+  private async getRidByPK(pk: number, tx?: Transaction): Promise<number | null> {
+    // 1. 현재 트랜잭션의 Pending Updates 우선 확인
+    if (tx) {
+      const pendingUpdate = tx.getPendingIndexUpdate(pk)
+      if (pendingUpdate) {
+        return pendingUpdate.newRid
+      }
+    }
+
+    // 2. B+트리에서 조회
+    const keys = await this.bptree.keys({ equal: pk })
+    if (keys.size === 0) {
+      return null
+    }
+    return keys.values().next().value!
+  }
+
+  /**
    * B+트리에서 pk에 해당하는 rid를 조회하여, 실제 행을 반환합니다
    * @param pk 행의 고유값
    * @param tx 트랜잭션
@@ -201,11 +225,10 @@ export class RowTableEngine {
   async update(pk: number, data: Uint8Array, tx?: Transaction): Promise<void> {
     const operation = async () => {
       // B+트리에서 pk에 해당하는 rid를 조회합니다.
-      const keys = await this.bptree.keys({ equal: pk })
-      if (keys.size === 0) {
-        throw new Error(`Row not found for PK: ${pk}`)
+      const rid = await this.getRidByPK(pk, tx)
+      if (rid === null) {
+        return
       }
-      const rid = keys.values().next().value!
       this.keyManager.setBufferFromKey(rid, this.ridBuffer)
 
       const pageId = this.keyManager.getPageId(this.ridBuffer)
@@ -260,65 +283,9 @@ export class RowTableEngine {
 
     // 새 데이터가 기존 데이터보다 짧거나 같은 경우: in-place 수정
     if (newBodySize <= oldBodySize) {
-      console.log(`[Update In-Place] PID: ${pageId}, Slot: ${slotIndex}, OldSize: ${oldBodySize}, NewSize: ${newBodySize}`)
       this.rowManager.setBodySize(row, newBodySize)
       this.rowManager.setBody(row, data)
       await this.pfs.setPage(pageId, page, tx)
-      return
-    }
-
-    // 새 데이터가 더 긴 경우: 기존 행을 삭제로 표시하고 새 행을 삽입 후 B+트리 RID 업데이트
-    const willRowSize = this.getRequiredRowSize(data)
-
-    // 거대 데이터인 경우: 오버플로우 페이지로 이동
-    if (willRowSize > this.maxBodySize) {
-      // 오버플로우 페이지를 생성하고 데이터를 삽입합니다.
-      const overflowPageId = await this.pfs.appendNewPage(this.overflowPageManager.pageType, tx)
-      await this.pfs.writePageContent(overflowPageId, data, 0, tx)
-
-      // 새로운 포인터 행 생성 (오버플로우 포인터)
-      const newRow = new Uint8Array(Row.CONSTANT.SIZE_HEADER + 4)
-      this.rowManager.setPK(newRow, pk)
-      this.rowManager.setOverflowFlag(newRow, true)
-      this.rowManager.setBodySize(newRow, 4)
-      this.rowManager.setBody(newRow, numberToBytes(overflowPageId, this.pageIdBuffer))
-
-      // 새 행을 삽입할 위치를 찾습니다.
-      const metadataPage = await this.pfs.getMetadata(tx)
-      let lastInsertDataPageId = this.metadataPageManager.getLastInsertPageId(metadataPage)
-      let lastInsertDataPage = await this.pfs.get(lastInsertDataPageId, tx) as DataPage
-
-      if (!this.factory.isDataPage(lastInsertDataPage)) {
-        throw new Error('Last insert page is not data page')
-      }
-
-      let newSlotIndex = this.dataPageManager.getNextSlotIndex(lastInsertDataPage, newRow)
-      if (newSlotIndex === -1) {
-        const newPageId = await this.pfs.appendNewPage(this.dataPageManager.pageType, tx)
-        lastInsertDataPage = await this.pfs.get(newPageId, tx) as DataPage
-        lastInsertDataPageId = newPageId
-        newSlotIndex = 0
-      }
-
-      this.dataPageManager.insert(lastInsertDataPage, newRow)
-      await this.pfs.setPage(lastInsertDataPageId, lastInsertDataPage, tx)
-
-      // 기존 행을 삭제로 표시합니다.
-      this.rowManager.setDeletedFlag(row, true)
-      await this.pfs.setPage(pageId, page, tx)
-
-      // B+트리에서 기존 RID를 삭제하고 새 RID를 삽입합니다.
-      this.setRID(pageId, slotIndex)
-      const oldRidNumeric = this.getRID()
-      this.setRID(lastInsertDataPageId, newSlotIndex)
-      const newRidNumeric = this.getRID()
-      await this.bptree.delete(oldRidNumeric, pk)
-      await this.bptree.insert(newRidNumeric, pk)
-
-      // 메타데이터 업데이트
-      const freshMetadataPage = await this.pfs.getMetadata(tx)
-      this.metadataPageManager.setLastInsertPageId(freshMetadataPage, lastInsertDataPageId)
-      await this.pfs.setMetadata(freshMetadataPage, tx)
       return
     }
 
@@ -377,29 +344,58 @@ export class RowTableEngine {
         tx.onCommit(async () => {
           const updates = tx.getPendingIndexUpdates()
           for (const [key, { newRid, oldRid }] of updates) {
-            console.log(`[TxHook] Deleting PK: ${key}, OldRID: ${oldRid}`)
-            try {
-              await this.bptree.delete(key, oldRid)
-              console.log(`[TxHook] Delete Success`)
-            } catch (e) { console.error(`[TxHook] Delete Failed`, e) }
-
-            console.log(`[TxHook] Inserting PK: ${key}, NewRID: ${newRid}`)
-            await this.bptree.insert(key, newRid)
+            await this.bptree.delete(oldRid, key)
+            await this.bptree.insert(newRid, key)
           }
         })
       }
       tx.addPendingIndexUpdate(pk, newRidNumeric, oldRidNumeric)
     } else {
       // 트랜잭션이 없으면 즉시 반영 (Auto-commit)
-      // 트랜잭션이 없으면 즉시 반영 (Auto-commit)
-      console.log(`[AutoCommit] Deleting PK: ${pk}, OldRID: ${oldRidNumeric}`)
-      await this.bptree.delete(pk, oldRidNumeric)
-      console.log(`[AutoCommit] Inserting PK: ${pk}, NewRID: ${newRidNumeric}`)
-      await this.bptree.insert(pk, newRidNumeric)
+      await this.bptree.delete(oldRidNumeric, pk)
+      await this.bptree.insert(newRidNumeric, pk)
     }
     const freshMetadataPage = await this.pfs.getMetadata(tx)
     this.metadataPageManager.setLastInsertPageId(freshMetadataPage, lastInsertDataPageId)
     await this.pfs.setMetadata(freshMetadataPage, tx)
+  }
+
+  /**
+   * 데이터를 삭제합니다.
+   * @param pk 삭제할 데이터의 PK
+   * @param tx 트랜잭션
+   */
+  async delete(pk: number, tx?: Transaction): Promise<void> {
+    const operation = async () => {
+      const rid = await this.getRidByPK(pk, tx)
+      if (rid === null) {
+        return
+      }
+
+      this.keyManager.setBufferFromKey(rid, this.ridBuffer)
+      const pageId = this.keyManager.getPageId(this.ridBuffer)
+      const slotIndex = this.keyManager.getSlotIndex(this.ridBuffer)
+
+      const page = await this.pfs.get(pageId, tx)
+      if (!this.factory.isDataPage(page)) {
+        throw new Error(`RID not found for PK: ${pk}`)
+      }
+
+      const row = this.dataPageManager.getRow(page as DataPage, slotIndex)
+
+      if (this.rowManager.getDeletedFlag(row)) {
+        return
+      }
+
+      this.rowManager.setDeletedFlag(row, true)
+      await this.pfs.setPage(pageId, page, tx)
+    }
+
+    if (tx) {
+      return TxContext.run(tx, operation)
+    } else {
+      return operation()
+    }
   }
 
   /**
@@ -410,19 +406,10 @@ export class RowTableEngine {
    */
   async selectByPK(pk: number, tx?: Transaction): Promise<Uint8Array | null> {
     const operation = async () => {
-      // 1. 현재 트랜잭션의 Pending Updates 우선 확인 (Read Your Own Writes)
-      if (tx) {
-        const pendingUpdate = tx.getPendingIndexUpdate(pk)
-        if (pendingUpdate) {
-          return this.fetchRowByRid(pk, pendingUpdate.newRid, tx)
-        }
-      }
-
-      const keys = await this.bptree.keys({ equal: pk })
-      if (keys.size === 0) {
+      const rid = await this.getRidByPK(pk, tx)
+      if (rid === null) {
         return null
       }
-      const rid = keys.values().next().value!
       return this.fetchRowByRid(pk, rid, tx)
     }
 
@@ -447,16 +434,16 @@ export class RowTableEngine {
     const manager = this.factory.getManager(page)
     const row = manager.getRow(page, slotIndex)
 
-    if (this.rowManager.getOverflowFlag(row)) {
+    if (this.rowManager.getDeletedFlag(row)) {
+      return null
+    }
+    else if (this.rowManager.getOverflowFlag(row)) {
       const overflowPageId = bytesToNumber(this.rowManager.getBody(row))
       const overflowPage = await this.pfs.get(overflowPageId, tx)
       if (!this.factory.isOverflowPage(overflowPage)) {
         throw new Error(`Overflow page not found for RID: ${rid}`)
       }
       return this.pfs.getBody(overflowPageId, true, tx)
-    }
-    else if (this.rowManager.getDeletedFlag(row)) {
-      return null
     }
 
     return this.rowManager.getBody(row)
