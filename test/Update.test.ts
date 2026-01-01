@@ -64,7 +64,7 @@ describe('Shard Update', () => {
 
   it('should work with transactions', async () => {
     const pk = await shard.insert('initial')
-    const tx = await shard.createTransaction()
+    const tx = shard.createTransaction()
     await shard.update(pk, 'updated in tx', tx)
 
     // 이전에 읽으면 initial이어야 함 (MVCC 지원 여부에 따라 다르지만, 현재 구현상 tx 내에서만 보임)

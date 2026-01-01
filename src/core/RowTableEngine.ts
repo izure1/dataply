@@ -196,7 +196,7 @@ export class RowTableEngine {
   private async getRidByPK(pk: number, tx?: Transaction): Promise<number | null> {
     // 1. 현재 트랜잭션의 Pending Updates 우선 확인
     if (tx) {
-      const pendingUpdate = tx.getPendingIndexUpdate(pk)
+      const pendingUpdate = tx.__getPendingIndexUpdate(pk)
       if (pendingUpdate) {
         return pendingUpdate.newRid
       }
@@ -339,17 +339,17 @@ export class RowTableEngine {
     // 트랜잭션이 있는 경우 즉시 반영하지 않고, 커밋 시점으로 미룹니다.
     // 이는 다른 트랜잭션이 커밋되지 않은 새 RID를 참조하는 것을 방지합니다.
     if (tx) {
-      if (tx.getPendingIndexUpdates().size === 0) {
+      if (tx.__getPendingIndexUpdates().size === 0) {
         // 커밋 시 일괄 적용 hook 등록 (최초 1회)
         tx.onCommit(async () => {
-          const updates = tx.getPendingIndexUpdates()
+          const updates = tx.__getPendingIndexUpdates()
           for (const [key, { newRid, oldRid }] of updates) {
             await this.bptree.delete(oldRid, key)
             await this.bptree.insert(newRid, key)
           }
         })
       }
-      tx.addPendingIndexUpdate(pk, newRidNumeric, oldRidNumeric)
+      tx.__addPendingIndexUpdate(pk, newRidNumeric, oldRidNumeric)
     } else {
       // 트랜잭션이 없으면 즉시 반영 (Auto-commit)
       await this.bptree.delete(oldRidNumeric, pk)

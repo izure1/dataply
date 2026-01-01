@@ -86,7 +86,7 @@ export class VirtualFileSystem {
    * @param tx Transaction
    */
   async commit(tx: Transaction): Promise<void> {
-    const dirtyPages = tx.getDirtyPages()
+    const dirtyPages = tx.__getDirtyPages()
     if (!dirtyPages || dirtyPages.size === 0) {
       this.cleanupTransaction(tx)
       return
@@ -161,12 +161,12 @@ export class VirtualFileSystem {
    * @param tx Transaction
    */
   async rollback(tx: Transaction): Promise<void> {
-    const dirtyPages = tx.getDirtyPages()
+    const dirtyPages = tx.__getDirtyPages()
 
     if (dirtyPages) {
       // Undo 버퍼를 사용하여 이전 상태로 복구
       for (const pageId of dirtyPages) {
-        const undoData = tx.getUndoPage(pageId)
+        const undoData = tx.__getUndoPage(pageId)
         if (undoData) {
           this.cache.set(pageId, undoData)
         }
@@ -186,7 +186,7 @@ export class VirtualFileSystem {
 
   private cleanupTransaction(tx: Transaction) {
     // Dirty Page 소유권 해제
-    const pages = tx.getDirtyPages()
+    const pages = tx.__getDirtyPages()
     if (pages) {
       for (const pageId of pages) {
         this.dirtyPageOwners.delete(pageId)
@@ -263,7 +263,7 @@ export class VirtualFileSystem {
           // pass (read cache)
         } else {
           // 타인이 소유 중 -> Undo 데이터(Snapshot)를 읽음
-          const undoPage = ownerTx.getUndoPage(pageIndex)
+          const undoPage = ownerTx.__getUndoPage(pageIndex)
           if (undoPage) {
             const snapshot = new Uint8Array(this.pageSize)
             snapshot.set(undoPage)
@@ -377,7 +377,7 @@ export class VirtualFileSystem {
         // 현재 페이지의 상태 백업 (Deep Copy)
         const snapshot = new Uint8Array(this.pageSize)
         snapshot.set(page)
-        tx.addUndoPage(pageIndex, snapshot)
+        tx.__addUndoPage(pageIndex, snapshot)
       }
 
       const pageStartOffset = pageIndex * this.pageSize
@@ -392,7 +392,7 @@ export class VirtualFileSystem {
       this.cache.set(pageIndex, page)
 
       if (tx) {
-        tx.addDirtyPage(pageIndex)
+        tx.__addDirtyPage(pageIndex)
       } else {
         // Auto-commit: 즉시 디스크 반영
         // 단순히 dirtyPages에 넣고 sync 호출

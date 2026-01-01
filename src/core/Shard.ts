@@ -1,9 +1,10 @@
 import fs from 'node:fs'
-import type { ShardOptions, MetadataPage, DataPage, IndexPage } from '../types'
+import type { ShardOptions, MetadataPage, DataPage } from '../types'
 import { PageFileSystem } from './PageFileSystem'
-import { MetadataPageManager, DataPageManager, IndexPageManager } from './Page'
+import { MetadataPageManager, DataPageManager } from './Page'
 import { RowTableEngine } from './RowTableEngine'
 import { TextCodec } from '../utils/TextCodec'
+import { catchPromise } from '../utils/catchPromise'
 import { LockManager } from './transaction/LockManager'
 import { Transaction } from './transaction/Transaction'
 
@@ -159,6 +160,24 @@ export class Shard {
     return new Transaction(++this.txIdCounter, this.pfs.vfsInstance, this.lockManager)
   }
 
+  private async runWithDefault<T>(callback: (tx: Transaction) => Promise<T>, tx?: Transaction): Promise<T> {
+    const isInternalTx = !tx
+    if (!tx) {
+      tx = this.createTransaction()
+    }
+    const [error, result] = await catchPromise(callback(tx))
+    if (error) {
+      if (isInternalTx) {
+        await tx.rollback()
+      }
+      throw error
+    }
+    if (isInternalTx) {
+      await tx.commit()
+    }
+    return result
+  }
+
   /**
    * Inserts data. Returns the PK of the added row.
    * @param data Data to add
@@ -174,23 +193,10 @@ export class Shard {
       data = this.textCodec.encode(data)
     }
 
-    const isInternalTx = !tx
-    if (!tx) {
-      tx = await this.createTransaction()
-    }
-
-    try {
+    return this.runWithDefault(async (tx) => {
       const pk = await this.rowTableEngine.insert(data, tx)
-      if (isInternalTx) {
-        await tx.commit()
-      }
       return pk
-    } catch (error) {
-      if (isInternalTx) {
-        await tx.rollback()
-      }
-      throw error
-    }
+    }, tx)
   }
 
   /**
@@ -205,31 +211,15 @@ export class Shard {
       throw new Error('Shard instance is not initialized')
     }
 
-    const isInternalTx = !tx
-    if (!tx) {
-      tx = await this.createTransaction()
-    }
-
-    const pks: number[] = []
-
-    try {
+    return this.runWithDefault(async (tx) => {
+      const pks: number[] = []
       for (const data of dataList) {
         const encoded = typeof data === 'string' ? this.textCodec.encode(data) : data
         const pk = await this.rowTableEngine.insert(encoded, tx)
         pks.push(pk)
       }
-      // 내부 트랜잭션인 경우에만 커밋
-      if (isInternalTx) {
-        await tx.commit()
-      }
       return pks
-    } catch (error) {
-      // 내부 트랜잭션인 경우에만 롤백
-      if (isInternalTx) {
-        await tx.rollback()
-      }
-      throw error
-    }
+    }, tx)
   }
 
   /**
@@ -243,24 +233,13 @@ export class Shard {
       throw new Error('Shard instance is not initialized')
     }
 
-    const encoded = typeof data === 'string' ? this.textCodec.encode(data) : data
-
-    const isInternalTx = !tx
-    if (!tx) {
-      tx = await this.createTransaction()
+    if (typeof data === 'string') {
+      data = this.textCodec.encode(data)
     }
 
-    try {
-      await this.rowTableEngine.update(pk, encoded, tx)
-      if (isInternalTx) {
-        await tx.commit()
-      }
-    } catch (error) {
-      if (isInternalTx) {
-        await tx.rollback()
-      }
-      throw error
-    }
+    return this.runWithDefault(async (tx) => {
+      await this.rowTableEngine.update(pk, data, tx)
+    }, tx)
   }
 
   /**
@@ -273,22 +252,9 @@ export class Shard {
       throw new Error('Shard instance is not initialized')
     }
 
-    const isInternalTx = !tx
-    if (!tx) {
-      tx = await this.createTransaction()
-    }
-
-    try {
+    return this.runWithDefault(async (tx) => {
       await this.rowTableEngine.delete(pk, tx)
-      if (isInternalTx) {
-        await tx.commit()
-      }
-    } catch (error) {
-      if (isInternalTx) {
-        await tx.rollback()
-      }
-      throw error
-    }
+    }, tx)
   }
 
   /**

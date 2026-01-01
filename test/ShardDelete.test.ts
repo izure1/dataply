@@ -32,7 +32,7 @@ describe('Shard Delete Transaction Tests', () => {
     expect(await shard.select(pk)).toBe(data)
 
     // Start transaction and delete
-    const tx = await shard.createTransaction()
+    const tx = shard.createTransaction()
     await shard.delete(pk, tx)
 
     // Verify deleted within transaction
@@ -55,8 +55,8 @@ describe('Shard Delete Transaction Tests', () => {
     const pk = await shard.insert(data)
 
     // Create two transactions
-    const tx1 = await shard.createTransaction()
-    const tx2 = await shard.createTransaction()
+    const tx1 = shard.createTransaction()
+    const tx2 = shard.createTransaction()
 
     // Tx1 deletes the row
     await shard.delete(pk, tx1)

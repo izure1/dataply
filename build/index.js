@@ -12,5 +12,5 @@ esbuild.build({
   ...Config,
   platform: 'node',
   format: 'cjs',
-  outdir: 'dist/cjs',
+  outdir: 'dist',
 })

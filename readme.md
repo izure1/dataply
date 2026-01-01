@@ -158,9 +158,9 @@ Shard is optimized for high-speed data processing. Below are the results of basi
 | **Medium Row Insert (1KB)** | 100 | ~40ms | **~2,471 OPS** |
 
 ### Benchmark Analysis
-- **Batching Efficiency**: Grouping operations into a single transaction significantly increases throughput by minimizing internal transaction management overhead.
-- **WAL Trade-off**: Enabling Write-Ahead Logging ensures data durability and crash recovery, which naturally increases I/O latency due to synchronous disk operations.
-- **Node.js Optimization**: Shard is designed to provide optimal performance for a pure TypeScript engine without native dependencies.
+- **Batching Efficiency**: Grouping operations into a single transaction is approximately **2.3x faster** than individual inserts by minimizing internal transaction management overhead.
+- **WAL Trade-off**: Enabling Write-Ahead Logging ensures data durability but results in a significant performance decrease (approximately **22x slower** for individual inserts) due to synchronous I/O operations.
+- **Node.js Optimization**: Shard is designed to provide competitive performance (over **5,000 OPS** in batch mode) for a pure TypeScript engine without native dependencies.
 
 > [!NOTE]
 > Tests were conducted on a standard local environment (Node.js v25+). Performance may vary depending on hardware specifications (especially SSD/HDD) and system load.

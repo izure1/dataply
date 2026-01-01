@@ -84,7 +84,7 @@ describe('Recovery Integration Test', () => {
     await shard1.init()
 
     // 2. 트랜잭션으로 데이터 삽입 및 커밋
-    const tx = await shard1.createTransaction()
+    const tx = shard1.createTransaction()
     const pk1 = await shard1.insert('Committed Data 1', tx)
     const pk2 = await shard1.insert('Committed Data 2', tx)
     await tx.commit()
@@ -141,7 +141,7 @@ describe('Recovery Integration Test', () => {
     const pkCommitted = await shard1.insert('This is committed')
 
     // 2. 새 트랜잭션에서 데이터 삽입 (커밋 안함)
-    const tx = await shard1.createTransaction()
+    const tx = shard1.createTransaction()
     const pkUncommitted = await shard1.insert('This is NOT committed', tx)
     // tx.commit()을 호출하지 않음 - 롤백도 하지 않음
 
@@ -204,7 +204,7 @@ describe('Recovery Integration Test', () => {
 
     // 5개의 개별 트랜잭션
     for (let i = 0; i < 5; i++) {
-      const tx = await shard1.createTransaction()
+      const tx = shard1.createTransaction()
       const pk = await shard1.insert(`Transaction ${i} Data`, tx)
       pks.push(pk)
       await tx.commit()

@@ -15,6 +15,8 @@ export class Transaction {
 
   /** Undo Logs: PageID -> Original Page Buffer (Snapshot) */
   private undoPages: Map<number, Uint8Array> = new Map()
+  /** List of Dirty Pages modified by the transaction */
+  private dirtyPages: Set<number> = new Set()
   /** Pending Index Updates: PK -> { newRid, oldRid } */
   private pendingIndexUpdates: Map<number, { newRid: number, oldRid: number }> = new Map()
   /** List of callbacks to execute on commit */
@@ -44,8 +46,11 @@ export class Transaction {
   /**
    * Stores an Undo page.
    * Does not overwrite if the page is already stored (maintains the original snapshot).
+   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
+   * @param pageId Page ID
+   * @param buffer Page buffer
    */
-  addUndoPage(pageId: number, buffer: Uint8Array) {
+  __addUndoPage(pageId: number, buffer: Uint8Array) {
     if (!this.undoPages.has(pageId)) {
       this.undoPages.set(pageId, buffer)
     }
@@ -53,37 +58,49 @@ export class Transaction {
 
   /**
    * Returns an Undo page.
+   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
+   * @param pageId Page ID
+   * @returns Undo page
    */
-  getUndoPage(pageId: number): Uint8Array | undefined {
+  __getUndoPage(pageId: number): Uint8Array | undefined {
     return this.undoPages.get(pageId)
   }
 
   /**
    * Adds a Pending Index Update.
+   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
+   * @param pk PK
+   * @param newRid New RID
+   * @param oldRid Old RID
    */
-  addPendingIndexUpdate(pk: number, newRid: number, oldRid: number) {
+  __addPendingIndexUpdate(pk: number, newRid: number, oldRid: number) {
     this.pendingIndexUpdates.set(pk, { newRid, oldRid })
   }
 
   /**
    * Returns a Pending Index Update.
+   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
+   * @param pk PK
+   * @returns Pending Index Update
    */
-  getPendingIndexUpdate(pk: number) {
+  __getPendingIndexUpdate(pk: number) {
     return this.pendingIndexUpdates.get(pk)
   }
 
   /**
    * Returns all Pending Index Updates.
+   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
    */
-  getPendingIndexUpdates() {
+  __getPendingIndexUpdates() {
     return this.pendingIndexUpdates
   }
 
   /**
    * Acquires a write lock.
+   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
    * @param pageId Page ID
    */
-  async acquireWriteLock(pageId: number): Promise<void> {
+  async __acquireWriteLock(pageId: number): Promise<void> {
     const existingLockId = this.pageLocks.get(pageId)
     if (existingLockId) {
       if (this.heldLocks.has(existingLockId)) {
@@ -115,21 +132,20 @@ export class Transaction {
     this.releaseAllLocks()
   }
 
-  /** List of Dirty Pages modified by the transaction */
-  private dirtyPages: Set<number> = new Set()
-
   /**
    * Adds a Dirty Page.
+   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
    * @param pageId Page ID
    */
-  addDirtyPage(pageId: number) {
+  __addDirtyPage(pageId: number) {
     this.dirtyPages.add(pageId)
   }
 
   /**
    * Returns the list of Dirty Pages.
+   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
    */
-  getDirtyPages(): Set<number> {
+  __getDirtyPages(): Set<number> {
     return this.dirtyPages
   }
 

@@ -139,7 +139,7 @@ export class PageFileSystem {
    */
   async setPage(pageIndex: number, page: Uint8Array, tx?: Transaction): Promise<void> {
     if (tx) {
-      await tx.acquireWriteLock(pageIndex)
+      await tx.__acquireWriteLock(pageIndex)
     }
     await this.vfs.write(pageIndex * this.pageSize, page, tx)
   }
