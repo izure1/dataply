@@ -10,7 +10,7 @@ describe('Row Count Test', () => {
 
   beforeEach(async () => {
     if (fs.existsSync(DB_PATH)) fs.unlinkSync(DB_PATH)
-    shard = Shard.Open(DB_PATH)
+    shard = new Shard(DB_PATH)
     await shard.init()
   })
 
@@ -20,7 +20,7 @@ describe('Row Count Test', () => {
   })
 
   it('should track row count correctly on insert', async () => {
-    const rowTableEngine = (shard as any).rowTableEngine
+    const rowTableEngine = (shard as any).api.rowTableEngine
     const tx = shard.createTransaction()
 
     await TxContext.run(tx, async () => {
@@ -35,7 +35,7 @@ describe('Row Count Test', () => {
   })
 
   it('should track row count correctly on delete', async () => {
-    const rowTableEngine = (shard as any).rowTableEngine
+    const rowTableEngine = (shard as any).api.rowTableEngine
     const tx = shard.createTransaction()
 
     await TxContext.run(tx, async () => {
@@ -48,7 +48,7 @@ describe('Row Count Test', () => {
   })
 
   it('should not change row count on update', async () => {
-    const rowTableEngine = (shard as any).rowTableEngine
+    const rowTableEngine = (shard as any).api.rowTableEngine
     const tx = shard.createTransaction()
 
     await TxContext.run(tx, async () => {

@@ -28,7 +28,7 @@ describe('Atomicity (Transaction with Shard API)', () => {
     if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath)
     if (fs.existsSync(walPath)) fs.unlinkSync(walPath)
 
-    shard = Shard.Open(dbPath, { pageSize, wal: walPath })
+    shard = new Shard(dbPath, { pageSize, wal: walPath })
     await shard.init()
   })
 
@@ -79,7 +79,7 @@ describe('Atomicity (Transaction with Shard API)', () => {
     await shard.close()
 
     // Reopen
-    const shard2 = Shard.Open(dbPath, { pageSize, wal: walPath })
+    const shard2 = new Shard(dbPath, { pageSize, wal: walPath })
     await shard2.init()
 
     const readData = await shard2.select(pk, true)

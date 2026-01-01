@@ -11,7 +11,7 @@ describe('Shard Update', () => {
     if (fs.existsSync(testFile)) {
       fs.unlinkSync(testFile)
     }
-    shard = Shard.Open(testFile)
+    shard = new Shard(testFile)
     await shard.init()
   })
 

@@ -48,7 +48,7 @@ describe('Recovery Integration Test', () => {
    */
   test('should persist data after normal close and reopen', async () => {
     // 1. Shard 열기 및 데이터 삽입
-    const shard1 = Shard.Open(dbPath, { pageSize, wal: walPath })
+    const shard1 = new Shard(dbPath, { pageSize, wal: walPath })
     await shard1.init()
 
     const pk1 = await shard1.insert('Hello, Recovery!')
@@ -59,7 +59,7 @@ describe('Recovery Integration Test', () => {
     await shard1.close()
 
     // 3. 다시 열어서 데이터 확인
-    const shard2 = Shard.Open(dbPath, { pageSize, wal: walPath })
+    const shard2 = new Shard(dbPath, { pageSize, wal: walPath })
     await shard2.init()
 
     const result1 = await shard2.select(pk1)
@@ -80,7 +80,7 @@ describe('Recovery Integration Test', () => {
    */
   test('should recover committed data after simulated crash', async () => {
     // 1. Shard 열기 및 초기화
-    const shard1 = Shard.Open(dbPath, { pageSize, wal: walPath })
+    const shard1 = new Shard(dbPath, { pageSize, wal: walPath })
     await shard1.init()
 
     // 2. 트랜잭션으로 데이터 삽입 및 커밋
@@ -114,7 +114,7 @@ describe('Recovery Integration Test', () => {
     logManager.close()
 
     // 4. 재시작 후 복구 확인
-    const shard2 = Shard.Open(dbPath, { pageSize, wal: walPath })
+    const shard2 = new Shard(dbPath, { pageSize, wal: walPath })
     await shard2.init()
 
     // 이전에 정상 커밋된 데이터 확인
@@ -134,7 +134,7 @@ describe('Recovery Integration Test', () => {
    */
   test('should NOT recover uncommitted data after crash', async () => {
     // 1. Shard 열기 및 커밋된 데이터 삽입
-    const shard1 = Shard.Open(dbPath, { pageSize, wal: walPath })
+    const shard1 = new Shard(dbPath, { pageSize, wal: walPath })
     await shard1.init()
 
     // 먼저 커밋되는 데이터
@@ -150,7 +150,7 @@ describe('Recovery Integration Test', () => {
     await shard1.close()
 
     // 4. 재시작 후 확인
-    const shard2 = Shard.Open(dbPath, { pageSize, wal: walPath })
+    const shard2 = new Shard(dbPath, { pageSize, wal: walPath })
     await shard2.init()
 
     // 커밋된 데이터는 존재
@@ -169,7 +169,7 @@ describe('Recovery Integration Test', () => {
    * insertBatch로 대량 데이터를 삽입하고 커밋한 후 crash 시나리오
    */
   test('should recover batch insert after crash', async () => {
-    const shard1 = Shard.Open(dbPath, { pageSize, wal: walPath })
+    const shard1 = new Shard(dbPath, { pageSize, wal: walPath })
     await shard1.init()
 
     // 배치로 100개 데이터 삽입
@@ -181,7 +181,7 @@ describe('Recovery Integration Test', () => {
     await shard1.close()
 
     // 재시작 후 모든 데이터 확인
-    const shard2 = Shard.Open(dbPath, { pageSize, wal: walPath })
+    const shard2 = new Shard(dbPath, { pageSize, wal: walPath })
     await shard2.init()
 
     for (let i = 0; i < 100; i++) {
@@ -197,7 +197,7 @@ describe('Recovery Integration Test', () => {
    * 여러 개의 개별 트랜잭션을 각각 커밋한 후 모든 데이터가 복구되는지 확인
    */
   test('should recover multiple committed transactions after crash', async () => {
-    const shard1 = Shard.Open(dbPath, { pageSize, wal: walPath })
+    const shard1 = new Shard(dbPath, { pageSize, wal: walPath })
     await shard1.init()
 
     const pks: number[] = []
@@ -213,7 +213,7 @@ describe('Recovery Integration Test', () => {
     await shard1.close()
 
     // 재시작 후 모든 트랜잭션 데이터 확인
-    const shard2 = Shard.Open(dbPath, { pageSize, wal: walPath })
+    const shard2 = new Shard(dbPath, { pageSize, wal: walPath })
     await shard2.init()
 
     for (let i = 0; i < 5; i++) {
@@ -232,7 +232,7 @@ describe('Recovery Integration Test', () => {
     const allPks: { pk: number; data: string }[] = []
 
     // 첫 번째 사이클
-    const shard1 = Shard.Open(dbPath, { pageSize, wal: walPath })
+    const shard1 = new Shard(dbPath, { pageSize, wal: walPath })
     await shard1.init()
 
     const pk1 = await shard1.insert('Cycle 1 Data')
@@ -241,7 +241,7 @@ describe('Recovery Integration Test', () => {
     await shard1.close()
 
     // 두 번째 사이클 - 재시작 후 추가 데이터 삽입
-    const shard2 = Shard.Open(dbPath, { pageSize, wal: walPath })
+    const shard2 = new Shard(dbPath, { pageSize, wal: walPath })
     await shard2.init()
 
     // 이전 데이터 확인
@@ -253,7 +253,7 @@ describe('Recovery Integration Test', () => {
     await shard2.close()
 
     // 세 번째 사이클 - 또 다시 재시작
-    const shard3 = Shard.Open(dbPath, { pageSize, wal: walPath })
+    const shard3 = new Shard(dbPath, { pageSize, wal: walPath })
     await shard3.init()
 
     // 모든 이전 데이터 확인
@@ -267,7 +267,7 @@ describe('Recovery Integration Test', () => {
     await shard3.close()
 
     // 최종 확인
-    const shardFinal = Shard.Open(dbPath, { pageSize, wal: walPath })
+    const shardFinal = new Shard(dbPath, { pageSize, wal: walPath })
     await shardFinal.init()
 
     for (const { pk, data } of allPks) {
@@ -282,7 +282,7 @@ describe('Recovery Integration Test', () => {
    * 페이지 크기를 넘는 대용량 데이터가 올바르게 복구되는지 확인
    */
   test('should recover large data (overflow pages) after crash', async () => {
-    const shard1 = Shard.Open(dbPath, { pageSize, wal: walPath })
+    const shard1 = new Shard(dbPath, { pageSize, wal: walPath })
     await shard1.init()
 
     // 페이지 크기(4096)보다 큰 데이터 생성
@@ -292,7 +292,7 @@ describe('Recovery Integration Test', () => {
     await shard1.close()
 
     // 재시작 후 대용량 데이터 확인
-    const shard2 = Shard.Open(dbPath, { pageSize, wal: walPath })
+    const shard2 = new Shard(dbPath, { pageSize, wal: walPath })
     await shard2.init()
 
     const result = await shard2.select(pk, true) // asRaw = true
@@ -307,7 +307,7 @@ describe('Recovery Integration Test', () => {
    */
   test('should recover data correctly when process terminates without close()', async () => {
     // 1. 초기 데이터 준비 및 커밋
-    const shard1 = Shard.Open(dbPath, { pageSize, wal: walPath })
+    const shard1 = new Shard(dbPath, { pageSize, wal: walPath })
     await shard1.init()
 
     const pk1 = await shard1.insert('Committed Data 1')
@@ -323,7 +323,7 @@ describe('Recovery Integration Test', () => {
 
     // 4. 강제 종료 시뮬레이션
     // private 속성에 접근하여 파일 핸들 강제 종료
-    const rawShard = shard1 as any
+    const rawShard = (shard1 as any).api
     const fd = rawShard.fileHandle
     const walFd = rawShard.pfs.vfs.logManager?.fd
 
@@ -331,7 +331,7 @@ describe('Recovery Integration Test', () => {
     if (walFd) fs.closeSync(walFd)
 
     // 5. 재시작 및 검증
-    const shard2 = Shard.Open(dbPath, { pageSize, wal: walPath })
+    const shard2 = new Shard(dbPath, { pageSize, wal: walPath })
     await shard2.init()
 
     const result1 = await shard2.select(pk1)
@@ -351,7 +351,7 @@ describe('Recovery Integration Test', () => {
    * commit()을 호출했으나 await하지 않고 즉시 종료되는 상황
    */
   test('should NOT recover data when process terminates immediately after async commit (simulation)', async () => {
-    const shard1 = Shard.Open(dbPath, { pageSize, wal: walPath })
+    const shard1 = new Shard(dbPath, { pageSize, wal: walPath })
     await shard1.init()
 
     // 1. 베이스 데이터
@@ -367,7 +367,7 @@ describe('Recovery Integration Test', () => {
     // 4. 즉시 강제 종료 (매우 짧은 시간 내에 종료된 것으로 가정)
     // 실제로는 OS 스케줄링에 따라 일부 기록될 수도 있지만, 
     // 여기서는 파일 핸들을 바로 닫아버림으로써 "쓰기 도중 차단" 또는 "쓰기 전 차단"을 유도
-    const rawShard = shard1 as any
+    const rawShard = (shard1 as any).api
     const fd = rawShard.fileHandle
     const walFd = rawShard.pfs.vfs.logManager?.fd
 
@@ -379,7 +379,7 @@ describe('Recovery Integration Test', () => {
     }
 
     // 5. 재시작
-    const shard2 = Shard.Open(dbPath, { pageSize, wal: walPath })
+    const shard2 = new Shard(dbPath, { pageSize, wal: walPath })
     await shard2.init()
 
     // 베이스 데이터는 있어야 함

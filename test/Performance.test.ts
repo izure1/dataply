@@ -16,7 +16,7 @@ describe('Performance Benchmark', () => {
   })
 
   test('Bulk Insert 10,000 small rows (batch)', async () => {
-    const shard = Shard.Open(TEST_FILE, { pageSize: 4096 })
+    const shard = new Shard(TEST_FILE, { pageSize: 4096 })
     await shard.init()
 
     const count = 10000
@@ -42,7 +42,7 @@ describe('Performance Benchmark', () => {
   }, 60000)
 
   test('Bulk Insert 100 small rows (individual)', async () => {
-    const shard = Shard.Open(TEST_FILE, { pageSize: 4096 })
+    const shard = new Shard(TEST_FILE, { pageSize: 4096 })
     await shard.init()
 
     const count = 100
@@ -65,7 +65,7 @@ describe('Performance Benchmark', () => {
   }, 120000)
 
   test('Bulk Insert 100 small rows with WAL', async () => {
-    const shard = Shard.Open(TEST_FILE, { pageSize: 4096, wal: WAL_FILE })
+    const shard = new Shard(TEST_FILE, { pageSize: 4096, wal: WAL_FILE })
     await shard.init()
 
     const count = 100
@@ -88,7 +88,7 @@ describe('Performance Benchmark', () => {
   }, 120000)
 
   test('Bulk Insert 100 medium rows (1KB)', async () => {
-    const shard = Shard.Open(TEST_FILE, { pageSize: 8192 })
+    const shard = new Shard(TEST_FILE, { pageSize: 8192 })
     await shard.init()
 
     const count = 100

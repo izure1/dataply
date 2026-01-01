@@ -25,7 +25,7 @@ npm install shard
 import { Shard } from 'shard'
 
 // Open Shard instance
-const shard = Shard.Open('./data.db', {
+const shard = new Shard('./data.db', {
   pageSize: 8192,
   wal: './data.db.wal'
 })
@@ -77,7 +77,7 @@ If you omit the `tx` argument when calling methods like `insert`, `update`, or `
 
 ### Shard Class
 
-#### `static Open(file: string, options?: ShardOptions): Shard`
+#### `constructor(file: string, options?: ShardOptions): Shard`
 Opens a database file. If the file does not exist, it creates and initializes a new one.
 - `options.pageSize`: Size of a page (Default: 8192, must be a power of 2)
 - `options.wal`: Path to the WAL file. If omitted, WAL is disabled.

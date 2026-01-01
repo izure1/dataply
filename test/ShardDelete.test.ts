@@ -22,7 +22,7 @@ describe('Shard Delete Transaction Tests', () => {
   })
 
   test('should rollback a delete operation', async () => {
-    const shard = Shard.Open(TEST_FILE, { pageSize: 8192 })
+    const shard = new Shard(TEST_FILE, { pageSize: 8192 })
     await shard.init()
 
     const data = 'persistent data'
@@ -48,7 +48,7 @@ describe('Shard Delete Transaction Tests', () => {
   })
 
   test('should support isolation between transactions (Read Committed / Snapshot)', async () => {
-    const shard = Shard.Open(TEST_FILE, { pageSize: 8192 })
+    const shard = new Shard(TEST_FILE, { pageSize: 8192 })
     await shard.init()
 
     const data = 'shared data'

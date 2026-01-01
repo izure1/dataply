@@ -28,7 +28,7 @@ describe('Page Checksum with Shard API', () => {
 
   test('should detect corrupted page checksum', async () => {
     // 1. Initialize Shard and write data
-    let shard = Shard.Open(DB_FILE, { pageSize: PAGE_SIZE })
+    let shard = new Shard(DB_FILE, { pageSize: PAGE_SIZE })
     await shard.init()
 
     const data = new Uint8Array([1, 2, 3, 4, 5])
@@ -46,7 +46,7 @@ describe('Page Checksum with Shard API', () => {
     fs.closeSync(fd)
 
     // 3. Re-open Shard and try to read
-    shard = Shard.Open(DB_FILE, { pageSize: PAGE_SIZE })
+    shard = new Shard(DB_FILE, { pageSize: PAGE_SIZE })
     await shard.init()
 
     try {

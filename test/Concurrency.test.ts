@@ -41,7 +41,7 @@ describe('Concurrency (MVCC)', () => {
   })
 
   test('should serialize concurrent inserts (Writers block Writers)', async () => {
-    shard = Shard.Open(dbPath, { wal: walPath })
+    shard = new Shard(dbPath, { wal: walPath })
     await shard.init()
 
     // Sequential inserts to verify correct PK increment
@@ -65,7 +65,7 @@ describe('Concurrency (MVCC)', () => {
   })
 
   test('should restore state via Undo Buffer after rollback (MVCC Isolation)', async () => {
-    shard = Shard.Open(dbPath, { wal: walPath })
+    shard = new Shard(dbPath, { wal: walPath })
     await shard.init()
 
     // Insert initial data and commit
@@ -84,7 +84,7 @@ describe('Concurrency (MVCC)', () => {
   })
 
   test('should handle multiple sequential transactions correctly', async () => {
-    shard = Shard.Open(dbPath, { wal: walPath })
+    shard = new Shard(dbPath, { wal: walPath })
     await shard.init()
 
     const insertCount = 10
@@ -109,7 +109,7 @@ describe('Concurrency (MVCC)', () => {
   })
 
   test('should handle interleaved commit and rollback', async () => {
-    shard = Shard.Open(dbPath, { wal: walPath })
+    shard = new Shard(dbPath, { wal: walPath })
     await shard.init()
 
     // First transaction: commit
@@ -133,7 +133,7 @@ describe('Concurrency (MVCC)', () => {
   })
 
   test('should maintain data integrity with large batch inserts', async () => {
-    shard = Shard.Open(dbPath, { wal: walPath })
+    shard = new Shard(dbPath, { wal: walPath })
     await shard.init()
 
     const batchSize = 50
@@ -159,7 +159,7 @@ describe('Concurrency (MVCC)', () => {
   })
 
   test('should allow reads during concurrent write transactions via snapshot', async () => {
-    shard = Shard.Open(dbPath, { wal: walPath })
+    shard = new Shard(dbPath, { wal: walPath })
     await shard.init()
 
     // Insert and commit initial data
@@ -184,7 +184,7 @@ describe('Concurrency (MVCC)', () => {
   })
 
   test('should handle rollback of large batch insert', async () => {
-    shard = Shard.Open(dbPath, { wal: walPath })
+    shard = new Shard(dbPath, { wal: walPath })
     await shard.init()
 
     // First, insert some committed data

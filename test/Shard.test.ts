@@ -8,7 +8,7 @@ describe('Shard', () => {
   afterEach(async () => {
     if (fs.existsSync(TEST_FILE)) {
       try {
-        // Shard.Open으로 열린 파일 핸들을 닫아줘야 삭제가 가능할 수 있음
+        // new Shard으로 열린 파일 핸들을 닫아줘야 삭제가 가능할 수 있음
         // 테스트 코드 내에서 close 호출 확인
         await fs.promises.unlink(TEST_FILE)
       } catch (e) {
@@ -18,7 +18,7 @@ describe('Shard', () => {
   })
 
   test('should create and initialize a new shard file', async () => {
-    const shard = Shard.Open(TEST_FILE, { pageSize: 4096 })
+    const shard = new Shard(TEST_FILE, { pageSize: 4096 })
 
     await shard.init()
 
@@ -33,12 +33,12 @@ describe('Shard', () => {
 
   test('should verify a valid shard file', async () => {
     // 먼저 파일 생성
-    const shard1 = Shard.Open(TEST_FILE)
+    const shard1 = new Shard(TEST_FILE)
     await shard1.init()
     await shard1.close()
 
     // 다시 열기
-    const shard2 = Shard.Open(TEST_FILE)
+    const shard2 = new Shard(TEST_FILE)
     await shard2.init()
     expect(shard2).toBeInstanceOf(Shard)
     await shard2.close()
@@ -49,7 +49,7 @@ describe('Shard', () => {
     fs.writeFileSync(TEST_FILE, 'invalid data')
 
     expect(() => {
-      Shard.Open(TEST_FILE)
+      new Shard(TEST_FILE)
     }).toThrow('Invalid shard file')
   })
 
@@ -57,7 +57,7 @@ describe('Shard', () => {
     let shard: Shard
 
     beforeEach(async () => {
-      shard = Shard.Open(TEST_FILE, { pageSize: 8192 })
+      shard = new Shard(TEST_FILE, { pageSize: 8192 })
       await shard.init()
     })
 

@@ -24,7 +24,7 @@ describe('Recovery Checksum with Shard API', () => {
 
   test('should ignore corrupted pages in WAL during recovery', async () => {
     // 1. Create Shard and generate WAL
-    let shard = Shard.Open(DB_FILE, { pageSize: PAGE_SIZE, wal: WAL_FILE })
+    let shard = new Shard(DB_FILE, { pageSize: PAGE_SIZE, wal: WAL_FILE })
     await shard.init()
 
     const data = new Uint8Array([10, 20, 30])
@@ -68,12 +68,12 @@ describe('Recovery Checksum with Shard API', () => {
     fs.writeFileSync(WAL_FILE, walBuf)
 
     // 3. Act: Open Shard (Trigger Recovery)
-    const shard2 = Shard.Open(DB_FILE, { pageSize: PAGE_SIZE, wal: WAL_FILE })
+    const shard2 = new Shard(DB_FILE, { pageSize: PAGE_SIZE, wal: WAL_FILE })
     await shard2.init() // This runs recovery.
 
     // 4. Assert
     // Verify using internal PFS to see if page content is overwritten by WAL
-    const pfs = (shard2 as any).pfs
+    const pfs = (shard2 as any).api.pfs
     const page = await pfs.get(pageId, shard2.createTransaction())
 
     // Check a random byte in body
@@ -86,7 +86,7 @@ describe('Recovery Checksum with Shard API', () => {
 
   test('should recover valid pages correctly', async () => {
     // 1. Setup WAL with VALID page
-    const s = Shard.Open(DB_FILE, { pageSize: PAGE_SIZE, wal: WAL_FILE })
+    const s = new Shard(DB_FILE, { pageSize: PAGE_SIZE, wal: WAL_FILE })
     await s.init()
     await s.close()
 
@@ -110,11 +110,11 @@ describe('Recovery Checksum with Shard API', () => {
     await logManager.close()
 
     // 2. Open Shard
-    const shard = Shard.Open(DB_FILE, { pageSize: PAGE_SIZE, wal: WAL_FILE })
+    const shard = new Shard(DB_FILE, { pageSize: PAGE_SIZE, wal: WAL_FILE })
     await shard.init()
 
     // 3. Verify
-    const pfs = (shard as any).pfs
+    const pfs = (shard as any).api.pfs
     const page = await pfs.get(pageId, shard.createTransaction())
 
     expect(page[100]).toBe(77) // Should have recovered
