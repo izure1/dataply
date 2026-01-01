@@ -1,5 +1,5 @@
 import { DataPage, IndexPage, BitmapPage, OverflowPage, MetadataPage, EmptyPage, UnknownPage } from '../types'
-import { bytesToNumber, numberToBytes } from '../utils'
+import { bytesToNumber, numberToBytes, crc32 } from '../utils'
 import { Row } from './Row'
 
 /**
@@ -21,11 +21,13 @@ export abstract class PageManager {
     SIZE_INSERTED_ROW_COUNT: 4,
     SIZE_REMAINING_CAPACITY: 4,
     SIZE_SLOT_OFFSET: 2,
+    SIZE_CHECKSUM: 4,
     OFFSET_PAGE_TYPE: 0,
     OFFSET_PAGE_ID: 1,
     OFFSET_NEXT_PAGE_ID: 5,
     OFFSET_INSERTED_ROW_COUNT: 9,
     OFFSET_REMAINING_CAPACITY: 13,
+    OFFSET_CHECKSUM: 17,
   } as const
 
   /**
@@ -91,6 +93,19 @@ export abstract class PageManager {
   }
 
   /**
+   * Returns the checksum of the page.
+   * @param page Page data
+   * @returns Checksum
+   */
+  getChecksum(page: Uint8Array): number {
+    return bytesToNumber(
+      page,
+      PageManager.CONSTANT.OFFSET_CHECKSUM,
+      PageManager.CONSTANT.SIZE_CHECKSUM
+    )
+  }
+
+  /**
    * Sets the page type.
    * @param page Page data
    * @param pageType Page type
@@ -144,6 +159,44 @@ export abstract class PageManager {
       PageManager.CONSTANT.OFFSET_REMAINING_CAPACITY,
       PageManager.CONSTANT.SIZE_REMAINING_CAPACITY
     )
+  }
+
+  /**
+   * Sets the checksum of the page.
+   * @param page Page data
+   * @param checksum Checksum
+   */
+  setChecksum(page: Uint8Array, checksum: number): void {
+    numberToBytes(
+      checksum,
+      page,
+      PageManager.CONSTANT.OFFSET_CHECKSUM,
+      PageManager.CONSTANT.SIZE_CHECKSUM
+    )
+  }
+
+  /**
+   * Updates the checksum of the page.
+   * Calculates the checksum of the page body (excluding the header) and sets it in the header.
+   * @param page Page data
+   */
+  updateChecksum(page: Uint8Array): void {
+    const body = this.getBody(page)
+    const checksum = crc32(body)
+    this.setChecksum(page, checksum)
+  }
+
+  /**
+   * Verifies the checksum of the page.
+   * Calculates the checksum of the page body and compares it with the checksum stored in the header.
+   * @param page Page data
+   * @returns boolean indicating if the checksum is valid
+   */
+  verifyChecksum(page: Uint8Array): boolean {
+    const body = this.getBody(page)
+    const checksum = crc32(body)
+    const storedChecksum = this.getChecksum(page)
+    return checksum === storedChecksum
   }
 
   /**
@@ -450,10 +503,11 @@ export class MetadataPageManager extends PageManager {
     OFFSET_MAGIC_STRING: PageManager.CONSTANT.SIZE_PAGE_HEADER,
     OFFSET_PAGE_COUNT: PageManager.CONSTANT.SIZE_PAGE_HEADER + 8,
     OFFSET_PAGE_SIZE: PageManager.CONSTANT.SIZE_PAGE_HEADER + 12,
-    OFFSET_ROOT_INDEX_PAGE_ID: PageManager.CONSTANT.SIZE_PAGE_HEADER + 16,
-    OFFSET_ROOT_INDEX_ORDER: PageManager.CONSTANT.SIZE_PAGE_HEADER + 20,
-    OFFSET_LAST_INSERT_PAGE_ID: PageManager.CONSTANT.SIZE_PAGE_HEADER + 24,
-    OFFSET_LAST_ROW_PK: PageManager.CONSTANT.SIZE_PAGE_HEADER + 28,
+    OFFSET_ROW_COUNT: PageManager.CONSTANT.SIZE_PAGE_HEADER + 16,
+    OFFSET_ROOT_INDEX_PAGE_ID: PageManager.CONSTANT.SIZE_PAGE_HEADER + 22,
+    OFFSET_ROOT_INDEX_ORDER: PageManager.CONSTANT.SIZE_PAGE_HEADER + 26,
+    OFFSET_LAST_INSERT_PAGE_ID: PageManager.CONSTANT.SIZE_PAGE_HEADER + 30,
+    OFFSET_LAST_ROW_PK: PageManager.CONSTANT.SIZE_PAGE_HEADER + 34,
   } as const
 
   /**
@@ -569,6 +623,19 @@ export class MetadataPageManager extends PageManager {
   }
 
   /**
+   * Returns the number of rows in the database.
+   * @param page Page data
+   * @returns Number of rows
+   */
+  getRowCount(page: MetadataPage): number {
+    return bytesToNumber(
+      page,
+      MetadataPageManager.CONSTANT.OFFSET_ROW_COUNT,
+      Row.CONSTANT.SIZE_PK
+    )
+  }
+
+  /**
    * Sets the number of pages stored in the database.
    * @param page Page data
    * @param pageCount Number of pages
@@ -658,6 +725,20 @@ export class MetadataPageManager extends PageManager {
       lastRowPk,
       page,
       MetadataPageManager.CONSTANT.OFFSET_LAST_ROW_PK,
+      Row.CONSTANT.SIZE_PK
+    )
+  }
+
+  /**
+   * Sets the number of rows in the database.
+   * @param page Page data
+   * @param rowCount Number of rows
+   */
+  setRowCount(page: MetadataPage, rowCount: number): void {
+    numberToBytes(
+      rowCount,
+      page,
+      MetadataPageManager.CONSTANT.OFFSET_ROW_COUNT,
       Row.CONSTANT.SIZE_PK
     )
   }
@@ -846,6 +927,7 @@ export class PageManagerFactory {
   getManager(page: DataPage): DataPageManager
   getManager(page: BitmapPage): BitmapPageManager
   getManager(page: OverflowPage): OverflowPageManager
+  getManager(page: UnknownPage): UnknownPageManager
   getManager(page: Uint8Array): PageManager
   getManager(page: Uint8Array): PageManager {
     switch (this.getPageType(page)) {
@@ -864,7 +946,7 @@ export class PageManagerFactory {
       case PageManager.CONSTANT.PAGE_TYPE_UNKNOWN:
         return PageManagerFactory.UnknownPage
       default:
-        throw new Error('Invalid page type')
+        throw new Error(`Invalid page type: ${this.getPageType(page)}`)
     }
   }
 
@@ -885,7 +967,7 @@ export class PageManagerFactory {
       case PageManager.CONSTANT.PAGE_TYPE_UNKNOWN:
         return PageManagerFactory.UnknownPage
       default:
-        throw new Error('Invalid page type')
+        throw new Error(`Invalid page type: ${pageType}`)
     }
   }
 }

@@ -1,12 +1,27 @@
 export interface ShardOptions {
   /**
-   * 페이지 크기
+   * The size of a page in bytes.
    */
   pageSize?: number
   /**
-   * Write-Ahead Logging 파일 경로
+   * Write-Ahead Logging file path
    */
   wal?: string | undefined | null
+}
+
+export interface ShardMetadata {
+  /**
+   * The size of a page in bytes.
+   */
+  pageSize: number
+  /**
+   * The total number of pages in the shard.
+   */
+  pageCount: number
+  /**
+   * The total number of data rows in the shard.
+   */
+  rowCount: number
 }
 
 export type DataPage = Uint8Array & { __pageType: 'data' }

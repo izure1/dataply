@@ -39,7 +39,7 @@ export class PageFileSystem {
    * @param tx 트랜잭션
    * @returns 페이지 버퍼
    */
-  async get(pageIndex: number, tx?: Transaction): Promise<Uint8Array> {
+  async get(pageIndex: number, tx: Transaction): Promise<Uint8Array> {
     return await this.vfs.read(pageIndex * this.pageSize, this.pageSize, tx)
   }
 
@@ -49,7 +49,7 @@ export class PageFileSystem {
    * @param tx Transaction
    * @returns Page header buffer
    */
-  async getHeader(pageIndex: number, tx?: Transaction): Promise<Uint8Array> {
+  async getHeader(pageIndex: number, tx: Transaction): Promise<Uint8Array> {
     const page = await this.get(pageIndex, tx)
     return page.subarray(0, PageManager.CONSTANT.SIZE_PAGE_HEADER)
   }
@@ -61,7 +61,7 @@ export class PageFileSystem {
    * @param tx Transaction
    * @returns Page body buffer
    */
-  async getBody(pageIndex: number, recursive = false, tx?: Transaction): Promise<Uint8Array> {
+  async getBody(pageIndex: number, recursive = false, tx: Transaction): Promise<Uint8Array> {
     const page = await this.get(pageIndex, tx)
     const manager = this.pageFactory.getManager(page)
     const fullBody = manager.getBody(page)
@@ -87,7 +87,7 @@ export class PageFileSystem {
    * @param tx Transaction
    * @returns Metadata page
    */
-  async getMetadata(tx?: Transaction): Promise<MetadataPage> {
+  async getMetadata(tx: Transaction): Promise<MetadataPage> {
     const page = await this.get(0, tx)
     if (!MetadataPageManager.IsMetadataPage(page)) {
       throw new Error('Invalid metadata page')
@@ -100,7 +100,7 @@ export class PageFileSystem {
    * @param tx Transaction
    * @returns Number of pages
    */
-  async getPageCount(tx?: Transaction): Promise<number> {
+  async getPageCount(tx: Transaction): Promise<number> {
     const metadata = await this.getMetadata(tx)
     const manager = this.pageFactory.getManager(metadata)
     return manager.getPageCount(metadata)
@@ -111,7 +111,7 @@ export class PageFileSystem {
    * @param tx Transaction
    * @returns Root index page
    */
-  async getRootIndex(tx?: Transaction): Promise<IndexPage> {
+  async getRootIndex(tx: Transaction): Promise<IndexPage> {
     const metadata = await this.getMetadata(tx)
     const manager = this.pageFactory.getManager(metadata)
     const rootIndexPageId = manager.getRootIndexPageId(metadata)
@@ -127,7 +127,7 @@ export class PageFileSystem {
    * @param metadataPage Metadata page
    * @param tx Transaction
    */
-  async setMetadata(metadataPage: MetadataPage, tx?: Transaction): Promise<void> {
+  async setMetadata(metadataPage: MetadataPage, tx: Transaction): Promise<void> {
     await this.setPage(0, metadataPage, tx)
   }
 
@@ -137,44 +137,19 @@ export class PageFileSystem {
    * @param page Page data
    * @param tx Transaction
    */
-  async setPage(pageIndex: number, page: Uint8Array, tx?: Transaction): Promise<void> {
-    if (tx) {
-      await tx.__acquireWriteLock(pageIndex)
-    }
+  async setPage(pageIndex: number, page: Uint8Array, tx: Transaction): Promise<void> {
+    const manager = this.pageFactory.getManager(page)
+    manager.updateChecksum(page)
+
+    await tx.__acquireWriteLock(pageIndex)
     await this.vfs.write(pageIndex * this.pageSize, page, tx)
-  }
-
-  /**
-   * Sets the page header.
-   * @param pageIndex Page index
-   * @param header Page header
-   * @param tx Transaction
-   */
-  async setPageHeader(pageIndex: number, header: Uint8Array, tx?: Transaction): Promise<void> {
-    const page = await this.get(pageIndex, tx)
-    const manager = this.pageFactory.getManager(page)
-    manager.setHeader(page, header)
-    await this.setPage(pageIndex, page, tx)
-  }
-
-  /**
-   * Sets the page body.
-   * @param pageIndex Page index
-   * @param body Page body
-   * @param tx Transaction
-   */
-  async setPageBody(pageIndex: number, body: Uint8Array, tx?: Transaction): Promise<void> {
-    const page = await this.get(pageIndex, tx)
-    const manager = this.pageFactory.getManager(page)
-    manager.setBody(page, body)
-    await this.setPage(pageIndex, page, tx)
   }
 
   /**
    * Appends and inserts a new page.
    * @returns Created page ID
    */
-  async appendNewPage(pageType: number = PageManager.CONSTANT.PAGE_TYPE_EMPTY, tx?: Transaction): Promise<number> {
+  async appendNewPage(pageType: number = PageManager.CONSTANT.PAGE_TYPE_EMPTY, tx: Transaction): Promise<number> {
     const metadata = await this.getMetadata(tx)
     const metadataManager = this.pageFactory.getManager(metadata)
     const pageCount = metadataManager.getPageCount(metadata)
@@ -199,7 +174,7 @@ export class PageFileSystem {
    * @param offset Position to write (default: 0)
    * @param tx Transaction
    */
-  async writePageContent(pageId: number, data: Uint8Array, offset: number = 0, tx?: Transaction): Promise<void> {
+  async writePageContent(pageId: number, data: Uint8Array, offset: number = 0, tx: Transaction): Promise<void> {
     let currentPageId = pageId
     let currentOffset = offset
     let dataOffset = 0

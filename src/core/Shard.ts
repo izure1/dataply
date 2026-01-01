@@ -1,5 +1,5 @@
 import fs from 'node:fs'
-import type { ShardOptions, MetadataPage, DataPage } from '../types'
+import type { ShardOptions, MetadataPage, DataPage, ShardMetadata } from '../types'
 import { PageFileSystem } from './PageFileSystem'
 import { MetadataPageManager, DataPageManager } from './Page'
 import { RowTableEngine } from './RowTableEngine'
@@ -7,6 +7,7 @@ import { TextCodec } from '../utils/TextCodec'
 import { catchPromise } from '../utils/catchPromise'
 import { LockManager } from './transaction/LockManager'
 import { Transaction } from './transaction/Transaction'
+import { TxContext } from './transaction/TxContext'
 
 /**
  * Class for managing Shard files.
@@ -143,7 +144,7 @@ export class Shard {
     if (this.initialized) {
       return
     }
-    await this.rowTableEngine.init()
+    await this.runWithDefault(() => this.rowTableEngine.init())
     this.initialized = true
   }
 
@@ -154,9 +155,6 @@ export class Shard {
    * @returns Transaction object
    */
   createTransaction(): Transaction {
-    if (!this.initialized) {
-      throw new Error('Shard instance is not initialized')
-    }
     return new Transaction(++this.txIdCounter, this.pfs.vfsInstance, this.lockManager)
   }
 
@@ -165,7 +163,7 @@ export class Shard {
     if (!tx) {
       tx = this.createTransaction()
     }
-    const [error, result] = await catchPromise(callback(tx))
+    const [error, result] = await catchPromise(TxContext.run(tx, () => callback(tx)))
     if (error) {
       if (isInternalTx) {
         await tx.rollback()
@@ -178,6 +176,13 @@ export class Shard {
     return result
   }
 
+  async getMetadata(): Promise<ShardMetadata> {
+    if (!this.initialized) {
+      throw new Error('Shard instance is not initialized')
+    }
+    return this.runWithDefault((tx) => this.rowTableEngine.getMetadata(tx))
+  }
+
   /**
    * Inserts data. Returns the PK of the added row.
    * @param data Data to add
@@ -188,14 +193,11 @@ export class Shard {
     if (!this.initialized) {
       throw new Error('Shard instance is not initialized')
     }
-
-    if (typeof data === 'string') {
-      data = this.textCodec.encode(data)
-    }
-
-    return this.runWithDefault(async (tx) => {
-      const pk = await this.rowTableEngine.insert(data, tx)
-      return pk
+    return this.runWithDefault((tx) => {
+      if (typeof data === 'string') {
+        data = this.textCodec.encode(data)
+      }
+      return this.rowTableEngine.insert(data, tx)
     }, tx)
   }
 
@@ -210,7 +212,6 @@ export class Shard {
     if (!this.initialized) {
       throw new Error('Shard instance is not initialized')
     }
-
     return this.runWithDefault(async (tx) => {
       const pks: number[] = []
       for (const data of dataList) {
@@ -232,12 +233,10 @@ export class Shard {
     if (!this.initialized) {
       throw new Error('Shard instance is not initialized')
     }
-
-    if (typeof data === 'string') {
-      data = this.textCodec.encode(data)
-    }
-
     return this.runWithDefault(async (tx) => {
+      if (typeof data === 'string') {
+        data = this.textCodec.encode(data)
+      }
       await this.rowTableEngine.update(pk, data, tx)
     }, tx)
   }
@@ -251,7 +250,6 @@ export class Shard {
     if (!this.initialized) {
       throw new Error('Shard instance is not initialized')
     }
-
     return this.runWithDefault(async (tx) => {
       await this.rowTableEngine.delete(pk, tx)
     }, tx)
@@ -271,14 +269,12 @@ export class Shard {
     if (!this.initialized) {
       throw new Error('Shard instance is not initialized')
     }
-    const data = await this.rowTableEngine.selectByPK(pk, tx)
-    if (data === null) {
-      return null
-    }
-    if (asRaw) {
-      return data
-    }
-    return this.textCodec.decode(data)
+    return this.runWithDefault(async (tx) => {
+      const data = await this.rowTableEngine.selectByPK(pk, tx)
+      if (data === null) return null
+      if (asRaw) return data
+      return this.textCodec.decode(data)
+    }, tx)
   }
 
   /**

@@ -17,7 +17,7 @@
     "dist/**/*"
   ],
   "scripts": {
-    "test": "jest --forceExit",
+    "test": "jest --runInBand --forceExit",
     "build": "node build/index.js && tsc"
   },
   "keywords": [

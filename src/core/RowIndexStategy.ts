@@ -18,13 +18,13 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
   }
 
   async id(isLeaf: boolean): Promise<string> {
-    const tx = TxContext.get()
+    const tx = TxContext.get()!
     const pageId = await this.pfs.appendNewPage(PageManager.CONSTANT.PAGE_TYPE_INDEX, tx)
     return pageId.toString()
   }
 
   async read(id: string): Promise<BPTreeNode<number, number>> {
-    const tx = TxContext.get()
+    const tx = TxContext.get()!
     const pageId = parseInt(id)
     const page = await this.pfs.getBody(pageId, true, tx)
     const text = this.codec.decode(page)
@@ -32,7 +32,7 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
   }
 
   async write(id: string, node: BPTreeNode<number, number>): Promise<void> {
-    const tx = TxContext.get()
+    const tx = TxContext.get()!
     const pageId = parseInt(id)
     const text = JSON.stringify(node)
     const source = this.codec.encode(text)
@@ -40,7 +40,7 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
   }
 
   async delete(id: string): Promise<void> {
-    const tx = TxContext.get()
+    const tx = TxContext.get()!
     const manager = this.factory.getManagerFromType(PageManager.CONSTANT.PAGE_TYPE_EMPTY)
     let pageId = parseInt(id)
     while (true) {
@@ -56,7 +56,8 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
   }
 
   async readHead(): Promise<SerializeStrategyHead | null> {
-    const metadataPage = await this.pfs.getMetadata()
+    const tx = TxContext.get()!
+    const metadataPage = await this.pfs.getMetadata(tx)
     const manager = this.factory.getManager(metadataPage)
     const rootIndexPageId = manager.getRootIndexPageId(metadataPage)
     if (rootIndexPageId === -1) {
@@ -70,7 +71,7 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
   }
 
   async writeHead(head: SerializeStrategyHead): Promise<void> {
-    const tx = TxContext.get()
+    const tx = TxContext.get()!
     const { root, order } = head
     if (root === null) {
       throw new Error('')

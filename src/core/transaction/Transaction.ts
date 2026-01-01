@@ -1,5 +1,6 @@
 import { LockManager } from './LockManager'
 import { VirtualFileSystem } from '../VirtualFileSystem'
+import { TxContext } from './TxContext'
 
 /**
  * Transaction class.
@@ -12,6 +13,9 @@ export class Transaction {
   private heldLocks: Set<string> = new Set()
   /** Held page locks (PageID -> LockID) */
   private pageLocks: Map<number, string> = new Map()
+
+
+
 
   /** Undo Logs: PageID -> Original Page Buffer (Snapshot) */
   private undoPages: Map<number, Uint8Array> = new Map()
@@ -118,9 +122,11 @@ export class Transaction {
    */
   async commit(): Promise<void> {
     await this.vfs.commit(this)
-    for (const hook of this.commitHooks) {
-      await hook()
-    }
+    await TxContext.run(this, async () => {
+      for (const hook of this.commitHooks) {
+        await hook()
+      }
+    })
     this.releaseAllLocks()
   }
 

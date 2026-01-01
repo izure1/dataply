@@ -1,6 +1,7 @@
 import fs from 'node:fs'
 import { LogManager } from './LogManager'
 import type { Transaction } from './transaction/Transaction'
+import { PageManagerFactory } from './Page'
 
 /**
  * Virtual File System class that manages and caches files in page units.
@@ -63,6 +64,18 @@ export class VirtualFileSystem {
       // PageID가 비정상적으로 큰 경우(예: 1GB 이상의 오프셋) 무시
       if (pageId > 1000000) {
         console.warn(`[VFS] Ignoring suspicious PageID ${pageId} during recovery.`)
+        continue
+      }
+
+      // Checksum verification
+      try {
+        const manager = new PageManagerFactory().getManager(data)
+        if (!manager.verifyChecksum(data)) {
+          console.warn(`[VFS] Checksum verification failed for PageID ${pageId} during recovery. Ignoring changes.`)
+          continue
+        }
+      } catch (e) {
+        console.warn(`[VFS] Failed to verify checksum for PageID ${pageId} during recovery: ${e}. Ignoring changes.`)
         continue
       }
 
@@ -253,16 +266,13 @@ export class VirtualFileSystem {
     })
   }
 
-  protected async _readPage(pageIndex: number, tx?: Transaction): Promise<Uint8Array> {
+  protected async _readPage(pageIndex: number, tx: Transaction): Promise<Uint8Array> {
     // [MVCC] 다른 트랜잭션이 수정한 페이지(Dirty)인지 확인
     if (this.activeTransactions.size > 0) {
       const ownerTx = this.dirtyPageOwners.get(pageIndex)
       if (ownerTx) {
-        // 내가 소유자라면 수정한 데이터(캐시)를 그대로 봄
-        if (tx && tx.id === ownerTx.id) {
-          // pass (read cache)
-        } else {
-          // 타인이 소유 중 -> Undo 데이터(Snapshot)를 읽음
+        // 타인이 소유 중 -> Undo 데이터(Snapshot)를 읽음
+        if (tx.id !== ownerTx.id) {
           const undoPage = ownerTx.__getUndoPage(pageIndex)
           if (undoPage) {
             const snapshot = new Uint8Array(this.pageSize)
@@ -293,10 +303,10 @@ export class VirtualFileSystem {
    * Reads data from a specific position in the file.
    * @param offset Start position
    * @param length Length of data to read
-   * @param tx Transaction (for MVCC)
+   * @param tx Transaction
    * @returns Read data buffer
    */
-  async read(offset: number, length: number, tx?: Transaction): Promise<Uint8Array> {
+  async read(offset: number, length: number, tx: Transaction): Promise<Uint8Array> {
     const startPage = offset >> this.pageShift // 최적화: 비트 시프트 사용
     const endPage = (offset + length - 1) >> this.pageShift
     const result = new Uint8Array(length) // 결과 버퍼
@@ -333,7 +343,7 @@ export class VirtualFileSystem {
    * @param buffer Data buffer to append
    * @returns Length of appended data
    */
-  async append(buffer: Uint8Array, tx?: Transaction): Promise<number> {
+  async append(buffer: Uint8Array, tx: Transaction): Promise<number> {
     // 캐시를 거치도록 fs.appendFile 대신 write 사용
     // 참고: fs.write는 끝을 넘어서 쓰면 자동으로 파일을 확장함. (테스트로 검증됨)
     return await this.write(this.fileSize, buffer, tx)
@@ -345,7 +355,7 @@ export class VirtualFileSystem {
    * @param buffer Data buffer to write
    * @returns Length of data written
    */
-  async write(offset: number, buffer: Uint8Array, tx?: Transaction): Promise<number> {
+  async write(offset: number, buffer: Uint8Array, tx: Transaction): Promise<number> {
     const startPage = Math.floor(offset / this.pageSize)
     const endPage = Math.floor((offset + buffer.length - 1) / this.pageSize)
 
@@ -362,8 +372,6 @@ export class VirtualFileSystem {
       const pageIndex = startPage + i
       const page = pages[i]
 
-      // [UndoLog] 트랜잭션 내 작업인 경우 이전 상태 스냅샷 저장
-      // Auto-commit(tx 없음)은 스냅샷 필요 없음
       if (tx) {
         // 활성 트랜잭션 등록
         if (!this.activeTransactions.has(tx.id)) {
