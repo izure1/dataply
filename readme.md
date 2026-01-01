@@ -47,22 +47,29 @@ async function main() {
 main()
 ```
 
-## 트랜잭션 사용법
+## 트랜잭션 관리
+
+### 명시적 트랜잭션
+원자성이 필요한 여러 작업을 하나의 단위로 묶을 수 있습니다.
 
 ```typescript
-const tx = await shard.createTransaction()
+const tx = shard.createTransaction()
 
 try {
-  await shard.insert('Important Data', tx)
-  await shard.update(pk, 'Updated Data', tx)
+  await shard.insert('데이터 1', tx)
+  await shard.update(pk, '업데이트 데이터', tx)
   
-  // 변경 사항 커밋
-  await tx.commit()
+  await tx.commit() // 성공 시 디스크 반영 및 WAL 정리
 } catch (error) {
-  // 오류 발생 시 롤백
-  await tx.rollback()
+  await tx.rollback() // 실패 시 모든 변경 사항 취소 (Undo)
 }
 ```
+
+### 자동 트랜잭션 (Auto-Transaction)
+`insert`, `update`, `delete` 등의 메서드 호출 시 `tx` 인자를 생략하면, Shard가 내부적으로 **개별 트랜잭션을 자동으로 생성**합니다.
+
+- **원자성 보장**: 단일 작업이라도 내부 트랜잭션을 통해 성공 시에만 최종 반영되며, 에러 발생 시 자동으로 롤백됩니다.
+- **성능 참고**: 대량의 삽입/수정 작업 시에는 매번 자동 트랜잭션을 생성하는 것보다 하나의 명시적 트랜잭션으로 묶어 처리하는 것이 I/O 오버헤드를 줄여 훨씬 빠릅니다.
 
 ## API 레퍼런스
 
@@ -102,9 +109,40 @@ PK를 기반으로 데이터를 조회합니다. `asRaw`가 true이면 `Uint8Arr
 #### `async rollback(): Promise<void>`
 트랜잭션 중 발생한 모든 변경 사항을 취소하고 원래 상태로 되돌립니다.
 
-## 작동 방식
+## 상세 작동 구조 (Internal Architecture)
 
-Shard는 내부적으로 데이터를 **고정 크기 페이지** 단위로 관리합니다. 가상 파일 시스템(VFS) 계층은 자주 액세스하는 페이지를 메모리에 캐싱하여 디스크 I/O를 최소화하며, 모든 변경 사항은 먼저 WAL에 기록된 후 디스크에 동기화되므로 예기치 못한 종료 시에도 안전하게 복구됩니다.
+Shard는 현대적인 데이터베이스 엔진의 핵심 원리를 가볍고 효율적으로 구현하고 있습니다.
+
+### 1. 계층형 아키텍처
+```mermaid
+graph TD
+    API[Shard API] --> RTE[Row Table Engine]
+    RTE --> PFS[Page File System]
+    PFS --> VFS[Virtual File System / Cache]
+    VFS --> WAL[Write Ahead Log]
+    VFS --> DISK[(Database File)]
+    
+    TX[Transaction Manager] -.-> VFS
+    TX -.-> LM[Lock Manager]
+```
+
+### 2. 페이지 기반 저장 및 VFS 캐싱
+- **Fixed-size Pages**: 모든 데이터는 고정 크기(기본 8KB)의 페이지 단위로 관리됩니다.
+- **VFS Cache**: 자주 액세스하는 페이지를 메모리에 캐싱하여 디스크 I/O를 최소화합니다.
+- **Dirty Page Tracking**: 수정된 페이지(Dirty)를 추적하여 커밋 시점에만 효율적으로 디스크에 동기화합니다.
+
+### 3. MVCC 및 스냅샷 격리 (Snapshot Isolation)
+- **Non-blocking Reads**: 읽기 작업은 쓰기 작업에 의해 차단되지 않습니다.
+- **Undo Log**: 트랜잭션이 페이지를 수정할 때, 수정 전의 원본 데이터를 **Undo Buffer**에 보관합니다. 다른 트랜잭션이 해당 페이지를 읽으려 하면 이 스냅샷을 제공하여 일관된 읽기를 보장합니다.
+- **롤백 메커니즘**: 트랜잭션 실패 시 Undo Buffer를 사용하여 페이지를 즉시 원래 상태로 복구합니다.
+
+### 4. WAL (Write-Ahead Logging) 및 장애 복구
+- **성능과 안정성**: 모든 변경 사항은 실제 데이터 파일에 기록되기 전, 순차적 로그 파일(WAL)에 먼저 기록됩니다. 이는 무작위 쓰기를 순차 쓰기로 변환하여 성능을 높이고 무결성을 보장합니다.
+- **Crash Recovery**: 시스템이 예기치 않게 종료된 후 재시작될 때, Shard는 WAL을 읽어 아직 데이터 파일에 반영되지 않은 변경 사항을 자동으로 복구(Redo)합니다.
+
+### 5. 동시성 제어 및 인덱싱
+- **Page-level Locking**: `LockManager`를 통해 페이지 단위 순차적 접근을 제어하여 데이터 경합을 방지합니다.
+- **B+Tree 인덱스**: Primary Key 기반의 조회 성능을 극대화하기 위해 $O(\log N)$ 성능을 보장하는 B+Tree 구조를 사용합니다.
 
 ## 라이선스
 

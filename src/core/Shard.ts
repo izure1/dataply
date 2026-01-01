@@ -152,7 +152,7 @@ export class Shard {
    * A transaction must be terminated by calling either `commit` or `rollback`.
    * @returns Transaction object
    */
-  async createTransaction(): Promise<Transaction> {
+  createTransaction(): Transaction {
     if (!this.initialized) {
       throw new Error('Shard instance is not initialized')
     }
