@@ -469,6 +469,27 @@ export class IndexPageManager extends PageManager {
     return PageManager.CONSTANT.PAGE_TYPE_INDEX
   }
 
+  static readonly CONSTANT = {
+    ...PageManager.CONSTANT,
+    OFFSET_INDEX_ID: PageManager.CONSTANT.SIZE_PAGE_HEADER,
+    OFFSET_PARENT_INDEX_ID: PageManager.CONSTANT.SIZE_PAGE_HEADER + 4,
+    OFFSET_NEXT_INDEX_ID: PageManager.CONSTANT.SIZE_PAGE_HEADER + 8,
+    OFFSET_PREV_INDEX_ID: PageManager.CONSTANT.SIZE_PAGE_HEADER + 12,
+    OFFSET_IS_LEAF: PageManager.CONSTANT.SIZE_PAGE_HEADER + 16,
+    OFFSET_KEYS_COUNT: PageManager.CONSTANT.SIZE_PAGE_HEADER + 17,
+    OFFSET_VALUES_COUNT: PageManager.CONSTANT.SIZE_PAGE_HEADER + 21,
+    OFFSET_KEYS_AND_VALUES: 128, // 8-byte aligned (original 125 -> 128)
+    SIZE_INDEX_ID: 4,
+    SIZE_PARENT_INDEX_ID: 4,
+    SIZE_NEXT_INDEX_ID: 4,
+    SIZE_PREV_INDEX_ID: 4,
+    SIZE_IS_LEAF: 1,
+    SIZE_KEYS_COUNT: 4,
+    SIZE_VALUES_COUNT: 4,
+    SIZE_KEY: 8,   // Updated to 8 bytes for Float64
+    SIZE_VALUE: 8, // Updated to 8 bytes for Float64
+  } as const
+
   /**
    * Checks if the page type is `IndexPage`.
    * @param page Page data
@@ -485,6 +506,241 @@ export class IndexPageManager extends PageManager {
    */
   isIndexPage(page: Uint8Array): page is IndexPage {
     return IndexPageManager.IsIndexPage(page)
+  }
+
+  /**
+   * Gets the index ID of the page.
+   * @param page Page data
+   * @returns Index ID
+   */
+  getIndexId(page: Uint8Array): number {
+    return bytesToNumber(
+      page,
+      IndexPageManager.CONSTANT.OFFSET_INDEX_ID,
+      IndexPageManager.CONSTANT.SIZE_INDEX_ID
+    )
+  }
+
+  /**
+   * Gets the parent index ID of the page.
+   * @param page Page data
+   * @returns Parent index ID
+   */
+  getParentIndexId(page: Uint8Array): number {
+    return bytesToNumber(
+      page,
+      IndexPageManager.CONSTANT.OFFSET_PARENT_INDEX_ID,
+      IndexPageManager.CONSTANT.SIZE_PARENT_INDEX_ID
+    )
+  }
+
+  /**
+   * Gets the next index ID of the page.
+   * @param page Page data
+   * @returns Next index ID
+   */
+  getNextIndexId(page: Uint8Array): number {
+    return bytesToNumber(
+      page,
+      IndexPageManager.CONSTANT.OFFSET_NEXT_INDEX_ID,
+      IndexPageManager.CONSTANT.SIZE_NEXT_INDEX_ID
+    )
+  }
+
+  /**
+   * Gets the previous index ID of the page.
+   * @param page Page data
+   * @returns Previous index ID
+   */
+  getPrevIndexId(page: Uint8Array): number {
+    return bytesToNumber(
+      page,
+      IndexPageManager.CONSTANT.OFFSET_PREV_INDEX_ID,
+      IndexPageManager.CONSTANT.SIZE_PREV_INDEX_ID
+    )
+  }
+
+  /**
+   * Gets the is leaf of the page.
+   * @param page Page data
+   * @returns Is leaf
+   */
+  getIsLeaf(page: Uint8Array): boolean {
+    return bytesToNumber(
+      page,
+      IndexPageManager.CONSTANT.OFFSET_IS_LEAF,
+      IndexPageManager.CONSTANT.SIZE_IS_LEAF
+    ) === 1
+  }
+
+  /**
+   * Gets the keys count of the page.
+   * @param page Page data
+   * @returns Keys count
+   */
+  getKeysCount(page: Uint8Array): number {
+    return bytesToNumber(
+      page,
+      IndexPageManager.CONSTANT.OFFSET_KEYS_COUNT,
+      IndexPageManager.CONSTANT.SIZE_KEYS_COUNT
+    )
+  }
+
+  /**
+   * Gets the values count of the page.
+   * @param page Page data
+   * @returns Values count
+   */
+  getValuesCount(page: Uint8Array): number {
+    return bytesToNumber(
+      page,
+      IndexPageManager.CONSTANT.OFFSET_VALUES_COUNT,
+      IndexPageManager.CONSTANT.SIZE_VALUES_COUNT
+    )
+  }
+
+  /**
+   * Sets the index ID of the page.
+   * @param page Page data
+   * @param indexId Index ID
+   */
+  setIndexId(page: Uint8Array, indexId: number): void {
+    numberToBytes(
+      indexId,
+      page,
+      IndexPageManager.CONSTANT.OFFSET_INDEX_ID,
+      IndexPageManager.CONSTANT.SIZE_INDEX_ID
+    )
+  }
+
+  /**
+   * Sets the parent index ID of the page.
+   * @param page Page data
+   * @param parentIndexId Parent index ID
+   */
+  setParentIndexId(page: Uint8Array, parentIndexId: number): void {
+    numberToBytes(
+      parentIndexId,
+      page,
+      IndexPageManager.CONSTANT.OFFSET_PARENT_INDEX_ID,
+      IndexPageManager.CONSTANT.SIZE_PARENT_INDEX_ID
+    )
+  }
+
+  /**
+   * Sets the next index ID of the page.
+   * @param page Page data
+   * @param nextIndexId Next index ID
+   */
+  setNextIndexId(page: Uint8Array, nextIndexId: number): void {
+    numberToBytes(
+      nextIndexId,
+      page,
+      IndexPageManager.CONSTANT.OFFSET_NEXT_INDEX_ID,
+      IndexPageManager.CONSTANT.SIZE_NEXT_INDEX_ID
+    )
+  }
+
+  /**
+   * Sets the previous index ID of the page.
+   * @param page Page data
+   * @param prevIndexId Previous index ID
+   */
+  setPrevIndexId(page: Uint8Array, prevIndexId: number): void {
+    numberToBytes(
+      prevIndexId,
+      page,
+      IndexPageManager.CONSTANT.OFFSET_PREV_INDEX_ID,
+      IndexPageManager.CONSTANT.SIZE_PREV_INDEX_ID
+    )
+  }
+
+  /**
+   * Sets the is leaf of the page.
+   * @param page Page data
+   * @param isLeaf Is leaf
+   */
+  setIsLeaf(page: Uint8Array, isLeaf: boolean): void {
+    numberToBytes(
+      isLeaf ? 1 : 0,
+      page,
+      IndexPageManager.CONSTANT.OFFSET_IS_LEAF,
+      IndexPageManager.CONSTANT.SIZE_IS_LEAF
+    )
+  }
+
+  /**
+   * Sets the keys count of the page.
+   * @param page Page data
+   * @param keysCount Keys count
+   */
+  setKeysCount(page: Uint8Array, keysCount: number): void {
+    numberToBytes(
+      keysCount,
+      page,
+      IndexPageManager.CONSTANT.OFFSET_KEYS_COUNT,
+      IndexPageManager.CONSTANT.SIZE_KEYS_COUNT
+    )
+  }
+
+  /**
+   * Sets the values count of the page.
+   * @param page Page data
+   * @param valuesCount Values count
+   */
+  setValuesCount(page: Uint8Array, valuesCount: number): void {
+    numberToBytes(
+      valuesCount,
+      page,
+      IndexPageManager.CONSTANT.OFFSET_VALUES_COUNT,
+      IndexPageManager.CONSTANT.SIZE_VALUES_COUNT
+    )
+  }
+
+  /**
+   * Gets the keys of the page.
+   * @param page Page data
+   * @returns Keys
+   */
+  getKeys(page: Uint8Array): number[] {
+    const keysCount = this.getKeysCount(page)
+    const byteOffset = page.byteOffset + IndexPageManager.CONSTANT.OFFSET_KEYS_AND_VALUES
+    const keys = new Float64Array(page.buffer, byteOffset, keysCount)
+    return Array.from(keys)
+  }
+
+  /**
+   * Gets the values of the page.
+   * @param page Page data
+   * @returns Values
+   */
+  getValues(page: Uint8Array): number[] {
+    const keysCount = this.getKeysCount(page)
+    const valuesCount = this.getValuesCount(page)
+    const byteOffset = page.byteOffset + IndexPageManager.CONSTANT.OFFSET_KEYS_AND_VALUES + (keysCount * IndexPageManager.CONSTANT.SIZE_KEY)
+    const values = new Float64Array(page.buffer, byteOffset, valuesCount)
+    return Array.from(values)
+  }
+
+  /**
+   * Sets the keys and values of the page.
+   * @param page Page data
+   * @param keys Keys
+   * @param values Values
+   */
+  setKeysAndValues(page: Uint8Array, keys: number[], values: number[]): void {
+    const keysCount = keys.length
+    const valuesCount = values.length
+
+    // Set Keys
+    const keyByteOffset = page.byteOffset + IndexPageManager.CONSTANT.OFFSET_KEYS_AND_VALUES
+    const keyDest = new Float64Array(page.buffer, keyByteOffset, keysCount)
+    keyDest.set(keys)
+
+    // Set Values
+    const valByteOffset = keyByteOffset + (keysCount * IndexPageManager.CONSTANT.SIZE_KEY)
+    const valDest = new Float64Array(page.buffer, valByteOffset, valuesCount)
+    valDest.set(values)
   }
 }
 

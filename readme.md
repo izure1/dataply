@@ -178,15 +178,15 @@ Shard is optimized for high-speed data processing. Below are the results of basi
 
 | Test Case | Count | Total Time | OPS (Operations Per Second) |
 | :--- | :--- | :--- | :--- |
-| **Bulk Insert (Batch)** | 10,000 | ~1,694ms | **~5,903 OPS** |
-| **Bulk Insert (Individual)** | 100 | ~38ms | **~2,593 OPS** |
-| **Bulk Insert with WAL** | 100 | ~854ms | **~117 OPS** |
-| **Medium Row Insert (1KB)** | 100 | ~40ms | **~2,471 OPS** |
+| **Bulk Insert (Batch)** | 10,000 | ~1,207ms | **~8,281 OPS** |
+| **Bulk Insert (Individual)** | 100 | ~47ms | **~2,121 OPS** |
+| **Bulk Insert with WAL** | 100 | ~946ms | **~105 OPS** |
+| **Medium Row Insert (1KB)** | 100 | ~52ms | **~1,892 OPS** |
 
 ### Benchmark Analysis
-- **Batching Efficiency**: Grouping operations into a single transaction is approximately **2.3x faster** than individual inserts by minimizing internal transaction management overhead.
-- **WAL Trade-off**: Enabling Write-Ahead Logging ensures data durability but results in a significant performance decrease (approximately **22x slower** for individual inserts) due to synchronous I/O operations.
-- **Node.js Optimization**: Shard is designed to provide competitive performance (over **5,000 OPS** in batch mode) for a pure TypeScript engine without native dependencies.
+- **Batching Efficiency**: Grouping operations into a single transaction is approximately **3.9x faster** than individual inserts by minimizing internal transaction management overhead.
+- **WAL Trade-off**: Enabling Write-Ahead Logging ensures data durability but results in a significant performance decrease (approximately **20x slower** for individual inserts) due to synchronous I/O operations.
+- **Node.js Optimization**: Shard is designed to provide competitive performance (over **8,000 OPS** in batch mode) for a pure TypeScript engine without native dependencies.
 
 > [!NOTE]
 > Tests were conducted on a standard local environment (Node.js v25+). Performance may vary depending on hardware specifications (especially SSD/HDD) and system load.

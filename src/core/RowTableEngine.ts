@@ -1,10 +1,10 @@
 import type { DataPage, ShardMetadata } from '../types'
 import { NumericComparator, BPTreeAsync } from 'serializable-bptree'
-import { RowIdentifierStrategy } from './RowIndexStategy'
+import { RowIdentifierStrategy } from './RowIndexStrategy'
 import { PageFileSystem } from './PageFileSystem'
 import { Row } from './Row'
 import { KeyManager } from './KeyManager'
-import { DataPageManager, MetadataPageManager, OverflowPageManager, PageManagerFactory } from './Page'
+import { DataPageManager, MetadataPageManager, OverflowPageManager, PageManagerFactory, IndexPageManager } from './Page'
 import { numberToBytes, bytesToNumber } from '../utils'
 import { Transaction } from './transaction/Transaction'
 
@@ -32,7 +32,7 @@ export class RowTableEngine {
     this.ridBuffer = new Uint8Array(Row.CONSTANT.SIZE_RID)
     this.pageIdBuffer = new Uint8Array(DataPageManager.CONSTANT.SIZE_PAGE_ID)
     this.maxBodySize = this.pfs.pageSize - DataPageManager.CONSTANT.SIZE_PAGE_HEADER
-    this.order = this.getOptimalOrder(pfs.pageSize, Row.CONSTANT.SIZE_RID, Row.CONSTANT.SIZE_PK)
+    this.order = this.getOptimalOrder(pfs.pageSize, IndexPageManager.CONSTANT.SIZE_KEY, IndexPageManager.CONSTANT.SIZE_VALUE)
     this.bptree = new BPTreeAsync(new RowIdentifierStrategy(this.order, pfs), new NumericComparator())
   }
 
@@ -54,6 +54,7 @@ export class RowTableEngine {
    * @returns Optimal order
    */
   private getOptimalOrder(pageSize: number, keySize: number, pointerSize: number): number {
+    pageSize -= IndexPageManager.CONSTANT.OFFSET_KEYS_AND_VALUES
     return Math.floor((pageSize + keySize) / (keySize + pointerSize))
   }
 
