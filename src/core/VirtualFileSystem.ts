@@ -100,7 +100,7 @@ export class VirtualFileSystem {
    */
   async commit(tx: Transaction): Promise<void> {
     const dirtyPages = tx.__getDirtyPages()
-    if (!dirtyPages || dirtyPages.size === 0) {
+    if (dirtyPages.size === 0) {
       this.cleanupTransaction(tx)
       return
     }
@@ -176,13 +176,11 @@ export class VirtualFileSystem {
   async rollback(tx: Transaction): Promise<void> {
     const dirtyPages = tx.__getDirtyPages()
 
-    if (dirtyPages) {
-      // Undo 버퍼를 사용하여 이전 상태로 복구
-      for (const pageId of dirtyPages) {
-        const undoData = tx.__getUndoPage(pageId)
-        if (undoData) {
-          this.cache.set(pageId, undoData)
-        }
+    // Undo 버퍼를 사용하여 이전 상태로 복구
+    for (const pageId of dirtyPages) {
+      const undoData = tx.__getUndoPage(pageId)
+      if (undoData) {
+        this.cache.set(pageId, undoData)
       }
     }
 
@@ -200,10 +198,8 @@ export class VirtualFileSystem {
   private cleanupTransaction(tx: Transaction) {
     // Dirty Page 소유권 해제
     const pages = tx.__getDirtyPages()
-    if (pages) {
-      for (const pageId of pages) {
-        this.dirtyPageOwners.delete(pageId)
-      }
+    for (const pageId of pages) {
+      this.dirtyPageOwners.delete(pageId)
     }
     this.activeTransactions.delete(tx.id)
   }
@@ -275,9 +271,7 @@ export class VirtualFileSystem {
         if (tx.id !== ownerTx.id) {
           const undoPage = ownerTx.__getUndoPage(pageIndex)
           if (undoPage) {
-            const snapshot = new Uint8Array(this.pageSize)
-            snapshot.set(undoPage)
-            return snapshot
+            return undoPage
           }
         }
       }
@@ -285,7 +279,7 @@ export class VirtualFileSystem {
 
     // 일반 읽기 (캐시 혹은 디스크)
     if (this.cache.has(pageIndex)) {
-      return this.cache.get(pageIndex)!.slice()
+      return this.cache.get(pageIndex)!
     }
 
     const buffer = new Uint8Array(this.pageSize)
@@ -296,7 +290,7 @@ export class VirtualFileSystem {
 
     await this._readAsync(this.fileHandle, buffer, 0, this.pageSize, pageStartPos)
     this.cache.set(pageIndex, buffer)
-    return buffer.slice()
+    return buffer
   }
 
   /**
@@ -367,25 +361,25 @@ export class VirtualFileSystem {
 
     const pages = await Promise.all(pagePromises)
 
+    // 활성 트랜잭션 등록
+    if (!this.activeTransactions.has(tx.id)) {
+      this.activeTransactions.set(tx.id, tx)
+    }
+
     let bufferOffset = 0
     for (let i = 0; i < pages.length; i++) {
       const pageIndex = startPage + i
       const page = pages[i]
 
-      if (tx) {
-        // 활성 트랜잭션 등록
-        if (!this.activeTransactions.has(tx.id)) {
-          this.activeTransactions.set(tx.id, tx)
-        }
+      // 소유자 등록
+      this.dirtyPageOwners.set(pageIndex, tx)
 
-        // 소유자 등록
-        this.dirtyPageOwners.set(pageIndex, tx)
-
-        // 스냅샷 저장 (이미 있으면 Transaction 객체가 판단하여 무시)
-        // 현재 페이지의 상태 백업 (Deep Copy)
+      // 스냅샷 저장 (이미 있으면 무시)
+      // 현재 페이지의 상태 백업 (Deep Copy)
+      if (!tx.__hasUndoPage(pageIndex)) {
         const snapshot = new Uint8Array(this.pageSize)
         snapshot.set(page)
-        tx.__addUndoPage(pageIndex, snapshot)
+        tx.__setUndoPage(pageIndex, snapshot)
       }
 
       const pageStartOffset = pageIndex * this.pageSize
@@ -399,16 +393,7 @@ export class VirtualFileSystem {
       // [중요] _readPage가 복사본을 반환하므로 수정한 페이지를 캐시에 다시 반영
       this.cache.set(pageIndex, page)
 
-      if (tx) {
-        tx.__addDirtyPage(pageIndex)
-      } else {
-        // Auto-commit: 즉시 디스크 반영
-        // 단순히 dirtyPages에 넣고 sync 호출
-        this.dirtyPages.add(pageIndex)
-        // 성능상 비효율적일 수 있으나 auto-commit의 안전성 보장
-        await this._writeAsync(this.fileHandle, page, 0, this.pageSize, pageIndex * this.pageSize)
-        this.dirtyPages.delete(pageIndex)
-      }
+      tx.__addDirtyPage(pageIndex)
     }
 
     // 파일 크기 업데이트 (확장된 경우에만)

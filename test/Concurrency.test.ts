@@ -211,5 +211,115 @@ describe('Concurrency (MVCC)', () => {
     const afterResult = await shard.select(pk, false)
     expect(afterResult).toBe('after-rollback')
   })
-})
 
+  test('should handle true parallel execution using Promise.all', async () => {
+    shard = new Shard(dbPath, { wal: walPath })
+    await shard.init()
+
+    const concurrencyLevel = 50
+    const operations = Array(concurrencyLevel).fill(0).map(async (_, i) => {
+      const tx = shard!.createTransaction()
+      // insert followed by commit, interleaved by JS event loop
+      const pk = await shard!.insert(`concurrent-data-${i}`, tx)
+      await tx.commit()
+      return { pk, data: `concurrent-data-${i}` }
+    })
+
+    const results = await Promise.all(operations)
+
+    // Verify all PKs are unique
+    const pks = results.map(r => r.pk)
+    const uniquePks = new Set(pks)
+    expect(uniquePks.size).toBe(concurrencyLevel)
+
+    // Verify data integrity for each insertion
+    for (const result of results) {
+      const storedData = await shard!.select(result.pk, false)
+      expect(storedData).toBe(result.data)
+    }
+
+    // Verify row count matches
+    const metadata = await shard!.getMetadata()
+    expect(metadata.rowCount).toBe(concurrencyLevel)
+  })
+
+  test('should simulate batch insert: allow parallel reads but block concurrent writes', async () => {
+    // 5초에 걸쳐 천천히 데이터를 삽입하는 상황 시뮬레이션
+    shard = new Shard(dbPath, { wal: walPath })
+    await shard.init()
+
+    // 0. 초기 데이터 세팅 (Update/Delete 대상)
+    const txInit = shard.createTransaction()
+    const targetPk = await shard.insert('target-row', txInit)
+    await txInit.commit()
+
+    // 1. Batch Insert 트랜잭션 시작 (약 5초 소요 예정)
+    const txBatch = shard.createTransaction()
+    const batchSize = 10
+    const insertDelay = 500 // 0.5초 * 10개 = 5초
+    const batchPks: number[] = []
+
+    const batchInsertTask = (async () => {
+      for (let i = 0; i < batchSize; i++) {
+        // 천천히 삽입
+        await new Promise(resolve => setTimeout(resolve, insertDelay))
+        const pk = await shard!.insert(`batch-data-${i}`, txBatch)
+        batchPks.push(pk)
+      }
+      await txBatch.commit()
+    })()
+
+    // 2. Select는 즉시 가능해야 함 (Non-blocking)
+    // Batch Insert가 진행되는 도중(예: 1초 후) 조회 시도
+    await new Promise(resolve => setTimeout(resolve, 1000))
+    const startSelect = Date.now()
+    const selectResult = await shard.select(targetPk, false)
+    const selectDuration = Date.now() - startSelect
+
+    expect(selectResult).toBe('target-row')
+    expect(selectDuration).toBeLessThan(100) // 100ms 이내 응답 (차단되지 않음)
+
+    // 3. Update/Delete는 차단되어야 함 (Blocking)
+    // Batch Insert가 아직 끝나지 않은 시점(예: 2초 후)에 시도
+    await new Promise(resolve => setTimeout(resolve, 1000))
+
+    let updateFinished = false
+    const startUpdate = Date.now()
+    const updateTask = (async () => {
+      const txUpdate = shard!.createTransaction()
+      // 여기서 Batch Tx가 끝날 때까지 대기해야 함 (메타데이터 락 때문)
+      await shard!.update(targetPk, 'updated-target', txUpdate)
+      await txUpdate.commit()
+      updateFinished = true
+    })()
+
+    // 아직 Batch가 3초 정도 남았으므로 Update는 끝나면 안 됨
+    await new Promise(resolve => setTimeout(resolve, 500))
+    expect(updateFinished).toBe(false)
+
+    // 4. Batch Insert 완료 대기
+    await batchInsertTask
+
+    // 5. 이제 Update가 완료되어야 함
+    await updateTask
+    const updateDuration = Date.now() - startUpdate
+    expect(updateFinished).toBe(true)
+    // Update는 Batch Insert가 끝날 때까지 기다렸으므로, 최소 2초 이상 걸렸어야 함 (남은 시간)
+    expect(updateDuration).toBeGreaterThan(1000)
+
+    // 6. 데이터 검증
+    // - Batch 데이터가 모두 잘 들어갔는지
+    for (let i = 0; i < batchSize; i++) {
+      const data = await shard.select(batchPks[i], false)
+      expect(data).toBe(`batch-data-${i}`)
+    }
+    // - Update가 반영되었는지
+    const targetData = await shard.select(targetPk, false)
+    expect(targetData).toBe('updated-target')
+
+    // - Row Count 확인
+    // Initial(1) + Batch(10) = 11 rows (Update는 count 변화 없음)
+    const metadata = await shard.getMetadata()
+    expect(metadata.rowCount).toBe(11)
+  }, 20000) // 타임아웃 20초로 연장
+})

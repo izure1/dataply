@@ -1,10 +1,10 @@
+import type { DataPage, ShardMetadata } from '../types'
 import { NumericComparator, BPTreeAsync } from 'serializable-bptree'
 import { RowIdentifierStrategy } from './RowIndexStategy'
 import { PageFileSystem } from './PageFileSystem'
 import { Row } from './Row'
 import { KeyManager } from './KeyManager'
 import { DataPageManager, MetadataPageManager, OverflowPageManager, PageManagerFactory } from './Page'
-import type { DataPage, ShardMetadata } from '../types'
 import { numberToBytes, bytesToNumber } from '../utils'
 import { Transaction } from './transaction/Transaction'
 
@@ -112,6 +112,10 @@ export class RowTableEngine {
    * @returns PK of the inserted data
    */
   async insert(data: Uint8Array, tx: Transaction): Promise<number> {
+    // 메타데이터(Page 0) 쓰기 락 획득 (Writers serialize)
+    // Select(Readers)는 락을 체크하지 않으므로(Snapshot) 조회가 차단되지 않습니다.
+    await tx.__acquireWriteLock(0)
+
     const metadataPage = await this.pfs.getMetadata(tx)
     const pk = this.metadataPageManager.getLastRowPk(metadataPage) + 1
     let lastInsertDataPageId = this.metadataPageManager.getLastInsertPageId(metadataPage)
@@ -299,6 +303,10 @@ export class RowTableEngine {
     this.rowManager.setBody(newRow, data)
 
     // 새 행을 삽입할 위치를 찾습니다.
+
+    // 메타데이터 쓰기 락 획득
+    await tx.__acquireWriteLock(0)
+
     const metadataPage = await this.pfs.getMetadata(tx)
     let lastInsertDataPageId = this.metadataPageManager.getLastInsertPageId(metadataPage)
     let lastInsertDataPage = await this.pfs.get(lastInsertDataPageId, tx) as DataPage
@@ -364,6 +372,9 @@ export class RowTableEngine {
    * @param tx Transaction
    */
   async delete(pk: number, tx: Transaction): Promise<void> {
+    // 메타데이터 쓰기 락 획득
+    await tx.__acquireWriteLock(0)
+
     const rid = await this.getRidByPK(pk, tx)
     if (rid === null) {
       return

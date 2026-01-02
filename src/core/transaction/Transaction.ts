@@ -54,10 +54,8 @@ export class Transaction {
    * @param pageId Page ID
    * @param buffer Page buffer
    */
-  __addUndoPage(pageId: number, buffer: Uint8Array) {
-    if (!this.undoPages.has(pageId)) {
-      this.undoPages.set(pageId, buffer)
-    }
+  __setUndoPage(pageId: number, buffer: Uint8Array) {
+    this.undoPages.set(pageId, buffer)
   }
 
   /**
@@ -68,6 +66,16 @@ export class Transaction {
    */
   __getUndoPage(pageId: number): Uint8Array | undefined {
     return this.undoPages.get(pageId)
+  }
+
+  /**
+   * Returns true if the transaction has an Undo page for the given page ID.
+   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
+   * @param pageId Page ID
+   * @returns True if the transaction has an Undo page for the given page ID
+   */
+  __hasUndoPage(pageId: number): boolean {
+    return this.undoPages.has(pageId)
   }
 
   /**

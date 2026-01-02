@@ -150,6 +150,7 @@ export class PageFileSystem {
    * @returns Created page ID
    */
   async appendNewPage(pageType: number = PageManager.CONSTANT.PAGE_TYPE_EMPTY, tx: Transaction): Promise<number> {
+    await tx.__acquireWriteLock(0)
     const metadata = await this.getMetadata(tx)
     const metadataManager = this.pageFactory.getManager(metadata)
     const pageCount = metadataManager.getPageCount(metadata)
