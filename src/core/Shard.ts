@@ -13,6 +13,14 @@ export class Shard {
   }
 
   /**
+   * Gets the options used to open the shard.
+   * @returns Options used to open the shard.
+   */
+  get options(): Required<ShardOptions> {
+    return this.api.options
+  }
+
+  /**
    * Creates a transaction.
    * The created transaction object can be used to add or modify data.
    * A transaction must be terminated by calling either `commit` or `rollback`.

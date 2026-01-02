@@ -111,6 +111,32 @@ Permanently reflects all changes made during the transaction to disk and release
 #### `async rollback(): Promise<void>`
 Cancels all changes made during the transaction and restores the original state.
 
+## Extending Shard
+
+If you want to extend Shard's functionality, use the `ShardAPI` class. Unlike the standard `Shard` class, `ShardAPI` provides direct access to internal components like `PageFileSystem` or `RowTableEngine`, offering much more flexibility for custom implementations.
+
+### Using ShardAPI
+
+```typescript
+import { ShardAPI } from 'shard'
+
+class CustomShard extends ShardAPI {
+  // Leverage internal protected members (pfs, rowTableEngine, etc.)
+  async getInternalStats() {
+    return {
+      pageSize: this.options.pageSize,
+      // Custom internal logic here
+    }
+  }
+}
+
+const custom = CustomShard.Use('./data.db')
+await custom.init()
+
+const stats = await custom.getInternalStats()
+console.log(stats)
+```
+
 ## Internal Architecture
 
 Shard implements the core principles of modern database engines in a lightweight and efficient manner.

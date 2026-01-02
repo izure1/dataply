@@ -13,7 +13,7 @@ import { TxContext } from './transaction/TxContext'
  * Class for managing Shard files.
  */
 export class ShardAPI {
-  protected readonly options: Required<ShardOptions>
+  readonly options: Required<ShardOptions>
   protected readonly pfs: PageFileSystem
   protected readonly rowTableEngine: RowTableEngine
   protected readonly lockManager: LockManager
