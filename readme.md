@@ -5,11 +5,12 @@
 > [!WARNING]
 > **Shard is currently in Alpha version.** It is experimental and not yet suitable for production use.
 
-**Shard** is a lightweight, high-performance **NoSQL** storage engine designed for Node.js. It provides reliable and fast data management by supporting MVCC (Multi-Version Concurrency Control), WAL (Write-Ahead Logging), and B+Tree indexing.
+**Shard** is a lightweight, high-performance **Record Store** designed for Node.js. It focuses on storing arbitrary data and providing an auto-generated Primary Key (PK) for ultra-fast retrieval, while supporting core enterprise features like MVCC, WAL, and atomic transactions.
 
 ## Key Features
 
-- **🚀 High-Performance B+Tree Indexing**: Supports fast data retrieval and management based on Primary Keys.
+- **🚀 Identity-Based Access**: Specialized in storing records and managing them via auto-generated Primary Keys.
+- **⚡ High-Performance B+Tree**: Optimizes data lookup and insertion through an asynchronous B+Tree structure.
 - **🛡️ MVCC Support**: Enables non-blocking read operations and guarantees data isolation between transactions.
 - **📝 WAL (Write-Ahead Logging)**: Ensures data integrity and provides recovery capabilities in case of system failures.
 - **💼 Transaction Mechanism**: Supports Commit and Rollback for atomic operations.
@@ -95,6 +96,7 @@ If you omit the `tx` argument when calling methods like `insert`, `update`, or `
 #### `constructor(file: string, options?: ShardOptions): Shard`
 Opens a database file. If the file does not exist, it creates and initializes a new one.
 - `options.pageSize`: Size of a page (Default: 8192, must be a power of 2)
+- `options.pageCacheCapacity`: Maximum number of pages to keep in memory (Default: 10000)
 - `options.wal`: Path to the WAL file. If omitted, WAL is disabled.
 
 #### `async init(): Promise<void>`
@@ -160,7 +162,7 @@ console.log(stats)
 
 ## Internal Architecture
 
-Shard implements the core principles of modern database engines in a lightweight and efficient manner.
+Shard implements the core principles of high-performance storage systems in a lightweight and efficient manner.
 
 ### 1. Layered Architecture
 ```mermaid
@@ -207,7 +209,7 @@ Shard is optimized for high-speed data processing. Below are the results of basi
 ### Benchmark Analysis
 - **Batching Efficiency**: Grouping operations into a single transaction is approximately **3.9x faster** than individual inserts by minimizing internal transaction management overhead.
 - **WAL Trade-off**: Enabling Write-Ahead Logging ensures data durability but results in a significant performance decrease (approximately **20x slower** for individual inserts) due to synchronous I/O operations.
-- **Node.js Optimization**: Shard is designed to provide competitive performance (over **8,000 OPS** in batch mode) for a pure TypeScript engine without native dependencies.
+- **Node.js Optimization**: Shard is designed to provide competitive performance (over **8,000 OPS** in batch mode) for a pure TypeScript Record Store without native dependencies.
 
 > [!NOTE]
 > Tests were conducted on a standard local environment (Node.js v25+). Performance may vary depending on hardware specifications (especially SSD/HDD) and system load.
@@ -216,8 +218,8 @@ Shard is optimized for high-speed data processing. Below are the results of basi
 
 As **Shard** is currently in Alpha, there are several limitations to keep in mind:
 - **PK-Only Access**: Data can only be retrieved or modified using the Primary Key. No secondary indexes or complex query logic are available yet.
-- **No SQL Support**: This is a low-level storage engine. It does not support SQL or any higher-level query language.
-- **Memory Usage**: The VFS cache size is currently not strictly limited, which may lead to high memory usage for extremely large databases.
+- **No SQL Support**: This is a low-level **Record Store**. It does not support SQL or any higher-level query language.
+- **Memory Usage**: The VFS cache size is controlled by `pageCacheCapacity`, but excessive use of large records should be handled with care.
 
 ## Roadmap
 
