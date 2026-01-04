@@ -220,6 +220,29 @@ As **Dataply** is currently in Alpha, there are several limitations to keep in m
 - **No SQL Support**: This is a low-level **Record Store**. It does not support SQL or any higher-level query language.
 - **Memory Usage**: The VFS cache size is controlled by `pageCacheCapacity`, but excessive use of large records should be handled with care.
 
+## Q&A
+
+### Q: What can I build with Dataply?
+Dataply is a low-level record store that provides the essential building blocks for storage engines. You can use it to build custom document databases, specialized caching layers, or any application requiring high-performance, ACID-compliant data persistence.
+
+### Q: Can I extend Dataply to implement a full-featured database?
+Absolutely! By leveraging `DataplyAPI`, you can implement custom indexing (like secondary indexes), query parsers, and complex data schemas. Dataply handles the difficult aspects of transaction management, crash recovery (WAL), and concurrency control, letting you focus on your database's unique features.
+
+### Q: How many rows can be inserted per page?
+Dataply uses a 4-byte Page ID and 2-byte slots for data positioning within a page. This allows for a theoretical maximum of **65,536 ($2^{16}$)** rows per page.
+
+### Q: What is the total maximum number of rows a database can hold?
+With $2^{32}$ possible pages and $2^{16}$ rows per page, the theoretical limit is **281 trillion ($2^{48}$)** rows. In practice, the limit is typically governed by the physical storage size (approx. 32TB for default settings).
+
+### Q: Is there a maximum database file size limit?
+Using 4-byte (unsigned int) Page IDs and the default 8KB page size, Dataply can manage up to **32TB** of data ($2^{32} \times 8KB$).
+
+### Q: Is WAL (Write-Ahead Logging) mandatory?
+It is optional. While disabling WAL can improve write performance by reducing synchronous I/O, it is highly recommended for any production-like environment to ensure data integrity and automatic recovery after a system crash.
+
+### Q: How does Dataply ensure data consistency during concurrent access?
+Dataply utilizes a combination of page-level locking and MVCC (Multi-Version Concurrency Control). This allows for Snapshot Isolation, meaning readers can access a consistent state of the data without being blocked by ongoing write operations.
+
 ## License
 
 MIT
