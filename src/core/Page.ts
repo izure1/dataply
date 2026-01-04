@@ -1,5 +1,5 @@
 import { DataPage, IndexPage, BitmapPage, OverflowPage, MetadataPage, EmptyPage, UnknownPage } from '../types'
-import { bytesToNumber, numberToBytes, crc32 } from '../utils'
+import { bytesToNumber, numberToBytes, crc32, getBit, setBit } from '../utils'
 import { Row } from './Row'
 
 /**
@@ -764,11 +764,14 @@ export class MetadataPageManager extends PageManager {
     OFFSET_ROOT_INDEX_ORDER: 126,
     OFFSET_LAST_INSERT_PAGE_ID: 130,
     OFFSET_LAST_ROW_PK: 134,
+    OFFSET_BITMAP_PAGE_ID: 140,
     SIZE_PAGE_COUNT: 4,
     SIZE_PAGE_SIZE: 4,
     SIZE_ROOT_INDEX_PAGE_ID: 4,
     SIZE_ROOT_INDEX_ORDER: 4,
     SIZE_LAST_INSERT_PAGE_ID: 4,
+    SIZE_ROW_PK: 6,
+    SIZE_BITMAP_PAGE_ID: 4,
   } as const
 
   /**
@@ -879,7 +882,7 @@ export class MetadataPageManager extends PageManager {
     return bytesToNumber(
       page,
       MetadataPageManager.CONSTANT.OFFSET_LAST_ROW_PK,
-      Row.CONSTANT.SIZE_PK
+      MetadataPageManager.CONSTANT.SIZE_ROW_PK
     )
   }
 
@@ -892,7 +895,20 @@ export class MetadataPageManager extends PageManager {
     return bytesToNumber(
       page,
       MetadataPageManager.CONSTANT.OFFSET_ROW_COUNT,
-      Row.CONSTANT.SIZE_PK
+      MetadataPageManager.CONSTANT.SIZE_ROW_PK
+    )
+  }
+
+  /**
+   * Returns the ID of the bitmap page.
+   * @param page Page data
+   * @returns Bitmap page ID
+   */
+  getBitmapPageId(page: MetadataPage): number {
+    return bytesToNumber(
+      page,
+      MetadataPageManager.CONSTANT.OFFSET_BITMAP_PAGE_ID,
+      MetadataPageManager.CONSTANT.SIZE_BITMAP_PAGE_ID
     )
   }
 
@@ -1003,6 +1019,20 @@ export class MetadataPageManager extends PageManager {
       Row.CONSTANT.SIZE_PK
     )
   }
+
+  /**
+   * Sets the ID of the bitmap page.
+   * @param page Page data
+   * @param bitmapPageId Bitmap page ID
+   */
+  setBitmapPageId(page: MetadataPage, bitmapPageId: number): void {
+    numberToBytes(
+      bitmapPageId,
+      page,
+      MetadataPageManager.CONSTANT.OFFSET_BITMAP_PAGE_ID,
+      MetadataPageManager.CONSTANT.SIZE_BITMAP_PAGE_ID
+    )
+  }
 }
 
 /**
@@ -1040,6 +1070,33 @@ export class BitmapPageManager extends PageManager {
    */
   isEmptyPage(page: BitmapPage, index: number): boolean {
     return bytesToNumber(page, index, 1) === 0
+  }
+
+  /**
+   * Gets a bit from the bitmap page.
+   * @param page Page data
+   * @param index Bit index
+   * @returns boolean indicating if the bit is set
+   */
+  getBit(page: BitmapPage, index: number): boolean {
+    const bitOffset = Math.floor(index / 8)
+    const offset = BitmapPageManager.CONSTANT.SIZE_PAGE_HEADER + bitOffset
+    const value = bytesToNumber(page, offset, 1)
+    return getBit(value, index % 8)
+  }
+
+  /**
+   * Sets a bit in the bitmap page.
+   * @param page Page data
+   * @param index Bit index
+   * @param flag boolean indicating if the bit is set
+   */
+  setBit(page: BitmapPage, index: number, flag: boolean): void {
+    const bitOffset = Math.floor(index / 8)
+    const offset = BitmapPageManager.CONSTANT.SIZE_PAGE_HEADER + bitOffset
+    const value = bytesToNumber(page, offset, 1)
+    const newValue = setBit(value, index % 8, flag)
+    numberToBytes(newValue, page, offset, 1)
   }
 }
 

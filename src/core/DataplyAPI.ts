@@ -1,7 +1,7 @@
 import fs from 'node:fs'
-import type { DataplyOptions, MetadataPage, DataPage, DataplyMetadata } from '../types'
+import type { DataplyOptions, MetadataPage, BitmapPage, DataPage, DataplyMetadata } from '../types'
 import { PageFileSystem } from './PageFileSystem'
-import { MetadataPageManager, DataPageManager } from './Page'
+import { MetadataPageManager, DataPageManager, BitmapPageManager } from './Page'
 import { RowTableEngine } from './RowTableEngine'
 import { TextCodec } from '../utils/TextCodec'
 import { catchPromise } from '../utils/catchPromise'
@@ -72,6 +72,7 @@ export class DataplyAPI {
    */
   static InitializeFile(fileHandle: number, options: Required<DataplyOptions>): void {
     const metadataPageManager = new MetadataPageManager()
+    const bitmapPageManager = new BitmapPageManager()
     const dataPageManager = new DataPageManager()
     const metadataPage = new Uint8Array(options.pageSize) as MetadataPage
     const dataPage = new Uint8Array(options.pageSize) as DataPage
@@ -88,19 +89,33 @@ export class DataplyAPI {
     metadataPageManager.setPageCount(metadataPage, 2)
     metadataPageManager.setPageSize(metadataPage, options.pageSize)
     metadataPageManager.setRootIndexPageId(metadataPage, -1)
-    metadataPageManager.setLastInsertPageId(metadataPage, 1)
+    metadataPageManager.setBitmapPageId(metadataPage, 1)
+    metadataPageManager.setLastInsertPageId(metadataPage, 2)
 
-    // Initialize the second data page
+    // Initialize the second bitmap page
+    const bitmapPage = new Uint8Array(options.pageSize) as BitmapPage
+    bitmapPageManager.initial(
+      bitmapPage,
+      BitmapPageManager.CONSTANT.PAGE_TYPE_BITMAP,
+      1,
+      -1,
+      options.pageSize - BitmapPageManager.CONSTANT.SIZE_PAGE_HEADER
+    )
+
+    // Initialize the third data page
     dataPageManager.initial(
       dataPage,
       DataPageManager.CONSTANT.PAGE_TYPE_DATA,
-      1,
+      2,
       -1,
       options.pageSize - DataPageManager.CONSTANT.SIZE_PAGE_HEADER
     )
 
-    fs.appendFileSync(fileHandle, metadataPage)
-    fs.appendFileSync(fileHandle, dataPage)
+    fs.appendFileSync(fileHandle, new Uint8Array([
+      ...metadataPage,
+      ...bitmapPage,
+      ...dataPage,
+    ]))
   }
 
   /**
