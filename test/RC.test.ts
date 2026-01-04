@@ -1,5 +1,6 @@
 import { Shard } from '../src/core/Shard'
 import { TxContext } from '../src/core/transaction/TxContext'
+import { type RowTableEngine } from '../src/core/RowTableEngine'
 import fs from 'node:fs'
 
 const DB_PATH = 'temp_rc_test.db'
@@ -20,14 +21,14 @@ describe('Row Count Test', () => {
   })
 
   it('should track row count correctly on insert', async () => {
-    const rowTableEngine = (shard as any).api.rowTableEngine
+    const rowTableEngine = (shard as any).api.rowTableEngine as RowTableEngine
     const tx = shard.createTransaction()
 
     await TxContext.run(tx, async () => {
       let count = await rowTableEngine.getRowCount(tx)
       expect(count).toBe(0)
 
-      await rowTableEngine.insert(new Uint8Array([1, 2, 3]), tx)
+      await rowTableEngine.insert(new Uint8Array([1, 2, 3]), true, tx)
 
       count = await rowTableEngine.getRowCount(tx)
       expect(count).toBe(1)
@@ -35,24 +36,24 @@ describe('Row Count Test', () => {
   })
 
   it('should track row count correctly on delete', async () => {
-    const rowTableEngine = (shard as any).api.rowTableEngine
+    const rowTableEngine = (shard as any).api.rowTableEngine as RowTableEngine
     const tx = shard.createTransaction()
 
     await TxContext.run(tx, async () => {
-      const pk = await rowTableEngine.insert(new Uint8Array([1, 2, 3]), tx)
+      const pk = await rowTableEngine.insert(new Uint8Array([1, 2, 3]), true, tx)
       expect(await rowTableEngine.getRowCount(tx)).toBe(1)
 
-      await rowTableEngine.delete(pk, tx)
+      await rowTableEngine.delete(pk, true, tx)
       expect(await rowTableEngine.getRowCount(tx)).toBe(0)
     })
   })
 
   it('should not change row count on update', async () => {
-    const rowTableEngine = (shard as any).api.rowTableEngine
+    const rowTableEngine = (shard as any).api.rowTableEngine as RowTableEngine
     const tx = shard.createTransaction()
 
     await TxContext.run(tx, async () => {
-      const pk = await rowTableEngine.insert(new Uint8Array([1, 2, 3]), tx)
+      const pk = await rowTableEngine.insert(new Uint8Array([1, 2, 3]), true, tx)
       expect(await rowTableEngine.getRowCount(tx)).toBe(1)
 
       // Update with same size
