@@ -221,14 +221,6 @@ As **Shard** is currently in Alpha, there are several limitations to keep in min
 - **No SQL Support**: This is a low-level **Record Store**. It does not support SQL or any higher-level query language.
 - **Memory Usage**: The VFS cache size is controlled by `pageCacheCapacity`, but excessive use of large records should be handled with care.
 
-## Roadmap
-
-We are working towards a stable production release. Planned features include:
-- [ ] **Document-based Search**: Implementation of attribute-based querying similar to MongoDB.
-- [ ] **Secondary Indexes**: Support for non-PK based efficient lookups.
-- [ ] **Query Engine**: Basic filtering, sorting, and projection capabilities.
-- [ ] **Improved Cache Management**: More sophisticated LRU or similar eviction policies for the VFS.
-
 ## License
 
 MIT
