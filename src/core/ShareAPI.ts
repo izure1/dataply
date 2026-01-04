@@ -27,10 +27,10 @@ export class ShardAPI {
     options: Required<ShardOptions>
   ) {
     this.options = options
-    this.pfs = new PageFileSystem(fileHandle, this.options.pageSize, this.options.wal)
+    this.pfs = new PageFileSystem(fileHandle, options.pageSize, options.pageCacheCapacity, options.wal)
     this.textCodec = new TextCodec()
     this.lockManager = new LockManager()
-    this.rowTableEngine = new RowTableEngine(this.pfs)
+    this.rowTableEngine = new RowTableEngine(this.pfs, this.options)
     this.initialized = false
     this.txIdCounter = 0
   }
@@ -57,7 +57,11 @@ export class ShardAPI {
    * @returns Options filled without omissions
    */
   static VerboseOptions(options?: ShardOptions): Required<ShardOptions> {
-    return Object.assign({ pageSize: 8192, wal: null }, options)
+    return Object.assign({
+      pageSize: 8192,
+      pageCacheCapacity: 10000,
+      wal: null,
+    }, options)
   }
 
   /**
@@ -108,6 +112,9 @@ export class ShardAPI {
   static Use(file: string, options?: ShardOptions): ShardAPI {
     const verboseOption = this.VerboseOptions(options)
     let fileHandle: number
+    if (verboseOption.pageCacheCapacity < 100) {
+      throw new Error('Page cache capacity must be at least 100')
+    }
     if (!fs.existsSync(file)) {
       if (verboseOption.pageSize < 4096) {
         throw new Error('Page size must be at least 4096 bytes')

@@ -43,7 +43,8 @@
     "typescript": "^5.9.3"
   },
   "dependencies": {
+    "cache-entanglement": "^1.7.1",
     "ryoiki": "^1.2.0",
-    "serializable-bptree": "^5.1.6"
+    "serializable-bptree": "^5.2.0"
   }
 }

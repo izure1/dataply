@@ -34,7 +34,7 @@ describe('VirtualFileSystem', () => {
   test('should write and read back data using cache', async () => {
     const pageSize = 16
     fd = fs.openSync(TEST_FILE, 'w+')
-    vfs = new VirtualFileSystem(fd, pageSize)
+    vfs = new VirtualFileSystem(fd, pageSize, 10000)
     lockManager = new LockManager()
     const tx = new Transaction(1, vfs, lockManager)
 
@@ -50,7 +50,7 @@ describe('VirtualFileSystem', () => {
   test('should handle cross-page writes and reads', async () => {
     const pageSize = 16
     fd = fs.openSync(TEST_FILE, 'w+')
-    vfs = new VirtualFileSystem(fd, pageSize)
+    vfs = new VirtualFileSystem(fd, pageSize, 10000)
     lockManager = new LockManager()
     const tx = new Transaction(1, vfs, lockManager)
 
@@ -73,7 +73,7 @@ describe('VirtualFileSystem', () => {
   test('should sync dirty pages to disk', async () => {
     const pageSize = 16
     fd = fs.openSync(TEST_FILE, 'w+')
-    vfs = new VirtualFileSystem(fd, pageSize)
+    vfs = new VirtualFileSystem(fd, pageSize, 10000)
     lockManager = new LockManager()
     const tx = new Transaction(1, vfs, lockManager)
 
@@ -105,7 +105,7 @@ describe('VirtualFileSystem', () => {
   test('should handle consecutive appends correctly (tracking file size)', async () => {
     const pageSize = 16
     fd = fs.openSync(TEST_FILE, 'w+')
-    vfs = new VirtualFileSystem(fd, pageSize)
+    vfs = new VirtualFileSystem(fd, pageSize, 10000)
     lockManager = new LockManager()
     const tx = new Transaction(1, vfs, lockManager)
 
@@ -126,7 +126,7 @@ describe('VirtualFileSystem', () => {
   test('append should extend file size and update cache using write internally', async () => {
     const pageSize = 16
     fd = fs.openSync(TEST_FILE, 'w+')
-    vfs = new VirtualFileSystem(fd, pageSize)
+    vfs = new VirtualFileSystem(fd, pageSize, 10000)
     lockManager = new LockManager()
     const tx = new Transaction(1, vfs, lockManager)
 
@@ -157,7 +157,7 @@ describe('VirtualFileSystem', () => {
   test('append across page boundaries', async () => {
     const pageSize = 16
     fd = fs.openSync(TEST_FILE, 'w+')
-    vfs = new VirtualFileSystem(fd, pageSize)
+    vfs = new VirtualFileSystem(fd, pageSize, 10000)
     lockManager = new LockManager()
     const tx = new Transaction(1, vfs, lockManager)
 

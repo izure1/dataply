@@ -10,6 +10,7 @@ import { LockManager } from '../src/core/transaction/LockManager'
 describe('PageFileSystem', () => {
   const TEST_FILE = path.join(__dirname, 'test_pfs.dat')
   const PAGE_SIZE = 1024
+  const PAGE_CACHE_CAPACITY = 10000
   let fd: number
   let pfs: PageFileSystem
   let tx: Transaction
@@ -18,7 +19,7 @@ describe('PageFileSystem', () => {
   beforeEach(() => {
     // 파일 생성 및 초기화
     fd = fs.openSync(TEST_FILE, 'w+')
-    pfs = new PageFileSystem(fd, PAGE_SIZE)
+    pfs = new PageFileSystem(fd, PAGE_SIZE, PAGE_CACHE_CAPACITY)
     lockManager = new LockManager()
     tx = new Transaction(1, pfs.vfsInstance, lockManager)
   })

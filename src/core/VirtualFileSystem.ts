@@ -1,4 +1,5 @@
 import fs from 'node:fs'
+import { LRUMap } from 'cache-entanglement'
 import { LogManager } from './LogManager'
 import type { Transaction } from './transaction/Transaction'
 import { PageManagerFactory } from './Page'
@@ -8,7 +9,7 @@ import { PageManagerFactory } from './Page'
  */
 export class VirtualFileSystem {
   /** Cache list (Page ID -> Data Buffer) */
-  protected cache: Map<number, Uint8Array> = new Map()
+  protected cache: LRUMap<number, Uint8Array>
   /** Page IDs that have changes and need disk synchronization */
   protected dirtyPages: Set<number> = new Set()
   /** Track logical file size */
@@ -25,13 +26,20 @@ export class VirtualFileSystem {
   // TxID -> Transaction (활성 트랜잭션 목록)
   protected activeTransactions: Map<number, Transaction> = new Map()
 
-  constructor(protected fileHandle: number, protected pageSize: number, walPath?: string | undefined | null) {
+  constructor(
+    protected fileHandle: number,
+    protected pageSize: number,
+    protected pageCacheCapacity: number,
+    walPath?: string | undefined | null
+  ) {
     // 페이지 크기는 비트 연산 최적화를 위해 2의 거듭제곱이어야 함
     if ((pageSize & (pageSize - 1)) !== 0) {
       throw new Error('Page size must be a power of 2')
     }
     this.pageShift = Math.log2(pageSize)
     this.pageMask = pageSize - 1
+
+    this.cache = new LRUMap(pageCacheCapacity)
 
     // 중요: 초기 파일 크기 로드
     this.fileSize = fs.fstatSync(fileHandle).size

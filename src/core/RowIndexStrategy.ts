@@ -1,5 +1,5 @@
-import type { BPTreeInternalNode, BPTreeLeafNode } from 'serializable-bptree/dist/types/base/BPTree'
-import { type BPTreeNode, type SerializeStrategyHead, SerializeStrategyAsync } from 'serializable-bptree'
+import type { BPTreeInternalNode, BPTreeLeafNode, BPTreeNode, SerializeStrategyHead } from 'serializable-bptree'
+import { SerializeStrategyAsync } from 'serializable-bptree'
 import { PageFileSystem } from './PageFileSystem'
 import { IndexPageManager, PageManager, PageManagerFactory } from './Page'
 import { TextCodec } from '../utils/TextCodec'
@@ -23,22 +23,6 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
     const pageId = await this.pfs.appendNewPage(PageManager.CONSTANT.PAGE_TYPE_INDEX, tx)
     return pageId.toString()
   }
-
-  // async read(id: string): Promise<BPTreeNode<number, number>> {
-  //   const tx = TxContext.get()!
-  //   const pageId = parseInt(id)
-  //   const page = await this.pfs.getBody(pageId, true, tx)
-  //   const text = this.codec.decode(page)
-  //   return JSON.parse(text)
-  // }
-
-  // async write(id: string, node: BPTreeNode<number, number>): Promise<void> {
-  //   const tx = TxContext.get()!
-  //   const pageId = parseInt(id)
-  //   const text = JSON.stringify(node)
-  //   const source = this.codec.encode(text)
-  //   await this.pfs.writePageContent(pageId, source, 0, tx)
-  // }
 
   async read(id: string): Promise<BPTreeNode<number, number>> {
     const tx = TxContext.get()!

@@ -1,4 +1,4 @@
-import type { DataPage, ShardMetadata } from '../types'
+import type { DataPage, ShardMetadata, ShardOptions } from '../types'
 import { NumericComparator, BPTreeAsync } from 'serializable-bptree'
 import { RowIdentifierStrategy } from './RowIndexStrategy'
 import { PageFileSystem } from './PageFileSystem'
@@ -22,7 +22,7 @@ export class RowTableEngine {
   private readonly pageIdBuffer: Uint8Array
   private initialized = false
 
-  constructor(protected readonly pfs: PageFileSystem) {
+  constructor(protected readonly pfs: PageFileSystem, protected readonly options: Required<ShardOptions>) {
     this.factory = new PageManagerFactory()
     this.metadataPageManager = this.factory.getManagerFromType(MetadataPageManager.CONSTANT.PAGE_TYPE_METADATA) as MetadataPageManager
     this.dataPageManager = this.factory.getManagerFromType(DataPageManager.CONSTANT.PAGE_TYPE_DATA) as DataPageManager
@@ -36,7 +36,7 @@ export class RowTableEngine {
     this.bptree = new BPTreeAsync(
       new RowIdentifierStrategy(this.order, pfs),
       new NumericComparator(), {
-      lifespan: '3 minutes'
+      capacity: this.options.pageCacheCapacity
     })
   }
 

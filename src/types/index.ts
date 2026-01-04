@@ -7,6 +7,10 @@ export interface ShardOptions {
    * Write-Ahead Logging file path
    */
   wal?: string | undefined | null
+  /**
+   * The maximum number of pages to cache in memory.
+   */
+  pageCacheCapacity?: number
 }
 
 export interface ShardMetadata {

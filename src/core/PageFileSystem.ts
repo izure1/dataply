@@ -14,15 +14,17 @@ export class PageFileSystem {
 
   /**
    * @param fileHandle 파일 핸들 (fs.open으로 얻은 핸들)
-   * @param pageSize 페이지 크기 (기본값: 4096)
+   * @param pageSize 페이지 크기
+   * @param pageCacheCapacity 페이지 캐시 크기
    * @param walPath WAL 파일 경로 (기본값: null)
    */
   constructor(
-    protected readonly fileHandle: number,
-    readonly pageSize: number = 4096,
-    walPath?: string | undefined | null
+    readonly fileHandle: number,
+    readonly pageSize: number,
+    readonly pageCacheCapacity: number,
+    readonly walPath?: string | undefined | null
   ) {
-    this.vfs = new VirtualFileSystem(fileHandle, pageSize, walPath)
+    this.vfs = new VirtualFileSystem(fileHandle, pageSize, pageCacheCapacity, walPath)
     this.pageManagerFactory = new PageManagerFactory()
   }
 
