@@ -34,7 +34,6 @@ import { Shard } from 'shard'
 
 // Open Shard instance
 const shard = new Shard('./data.db', {
-  pageSize: 8192,
   wal: './data.db.wal'
 })
 

@@ -210,10 +210,11 @@ export class ShardAPI {
   /**
    * Inserts data. Returns the PK of the added row.
    * @param data Data to add
+   * @param incrementRowCount Whether to increment the row count to metadata
    * @param tx Transaction
    * @returns PK of the added data
    */
-  async insert(data: string | Uint8Array, tx?: Transaction): Promise<number> {
+  async insert(data: string | Uint8Array, incrementRowCount?: boolean, tx?: Transaction): Promise<number> {
     if (!this.initialized) {
       throw new Error('Shard instance is not initialized')
     }
@@ -221,7 +222,7 @@ export class ShardAPI {
       if (typeof data === 'string') {
         data = this.textCodec.encode(data)
       }
-      return this.rowTableEngine.insert(data, true, tx)
+      return this.rowTableEngine.insert(data, incrementRowCount ?? true, tx)
     }, tx)
   }
 
@@ -229,10 +230,11 @@ export class ShardAPI {
    * Inserts multiple data in batch.
    * If a transaction is not provided, it internally creates a single transaction to process.
    * @param dataList Array of data to add
+   * @param incrementRowCount Whether to increment the row count to metadata
    * @param tx Transaction
    * @returns Array of PKs of the added data
    */
-  async insertBatch(dataList: (string | Uint8Array)[], tx?: Transaction): Promise<number[]> {
+  async insertBatch(dataList: (string | Uint8Array)[], incrementRowCount?: boolean, tx?: Transaction): Promise<number[]> {
     if (!this.initialized) {
       throw new Error('Shard instance is not initialized')
     }
@@ -240,7 +242,7 @@ export class ShardAPI {
       const pks: number[] = []
       for (const data of dataList) {
         const encoded = typeof data === 'string' ? this.textCodec.encode(data) : data
-        const pk = await this.rowTableEngine.insert(encoded, true, tx)
+        const pk = await this.rowTableEngine.insert(encoded, incrementRowCount ?? true, tx)
         pks.push(pk)
       }
       return pks
@@ -268,14 +270,15 @@ export class ShardAPI {
   /**
    * Deletes data.
    * @param pk PK of the data to delete
+   * @param decrementRowCount Whether to decrement the row count to metadata
    * @param tx Transaction
    */
-  async delete(pk: number, tx?: Transaction): Promise<void> {
+  async delete(pk: number, decrementRowCount?: boolean, tx?: Transaction): Promise<void> {
     if (!this.initialized) {
       throw new Error('Shard instance is not initialized')
     }
     return this.runWithDefault(async (tx) => {
-      await this.rowTableEngine.delete(pk, true, tx)
+      await this.rowTableEngine.delete(pk, decrementRowCount ?? true, tx)
     }, tx)
   }
 

@@ -113,7 +113,7 @@ export class RowTableEngine {
   /**
    * Inserts data.
    * @param data Data
-   * @param incrementRowCount Whether to increment the row count
+   * @param incrementRowCount Whether to increment the row count to metadata
    * @param tx Transaction
    * @returns PK of the inserted data
    */
@@ -377,7 +377,7 @@ export class RowTableEngine {
   /**
    * Deletes data.
    * @param pk PK of the data to delete
-   * @param decrementRowCount Whether to decrement the row count
+   * @param decrementRowCount Whether to decrement the row count to metadata
    * @param tx Transaction
    */
   async delete(pk: number, decrementRowCount: boolean, tx: Transaction): Promise<void> {

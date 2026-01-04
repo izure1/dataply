@@ -54,7 +54,7 @@ export class Shard {
    * @returns PK of the added data
    */
   async insert(data: string | Uint8Array, tx?: Transaction): Promise<number> {
-    return this.api.insert(data, tx)
+    return this.api.insert(data, true, tx)
   }
 
   /**
@@ -65,7 +65,7 @@ export class Shard {
    * @returns Array of PKs of the added data
    */
   async insertBatch(dataList: (string | Uint8Array)[], tx?: Transaction): Promise<number[]> {
-    return this.api.insertBatch(dataList, tx)
+    return this.api.insertBatch(dataList, true, tx)
   }
 
   /**
@@ -84,7 +84,7 @@ export class Shard {
    * @param tx Transaction
    */
   async delete(pk: number, tx?: Transaction): Promise<void> {
-    return this.api.delete(pk, tx)
+    return this.api.delete(pk, true, tx)
   }
 
   /**
