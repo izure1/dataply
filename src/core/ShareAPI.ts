@@ -221,7 +221,7 @@ export class ShardAPI {
       if (typeof data === 'string') {
         data = this.textCodec.encode(data)
       }
-      return this.rowTableEngine.insert(data, tx)
+      return this.rowTableEngine.insert(data, true, tx)
     }, tx)
   }
 
@@ -240,7 +240,7 @@ export class ShardAPI {
       const pks: number[] = []
       for (const data of dataList) {
         const encoded = typeof data === 'string' ? this.textCodec.encode(data) : data
-        const pk = await this.rowTableEngine.insert(encoded, tx)
+        const pk = await this.rowTableEngine.insert(encoded, true, tx)
         pks.push(pk)
       }
       return pks
@@ -275,7 +275,7 @@ export class ShardAPI {
       throw new Error('Shard instance is not initialized')
     }
     return this.runWithDefault(async (tx) => {
-      await this.rowTableEngine.delete(pk, tx)
+      await this.rowTableEngine.delete(pk, true, tx)
     }, tx)
   }
 

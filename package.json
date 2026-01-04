@@ -1,7 +1,7 @@
 {
   "name": "shard",
   "version": "0.0.1",
-  "description": "A lightweight storage engine for Node.js with support for MVCC, WAL, and Sharding.",
+  "description": "A lightweight storage engine for Node.js with support for MVCC, WAL.",
   "license": "MIT",
   "author": "izure <admin@izure.org>",
   "type": "commonjs",
@@ -45,6 +45,6 @@
   "dependencies": {
     "cache-entanglement": "^1.7.1",
     "ryoiki": "^1.2.0",
-    "serializable-bptree": "^5.2.0"
+    "serializable-bptree": "^5.2.1"
   }
 }

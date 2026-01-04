@@ -113,10 +113,11 @@ export class RowTableEngine {
   /**
    * Inserts data.
    * @param data Data
+   * @param incrementRowCount Whether to increment the row count
    * @param tx Transaction
    * @returns PK of the inserted data
    */
-  async insert(data: Uint8Array, tx: Transaction): Promise<number> {
+  async insert(data: Uint8Array, incrementRowCount: boolean, tx: Transaction): Promise<number> {
     // 메타데이터(Page 0) 쓰기 락 획득 (Writers serialize)
     // Select(Readers)는 락을 체크하지 않으므로(Snapshot) 조회가 차단되지 않습니다.
     await tx.__acquireWriteLock(0)
@@ -197,8 +198,10 @@ export class RowTableEngine {
     this.metadataPageManager.setLastInsertPageId(freshMetadataPage, lastInsertDataPageId)
     this.metadataPageManager.setLastRowPk(freshMetadataPage, pk)
 
-    const currentRowCount = this.metadataPageManager.getRowCount(freshMetadataPage)
-    this.metadataPageManager.setRowCount(freshMetadataPage, currentRowCount + 1)
+    if (incrementRowCount) {
+      const currentRowCount = this.metadataPageManager.getRowCount(freshMetadataPage)
+      this.metadataPageManager.setRowCount(freshMetadataPage, currentRowCount + 1)
+    }
 
     await this.pfs.setMetadata(freshMetadataPage, tx)
 
@@ -374,9 +377,10 @@ export class RowTableEngine {
   /**
    * Deletes data.
    * @param pk PK of the data to delete
+   * @param decrementRowCount Whether to decrement the row count
    * @param tx Transaction
    */
-  async delete(pk: number, tx: Transaction): Promise<void> {
+  async delete(pk: number, decrementRowCount: boolean, tx: Transaction): Promise<void> {
     // 메타데이터 쓰기 락 획득
     await tx.__acquireWriteLock(0)
 
@@ -403,10 +407,12 @@ export class RowTableEngine {
     this.rowManager.setDeletedFlag(row, true)
     await this.pfs.setPage(pageId, page, tx)
 
-    const metadataPage = await this.pfs.getMetadata(tx)
-    const currentRowCount = this.metadataPageManager.getRowCount(metadataPage)
-    this.metadataPageManager.setRowCount(metadataPage, currentRowCount - 1)
-    await this.pfs.setMetadata(metadataPage, tx)
+    if (decrementRowCount) {
+      const metadataPage = await this.pfs.getMetadata(tx)
+      const currentRowCount = this.metadataPageManager.getRowCount(metadataPage)
+      this.metadataPageManager.setRowCount(metadataPage, currentRowCount - 1)
+      await this.pfs.setMetadata(metadataPage, tx)
+    }
   }
 
   /**
