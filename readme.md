@@ -3,7 +3,7 @@
 # Dataply
 
 > [!WARNING]
-> **Dataply is currently in Alpha version.** It is experimental and not yet suitable for production use.
+> **Dataply is currently in Alpha version.** It is experimental and not yet suitable for production use. Internal data structures and file formats are subject to change at any time.
 
 **Dataply** is a lightweight, high-performance **Record Store** designed for Node.js. It focuses on storing arbitrary data and providing an auto-generated Primary Key (PK) for ultra-fast retrieval, while supporting core enterprise features like MVCC, WAL, and atomic transactions.
 
