@@ -86,11 +86,14 @@ export class DataplyAPI {
       options.pageSize - MetadataPageManager.CONSTANT.SIZE_PAGE_HEADER
     )
     metadataPageManager.setMagicString(metadataPage)
-    metadataPageManager.setPageCount(metadataPage, 2)
     metadataPageManager.setPageSize(metadataPage, options.pageSize)
+
     metadataPageManager.setRootIndexPageId(metadataPage, -1)
     metadataPageManager.setBitmapPageId(metadataPage, 1)
     metadataPageManager.setLastInsertPageId(metadataPage, 2)
+
+    metadataPageManager.setPageCount(metadataPage, 3)
+    metadataPageManager.setFreePageId(metadataPage, -1)
 
     // Initialize the second bitmap page
     const bitmapPage = new Uint8Array(options.pageSize) as BitmapPage

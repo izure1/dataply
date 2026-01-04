@@ -9,17 +9,17 @@ describe('Page Checksum with Dataply API', () => {
   const DB_FILE = path.join(TEST_DIR, 'test_checksum.db')
   const PAGE_SIZE = 4096 // Minimum for Dataply
 
-  beforeEach(() => {
+  beforeEach(async () => {
     if (fs.existsSync(TEST_DIR)) {
-      fs.rmSync(TEST_DIR, { recursive: true, force: true })
+      await fs.promises.rm(TEST_DIR, { recursive: true, force: true })
     }
-    fs.mkdirSync(TEST_DIR)
+    await fs.promises.mkdir(TEST_DIR)
   })
 
   afterEach(async () => {
     try {
       if (fs.existsSync(TEST_DIR)) {
-        fs.rmSync(TEST_DIR, { recursive: true, force: true })
+        await fs.promises.rm(TEST_DIR, { recursive: true, force: true })
       }
     } catch (e) {
       // ignore

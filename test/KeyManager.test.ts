@@ -5,7 +5,7 @@ describe('KeyManager', () => {
   const manager = new KeyManager()
   const SIZE_RID = 6
 
-  it('should correctly set and get pageId', () => {
+  test('should correctly set and get pageId', () => {
     const buffer = new Uint8Array(SIZE_RID)
     const pageId = 1000
 
@@ -15,7 +15,7 @@ describe('KeyManager', () => {
     expect(result).toBe(pageId)
   })
 
-  it('should correctly set and get slotIndex', () => {
+  test('should correctly set and get slotIndex', () => {
     const buffer = new Uint8Array(SIZE_RID)
     const slotIndex = 50
 
@@ -25,7 +25,7 @@ describe('KeyManager', () => {
     expect(result).toBe(slotIndex)
   })
 
-  it('should correctly convert to and from numeric key', () => {
+  test('should correctly convert to and from numeric key', () => {
     const buffer = new Uint8Array(SIZE_RID)
     // 50 (slot) + 1000 (page) * 65536 = 65536050
     const expectedKey = 65536050
@@ -36,7 +36,7 @@ describe('KeyManager', () => {
     expect(result).toBe(expectedKey)
   })
 
-  it('should maintain consistency between individual setters and numeric key', () => {
+  test('should maintain consistency between individual setters and numeric key', () => {
     const buffer = new Uint8Array(SIZE_RID)
     const pageId = 1000
     const slotIndex = 50

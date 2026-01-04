@@ -5,9 +5,9 @@ import { Dataply } from '../src/core/Dataply'
 describe('Dataply Delete Transaction Tests', () => {
   const TEST_FILE = path.join(__dirname, 'test_dataply_delete.dat')
 
-  beforeEach(() => {
+  beforeEach(async () => {
     if (fs.existsSync(TEST_FILE)) {
-      fs.unlinkSync(TEST_FILE)
+      await fs.promises.unlink(TEST_FILE)
     }
   })
 

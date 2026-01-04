@@ -4,23 +4,22 @@ import { type RowTableEngine } from '../src/core/RowTableEngine'
 import fs from 'node:fs'
 
 const DB_PATH = 'temp_rc_test.db'
-if (fs.existsSync(DB_PATH)) fs.unlinkSync(DB_PATH)
 
 describe('Row Count Test', () => {
   let dataply: Dataply
 
   beforeEach(async () => {
-    if (fs.existsSync(DB_PATH)) fs.unlinkSync(DB_PATH)
+    if (fs.existsSync(DB_PATH)) await fs.promises.unlink(DB_PATH)
     dataply = new Dataply(DB_PATH)
     await dataply.init()
   })
 
   afterEach(async () => {
     await dataply.close()
-    if (fs.existsSync(DB_PATH)) fs.unlinkSync(DB_PATH)
+    if (fs.existsSync(DB_PATH)) await fs.promises.unlink(DB_PATH)
   })
 
-  it('should track row count correctly on insert', async () => {
+  test('should track row count correctly on insert', async () => {
     const rowTableEngine = (dataply as any).api.rowTableEngine as RowTableEngine
     const tx = dataply.createTransaction()
 
@@ -35,7 +34,7 @@ describe('Row Count Test', () => {
     })
   })
 
-  it('should track row count correctly on delete', async () => {
+  test('should track row count correctly on delete', async () => {
     const rowTableEngine = (dataply as any).api.rowTableEngine as RowTableEngine
     const tx = dataply.createTransaction()
 
@@ -48,7 +47,7 @@ describe('Row Count Test', () => {
     })
   })
 
-  it('should not change row count on update', async () => {
+  test('should not change row count on update', async () => {
     const rowTableEngine = (dataply as any).api.rowTableEngine as RowTableEngine
     const tx = dataply.createTransaction()
 

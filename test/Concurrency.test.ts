@@ -9,8 +9,8 @@ describe('Concurrency (MVCC)', () => {
   const walPath = path.join(testDir, 'concurrency.wal')
   let dataply: Dataply | null = null
 
-  beforeAll(() => {
-    if (!fs.existsSync(testDir)) fs.mkdirSync(testDir)
+  beforeAll(async () => {
+    if (!fs.existsSync(testDir)) await fs.promises.mkdir(testDir)
   })
 
   afterAll(async () => {
@@ -22,7 +22,7 @@ describe('Concurrency (MVCC)', () => {
     // Wait a bit for file handles to release
     await new Promise(resolve => setTimeout(resolve, 100))
     if (fs.existsSync(testDir)) {
-      try { fs.rmSync(testDir, { recursive: true, force: true }) } catch (e) { }
+      try { await fs.promises.rm(testDir, { recursive: true, force: true }) } catch (e) { }
     }
   })
 
@@ -36,8 +36,8 @@ describe('Concurrency (MVCC)', () => {
   beforeEach(async () => {
     // Wait for any lingering file handles to release
     await new Promise(resolve => setTimeout(resolve, 50))
-    if (fs.existsSync(dbPath)) try { fs.unlinkSync(dbPath) } catch (e) { }
-    if (fs.existsSync(walPath)) try { fs.unlinkSync(walPath) } catch (e) { }
+    if (fs.existsSync(dbPath)) try { await fs.promises.unlink(dbPath) } catch (e) { }
+    if (fs.existsSync(walPath)) try { await fs.promises.unlink(walPath) } catch (e) { }
   })
 
   test('should serialize concurrent inserts (Writers block Writers)', async () => {

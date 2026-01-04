@@ -12,21 +12,21 @@ describe('Atomicity (Transaction with Dataply API)', () => {
 
   let dataply: Dataply
 
-  beforeAll(() => {
+  beforeAll(async () => {
     if (!fs.existsSync(testDir)) {
-      fs.mkdirSync(testDir)
+      await fs.promises.mkdir(testDir)
     }
   })
 
-  afterAll(() => {
+  afterAll(async () => {
     if (fs.existsSync(testDir)) {
-      fs.rmSync(testDir, { recursive: true, force: true })
+      await fs.promises.rm(testDir, { recursive: true, force: true })
     }
   })
 
   beforeEach(async () => {
-    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath)
-    if (fs.existsSync(walPath)) fs.unlinkSync(walPath)
+    if (fs.existsSync(dbPath)) await fs.promises.unlink(dbPath)
+    if (fs.existsSync(walPath)) await fs.promises.unlink(walPath)
 
     dataply = new Dataply(dbPath, { pageSize, wal: walPath })
     await dataply.init()
@@ -38,8 +38,8 @@ describe('Atomicity (Transaction with Dataply API)', () => {
     } catch (e) {
       // Ignore if already closed
     }
-    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath)
-    if (fs.existsSync(walPath)) fs.unlinkSync(walPath)
+    if (fs.existsSync(dbPath)) await fs.promises.unlink(dbPath)
+    if (fs.existsSync(walPath)) await fs.promises.unlink(walPath)
   })
 
   test('should rollback changes (undo memory)', async () => {

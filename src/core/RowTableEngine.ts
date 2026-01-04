@@ -4,7 +4,7 @@ import { RowIdentifierStrategy } from './RowIndexStrategy'
 import { PageFileSystem } from './PageFileSystem'
 import { Row } from './Row'
 import { KeyManager } from './KeyManager'
-import { DataPageManager, MetadataPageManager, OverflowPageManager, PageManagerFactory, IndexPageManager } from './Page'
+import { DataPageManager, MetadataPageManager, OverflowPageManager, PageManagerFactory, IndexPageManager, PageManager } from './Page'
 import { numberToBytes, bytesToNumber } from '../utils'
 import { Transaction } from './transaction/Transaction'
 
@@ -404,6 +404,21 @@ export class RowTableEngine {
       return
     }
 
+    // 1. 오버플로우 페이지 해제
+    if (this.rowManager.getOverflowFlag(row)) {
+      let overflowPageId = bytesToNumber(this.rowManager.getBody(row))
+      while (overflowPageId !== -1) {
+        const overflowPage = await this.pfs.get(overflowPageId, tx)
+        const manager = this.factory.getManager(overflowPage) as OverflowPageManager
+        const nextPageId = manager.getNextPageId(overflowPage)
+
+        // 오버플로우 페이지 반환 및 초기화
+        await this.pfs.setFreePage(overflowPageId, tx)
+
+        overflowPageId = nextPageId
+      }
+    }
+
     this.rowManager.setDeletedFlag(row, true)
     await this.pfs.setPage(pageId, page, tx)
 
@@ -412,6 +427,32 @@ export class RowTableEngine {
       const currentRowCount = this.metadataPageManager.getRowCount(metadataPage)
       this.metadataPageManager.setRowCount(metadataPage, currentRowCount - 1)
       await this.pfs.setMetadata(metadataPage, tx)
+    }
+
+    // 2. 빈 데이터 페이지 확인 및 해제 (새로 추가된 로직)
+    const insertedRowCount = this.dataPageManager.getInsertedRowCount(page)
+    let allDeleted = true
+
+    // 마지막 삽입 페이지 ID 가져오기 (반복문 밖에서 한 번만 호출)
+    const metadataPage = await this.pfs.getMetadata(tx)
+    const lastInsertPageId = this.metadataPageManager.getLastInsertPageId(metadataPage)
+
+    // 마지막 삽입 페이지라면 해제하지 않음
+    if (pageId === lastInsertPageId) {
+      allDeleted = false
+    } else {
+      for (let i = 0; i < insertedRowCount; i++) {
+        const slotRow = this.dataPageManager.getRow(page, i)
+        if (!this.rowManager.getDeletedFlag(slotRow)) {
+          allDeleted = false
+          break
+        }
+      }
+    }
+
+    if (allDeleted) {
+      // 모든 행이 삭제되었다면 페이지 반환 및 초기화
+      await this.pfs.setFreePage(pageId, tx)
     }
   }
 

@@ -9,16 +9,16 @@ describe('Recovery Checksum with Dataply API', () => {
   const WAL_FILE = path.join(TEST_DIR, 'test_recovery_checksum.wal')
   const PAGE_SIZE = 4096
 
-  beforeEach(() => {
+  beforeEach(async () => {
     if (fs.existsSync(TEST_DIR)) {
-      fs.rmSync(TEST_DIR, { recursive: true, force: true })
+      await fs.promises.rm(TEST_DIR, { recursive: true, force: true })
     }
-    fs.mkdirSync(TEST_DIR)
+    await fs.promises.mkdir(TEST_DIR)
   })
 
   afterEach(async () => {
     if (fs.existsSync(TEST_DIR)) {
-      fs.rmSync(TEST_DIR, { recursive: true, force: true })
+      await fs.promises.rm(TEST_DIR, { recursive: true, force: true })
     }
   })
 

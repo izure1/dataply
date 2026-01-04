@@ -4,25 +4,25 @@ import { Dataply } from '../src/core/Dataply'
 describe('Page Size Persistence', () => {
   const TEST_FILE = 'test_pagesize.dataply'
 
-  beforeEach(() => {
+  beforeEach(async () => {
     if (fs.existsSync(TEST_FILE)) {
-      fs.unlinkSync(TEST_FILE)
+      await fs.promises.unlink(TEST_FILE)
     }
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     if (fs.existsSync(TEST_FILE)) {
-      fs.unlinkSync(TEST_FILE)
+      await fs.promises.unlink(TEST_FILE)
     }
   })
 
-  it('should throw error when creating dataply with page size less than 4096', () => {
+  test('should throw error when creating dataply with page size less than 4096', () => {
     expect(() => {
       new Dataply(TEST_FILE, { pageSize: 1024 })
     }).toThrow('Page size must be at least 4096 bytes')
   })
 
-  it('should persist page size in metadata', async () => {
+  test('should persist page size in metadata', async () => {
     const dataply1 = new Dataply(TEST_FILE, { pageSize: 8192 })
     await dataply1.init()
     const pageSize1 = (dataply1 as any).api.options.pageSize
@@ -42,7 +42,7 @@ describe('Page Size Persistence', () => {
     await dataply2.close()
   })
 
-  it('should load persisted page size when opened without options', async () => {
+  test('should load persisted page size when opened without options', async () => {
     const dataply1 = new Dataply(TEST_FILE, { pageSize: 8192 })
     await dataply1.init()
     await dataply1.close()
@@ -56,7 +56,7 @@ describe('Page Size Persistence', () => {
     await dataply2.close()
   })
 
-  it('should work correctly with IO operations after reloading', async () => {
+  test('should work correctly with IO operations after reloading', async () => {
     // 1. Create with custom page size
     const dataply1 = new Dataply(TEST_FILE, { pageSize: 8192 })
     await dataply1.init()

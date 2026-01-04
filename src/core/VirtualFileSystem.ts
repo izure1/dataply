@@ -239,9 +239,9 @@ export class VirtualFileSystem {
    * @param position Start position in file
    */
   protected _writeAsync(handle: number, buffer: Uint8Array, offset: number, length: number, position: number): Promise<number> {
-    // [안전 장치] 파일 크기 폭발 방지 (100MB 제한)
-    if (position + length > 100 * 1024 * 1024) {
-      return Promise.reject(new Error(`[Safety Limit] File write exceeds 100MB limit at position ${position}`))
+    // [안전 장치] 파일 크기 폭발 방지 (512MB 제한)
+    if (position + length > 512 * 1024 * 1024) {
+      return Promise.reject(new Error(`[Safety Limit] File write exceeds 512MB limit at position ${position}`))
     }
 
     return new Promise((resolve, reject) => {

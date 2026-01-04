@@ -17,7 +17,7 @@
     "dist/**/*"
   ],
   "scripts": {
-    "test": "jest --runInBand --forceExit",
+    "test": "jest -i",
     "benchmark": "npx tsx benchmark/benchmark.ts",
     "build": "node build/index.js && tsc"
   },

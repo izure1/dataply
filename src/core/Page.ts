@@ -765,6 +765,7 @@ export class MetadataPageManager extends PageManager {
     OFFSET_LAST_INSERT_PAGE_ID: 130,
     OFFSET_LAST_ROW_PK: 134,
     OFFSET_BITMAP_PAGE_ID: 140,
+    OFFSET_FREE_PAGE_ID: 144,
     SIZE_PAGE_COUNT: 4,
     SIZE_PAGE_SIZE: 4,
     SIZE_ROOT_INDEX_PAGE_ID: 4,
@@ -772,6 +773,7 @@ export class MetadataPageManager extends PageManager {
     SIZE_LAST_INSERT_PAGE_ID: 4,
     SIZE_ROW_PK: 6,
     SIZE_BITMAP_PAGE_ID: 4,
+    SIZE_FREE_PAGE_ID: 4,
   } as const
 
   /**
@@ -913,6 +915,20 @@ export class MetadataPageManager extends PageManager {
   }
 
   /**
+   * Returns the ID of the free page.
+   * @param page Page data
+   * @returns Free page ID
+   */
+  getFreePageId(page: MetadataPage): number {
+    const id = bytesToNumber(
+      page,
+      MetadataPageManager.CONSTANT.OFFSET_FREE_PAGE_ID,
+      MetadataPageManager.CONSTANT.SIZE_FREE_PAGE_ID
+    )
+    return id === 0xFFFFFFFF ? -1 : id
+  }
+
+  /**
    * Sets the number of pages stored in the database.
    * @param page Page data
    * @param pageCount Number of pages
@@ -1031,6 +1047,20 @@ export class MetadataPageManager extends PageManager {
       page,
       MetadataPageManager.CONSTANT.OFFSET_BITMAP_PAGE_ID,
       MetadataPageManager.CONSTANT.SIZE_BITMAP_PAGE_ID
+    )
+  }
+
+  /**
+   * Sets the ID of the free page.
+   * @param page Page data
+   * @param pageId Free page ID
+   */
+  setFreePageId(page: MetadataPage, pageId: number): void {
+    numberToBytes(
+      pageId,
+      page,
+      MetadataPageManager.CONSTANT.OFFSET_FREE_PAGE_ID,
+      MetadataPageManager.CONSTANT.SIZE_FREE_PAGE_ID
     )
   }
 }

@@ -8,21 +8,21 @@ describe('LogManager', () => {
   const walPath = path.join(testDir, 'test.wal')
   const pageSize = 1024 // 1KB for testing
 
-  beforeAll(() => {
+  beforeAll(async () => {
     if (!fs.existsSync(testDir)) {
-      fs.mkdirSync(testDir)
+      await fs.promises.mkdir(testDir)
     }
   })
 
-  afterAll(() => {
+  afterAll(async () => {
     if (fs.existsSync(testDir)) {
-      fs.rmSync(testDir, { recursive: true, force: true })
+      await fs.promises.rm(testDir, { recursive: true, force: true })
     }
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     if (fs.existsSync(walPath)) {
-      fs.unlinkSync(walPath)
+      await fs.promises.unlink(walPath)
     }
   })
 

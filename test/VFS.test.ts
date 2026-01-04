@@ -24,7 +24,7 @@ describe('VirtualFileSystem', () => {
     }
     if (fs.existsSync(TEST_FILE)) {
       try {
-        fs.unlinkSync(TEST_FILE)
+        await fs.promises.unlink(TEST_FILE)
       } catch (e) {
         // 이미 닫힌 경우 무시 (혹은 윈도우에서 파일 잠금 이슈 등)
       }

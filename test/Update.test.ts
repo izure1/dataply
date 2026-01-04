@@ -9,7 +9,7 @@ describe('Dataply Update', () => {
 
   beforeEach(async () => {
     if (fs.existsSync(testFile)) {
-      fs.unlinkSync(testFile)
+      await fs.promises.unlink(testFile)
     }
     dataply = new Dataply(testFile)
     await dataply.init()
@@ -18,11 +18,11 @@ describe('Dataply Update', () => {
   afterEach(async () => {
     await dataply.close()
     if (fs.existsSync(testFile)) {
-      fs.unlinkSync(testFile)
+      await fs.promises.unlink(testFile)
     }
   })
 
-  it('should update row in place if new data is shorter', async () => {
+  test('should update row in place if new data is shorter', async () => {
     const pk = await dataply.insert('hello world')
     await dataply.update(pk, 'hello')
 
@@ -30,7 +30,7 @@ describe('Dataply Update', () => {
     expect(result).toBe('hello')
   })
 
-  it('should update row by moving if new data is longer', async () => {
+  test('should update row by moving if new data is longer', async () => {
     const pk = await dataply.insert('short')
     const longData = 'this is a much longer data that will definitely not fit in the original space if it was packed, but since we use exact allocation, any growth causes move'
     await dataply.update(pk, longData)
@@ -39,7 +39,7 @@ describe('Dataply Update', () => {
     expect(result).toBe(longData)
   })
 
-  it('should support multiple updates (chaining)', async () => {
+  test('should support multiple updates (chaining)', async () => {
     const pk = await dataply.insert('v1')
     await dataply.update(pk, 'version 2 is longer')
     await dataply.update(pk, 'v3') // shorter than v2, should overwrite in Target1
@@ -49,7 +49,7 @@ describe('Dataply Update', () => {
     expect(result).toBe('version 4 is even longer than version 2')
   })
 
-  it('should update overflow row in place (overflow page overwrite)', async () => {
+  test('should update overflow row in place (overflow page overwrite)', async () => {
     // pageSize is 8192, so > 8100 should be overflow
     const bigData = 'X'.repeat(8100)
     const pk = await dataply.insert(bigData)
@@ -62,7 +62,7 @@ describe('Dataply Update', () => {
     expect(result?.[0]).toBe('Y')
   })
 
-  it('should work with transactions', async () => {
+  test('should work with transactions', async () => {
     const pk = await dataply.insert('initial')
     const tx = dataply.createTransaction()
     await dataply.update(pk, 'updated in tx', tx)

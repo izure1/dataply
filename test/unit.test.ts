@@ -86,7 +86,6 @@ describe('bytesToNumber', () => {
     const bytes = numberToBytes(val, new Uint8Array(8))
     const result = bytesToNumber(bytes)
     expect(result).toBe(val)
-
   })
 })
 

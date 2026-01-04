@@ -14,29 +14,29 @@ describe('Recovery Integration Test', () => {
   const walPath = path.join(testDir, 'recovery_test.wal')
   const pageSize = 4096
 
-  beforeAll(() => {
+  beforeAll(async () => {
     if (!fs.existsSync(testDir)) {
-      fs.mkdirSync(testDir)
+      await fs.promises.mkdir(testDir)
     }
   })
 
-  afterAll(() => {
+  afterAll(async () => {
     if (fs.existsSync(testDir)) {
-      fs.rmSync(testDir, { recursive: true, force: true })
+      await fs.promises.rm(testDir, { recursive: true, force: true })
     }
   })
 
-  beforeEach(() => {
+  beforeEach(async () => {
     // 각 테스트 전에 기존 파일 삭제
-    if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath)
-    if (fs.existsSync(walPath)) fs.unlinkSync(walPath)
+    if (fs.existsSync(dbPath)) await fs.promises.unlink(dbPath)
+    if (fs.existsSync(walPath)) await fs.promises.unlink(walPath)
   })
 
-  afterEach(() => {
+  afterEach(async () => {
     // 각 테스트 후에 파일 정리
     try {
-      if (fs.existsSync(dbPath)) fs.unlinkSync(dbPath)
-      if (fs.existsSync(walPath)) fs.unlinkSync(walPath)
+      if (fs.existsSync(dbPath)) await fs.promises.unlink(dbPath)
+      if (fs.existsSync(walPath)) await fs.promises.unlink(walPath)
     } catch (e) {
       // 파일이 잠겨있을 수 있음
     }

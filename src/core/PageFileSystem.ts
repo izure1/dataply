@@ -1,5 +1,5 @@
-import { IndexPage, type MetadataPage } from '../types'
-import { IndexPageManager, MetadataPageManager, PageManager, PageManagerFactory } from './Page'
+import { BitmapPage, IndexPage, type MetadataPage } from '../types'
+import { IndexPageManager, MetadataPageManager, PageManager, PageManagerFactory, BitmapPageManager } from './Page'
 import { VirtualFileSystem } from './VirtualFileSystem'
 import type { Transaction } from './transaction/Transaction'
 
@@ -26,6 +26,66 @@ export class PageFileSystem {
   ) {
     this.vfs = new VirtualFileSystem(fileHandle, pageSize, pageCacheCapacity, walPath)
     this.pageManagerFactory = new PageManagerFactory()
+  }
+
+  /**
+   * Updates the bitmap status for a specific page.
+   * @param pageId The ID of the page to update
+   * @param isFree True to mark as free, false to mark as used
+   * @param tx Transaction
+   */
+  private async updateBitmap(pageId: number, isFree: boolean, tx: Transaction): Promise<void> {
+    const metadata = await this.getMetadata(tx)
+    const metadataManager = this.pageFactory.getManager(metadata) as MetadataPageManager
+    const bitmapPageId = metadataManager.getBitmapPageId(metadata)
+
+    // 비트맵 페이지 용량 계산
+    const headerSize = PageManager.CONSTANT.SIZE_PAGE_HEADER
+    const capacityPerBitmapPage = (this.pageSize - headerSize) * 8
+
+    let currentBitmapPageId = bitmapPageId
+    let targetBitIndex = pageId
+
+    // 타겟 비트 인덱스가 현재 페이지 용량을 초과하는 경우 다음 비트맵 페이지로 이동
+    while (targetBitIndex >= capacityPerBitmapPage) {
+      // 현재 비트맵 페이지 로드
+      const currentBitmapPage = await this.get(currentBitmapPageId, tx)
+      const manager = this.pageFactory.getManager(currentBitmapPage)
+
+      targetBitIndex -= capacityPerBitmapPage
+
+      const nextPageId = manager.getNextPageId(currentBitmapPage)
+
+      if (nextPageId === -1) {
+        // 다음 비트맵 페이지가 없으면 새로 생성
+        // 주의: appendNewPage는 내부적으로 메타데이터 락(페이지 수 증가)을 잡음
+        // 여기서는 recursion을 방지하기 위해 isFree=true(확장)일 때만 발생한다고 가정하거나,
+        // Reuse 로직이 이미 존재하는 페이지에 대해서만 updateBitmap(Usage)를 호출한다고 가정함.
+        if (!isFree) {
+          // Used로 설정하는데 비트맵 페이지가 없다? 이는 존재하지 않는 페이지를 재사용하려 한다는 뜻이므로 에러
+          throw new Error('Bitmap page not found for reused page')
+        }
+        const newBitmapPageId = await this.appendNewPage(PageManager.CONSTANT.PAGE_TYPE_BITMAP, tx)
+
+        // 링크 연결
+        manager.setNextPageId(currentBitmapPage, newBitmapPageId)
+        await this.setPage(currentBitmapPageId, currentBitmapPage, tx)
+
+        currentBitmapPageId = newBitmapPageId
+      } else {
+        // 다음 페이지로 이동
+        currentBitmapPageId = nextPageId
+      }
+    }
+
+    // 최종 타겟 비트맵 페이지 로드 및 업데이트
+    await tx.__acquireWriteLock(currentBitmapPageId)
+    const targetBitmapPage = await this.get(currentBitmapPageId, tx)
+    const bitmapManager = this.pageFactory.getManager(targetBitmapPage) as BitmapPageManager
+
+    // 해당 pageId(상대적 인덱스)를 설정
+    bitmapManager.setBit(targetBitmapPage as BitmapPage, targetBitIndex, isFree)
+    await this.setPage(currentBitmapPageId, targetBitmapPage, tx)
   }
 
   /**
@@ -149,12 +209,45 @@ export class PageFileSystem {
 
   /**
    * Appends and inserts a new page.
-   * @returns Created page ID
+   * If a free page is available in the free list, it reuses it.
+   * Otherwise, it appends a new page to the end of the file.
+   * @returns Created or reused page ID
    */
   async appendNewPage(pageType: number = PageManager.CONSTANT.PAGE_TYPE_EMPTY, tx: Transaction): Promise<number> {
     await tx.__acquireWriteLock(0)
     const metadata = await this.getMetadata(tx)
-    const metadataManager = this.pageFactory.getManager(metadata)
+    const metadataManager = this.pageFactory.getManager(metadata) as MetadataPageManager // Explicit cast
+
+    // 1. 재사용 가능한 페이지 확인
+    const freePageId = metadataManager.getFreePageId(metadata)
+
+    if (freePageId !== -1) {
+      // 재사용 로직
+      const reusedPageId = freePageId
+
+      // 재사용할 페이지 로드 (헤더 정보 확인을 위해 get 사용)
+      const reusedPage = await this.get(reusedPageId, tx)
+      const reusedPageManager = this.pageFactory.getManager(reusedPage)
+
+      // 다음 프리 페이지 ID 가져오기
+      const nextFreePageId = reusedPageManager.getNextPageId(reusedPage)
+
+      // 메타데이터 업데이트 (프리 페이지 포인터 이동)
+      metadataManager.setFreePageId(metadata, nextFreePageId)
+      await this.setPage(0, metadata, tx)
+
+      // 비트맵 업데이트 (Used로 표시 -> false)
+      await this.updateBitmap(reusedPageId, false, tx)
+
+      // 페이지 초기화
+      const manager = this.pageFactory.getManagerFromType(pageType)
+      const newPage = manager.create(this.pageSize, reusedPageId)
+      await this.setPage(reusedPageId, newPage, tx)
+
+      return reusedPageId
+    }
+
+    // 2. 새 페이지 추가 로직 (기존 appendNewPage)
     const pageCount = metadataManager.getPageCount(metadata)
     const newPageIndex = pageCount
     const newTotalCount = pageCount + 1
@@ -239,6 +332,40 @@ export class PageFileSystem {
         }
       }
     }
+  }
+
+  /**
+   * Frees the page and marks it as available in the bitmap.
+   * It also adds the page to the linked list of free pages in metadata.
+   * @param pageId Page ID
+   * @param tx Transaction
+   */
+  async setFreePage(pageId: number, tx: Transaction): Promise<void> {
+    // 1. 메타데이터 조회 및 락 획득
+    await tx.__acquireWriteLock(0)
+    await tx.__acquireWriteLock(pageId)
+
+    const metadata = await this.getMetadata(tx)
+    const metadataManager = this.pageFactory.getManager(metadata) as MetadataPageManager
+
+    // 현재 freePageId 가져오기 (Linked List의 Head)
+    const currentHeadFreePageId = metadataManager.getFreePageId(metadata)
+
+    // 2. 페이지 초기화 (EmptyPage) 및 링크 연결
+    const emptyPageManager = this.pageFactory.getManagerFromType(PageManager.CONSTANT.PAGE_TYPE_EMPTY)
+    const emptyPage = emptyPageManager.create(this.pageSize, pageId)
+
+    // 다음 페이지를 이전 Head로 설정 (Stack Push)
+    emptyPageManager.setNextPageId(emptyPage, currentHeadFreePageId)
+
+    await this.setPage(pageId, emptyPage, tx)
+
+    // 3. 비트맵 업데이트 (Free로 표시 -> true)
+    await this.updateBitmap(pageId, true, tx)
+
+    // 4. 메타데이터 업데이트 (Head를 현재 페이지로 변경)
+    metadataManager.setFreePageId(metadata, pageId)
+    await this.setPage(0, metadata, tx)
   }
 
   /**

@@ -37,7 +37,7 @@ describe('PageFileSystem', () => {
     }
     if (fs.existsSync(TEST_FILE)) {
       try {
-        fs.unlinkSync(TEST_FILE)
+        await fs.promises.unlink(TEST_FILE)
       } catch (e) {
         // 이미 닫힌 경우 무시
       }
@@ -74,6 +74,7 @@ describe('PageFileSystem', () => {
     mgr.setMagicString(metadata)
     mgr.setPageCount(metadata, 1) // Page 0 is used by Metadata itself
     mgr.setPageSize(metadata, PAGE_SIZE)
+    mgr.setFreePageId(metadata, -1)
 
     await pfs.setPage(0, metadata, tx)
 
@@ -100,6 +101,7 @@ describe('PageFileSystem', () => {
       mgr.setMagicString(metadata)
       mgr.setPageCount(metadata, 1)
       mgr.setPageSize(metadata, PAGE_SIZE)
+      mgr.setFreePageId(metadata, -1)
       await pfs.setPage(0, metadata, tx)
     }
 
