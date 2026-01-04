@@ -5,7 +5,7 @@
 > [!WARNING]
 > **Shard is currently in Alpha version.** It is experimental and not yet suitable for production use.
 
-**Shard** is a lightweight, high-performance storage engine designed for Node.js. It provides reliable and fast data management by supporting MVCC (Multi-Version Concurrency Control), WAL (Write-Ahead Logging), and B+Tree indexing.
+**Shard** is a lightweight, high-performance **NoSQL** storage engine designed for Node.js. It provides reliable and fast data management by supporting MVCC (Multi-Version Concurrency Control), WAL (Write-Ahead Logging), and B+Tree indexing.
 
 ## Key Features
 
@@ -17,6 +17,10 @@
 - **⌨️ TypeScript Support**: Provides comprehensive type definitions for all APIs.
 
 ## Installation
+
+### Prerequisites
+
+- **Node.js**: v18.0.0 or higher
 
 ```bash
 npm install shard
@@ -99,6 +103,9 @@ Initializes the instance. Must be called before performing any CRUD operations.
 #### `async insert(data: string | Uint8Array, tx?: Transaction): Promise<number>`
 Inserts new data. Returns the Primary Key (PK) of the created row.
 
+#### `async insertBatch(dataList: (string | Uint8Array)[], tx?: Transaction): Promise<number[]>`
+Inserts multiple rows at once. This is significantly faster than multiple individual inserts as it minimizes internal transaction overhead.
+
 #### `async select(pk: number, asRaw?: boolean, tx?: Transaction): Promise<string | Uint8Array | null>`
 Retrieves data based on the PK. Returns `Uint8Array` if `asRaw` is true.
 
@@ -107,6 +114,9 @@ Updates existing data.
 
 #### `async delete(pk: number, tx?: Transaction): Promise<void>`
 Marks data as deleted.
+
+#### `async getMetadata(): Promise<ShardMetadata>`
+Returns the current metadata of the shard, including `pageSize`, `pageCount`, and `rowCount`.
 
 #### `createTransaction(): Transaction`
 Creates a new transaction instance.
@@ -201,6 +211,21 @@ Shard is optimized for high-speed data processing. Below are the results of basi
 
 > [!NOTE]
 > Tests were conducted on a standard local environment (Node.js v25+). Performance may vary depending on hardware specifications (especially SSD/HDD) and system load.
+
+## Limitations
+
+As **Shard** is currently in Alpha, there are several limitations to keep in mind:
+- **PK-Only Access**: Data can only be retrieved or modified using the Primary Key. No secondary indexes or complex query logic are available yet.
+- **No SQL Support**: This is a low-level storage engine. It does not support SQL or any higher-level query language.
+- **Memory Usage**: The VFS cache size is currently not strictly limited, which may lead to high memory usage for extremely large databases.
+
+## Roadmap
+
+We are working towards a stable production release. Planned features include:
+- [ ] **Document-based Search**: Implementation of attribute-based querying similar to MongoDB.
+- [ ] **Secondary Indexes**: Support for non-PK based efficient lookups.
+- [ ] **Query Engine**: Basic filtering, sorting, and projection capabilities.
+- [ ] **Improved Cache Management**: More sophisticated LRU or similar eviction policies for the VFS.
 
 ## License
 
