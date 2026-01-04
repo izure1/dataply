@@ -144,12 +144,12 @@ describe('PageFileSystem', () => {
       const initialData = Buffer.from('Hello World')
       await pfs.writePageContent(pageId, initialData, 0, tx)
 
-      const overwriteData = Buffer.from('Shard')
-      await pfs.writePageContent(pageId, overwriteData, 6, tx) // "Hello Shard"
+      const overwriteData = Buffer.from('Dataply')
+      await pfs.writePageContent(pageId, overwriteData, 6, tx) // "Hello Dataply"
 
       const body = await pfs.getBody(pageId, false, tx)
-      const result = Buffer.from(body.subarray(0, 11)).toString()
-      expect(result).toBe('Hello Shard')
+      const result = Buffer.from(body.subarray(0, 13)).toString()
+      expect(result).toBe('Hello Dataply')
     })
   })
 })

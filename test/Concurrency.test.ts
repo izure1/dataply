@@ -1,5 +1,5 @@
 
-import { Shard } from '../src/core/Shard'
+import { Dataply } from '../src/core/Dataply'
 import path from 'node:path'
 import fs from 'node:fs'
 
@@ -7,17 +7,17 @@ describe('Concurrency (MVCC)', () => {
   const testDir = path.join(__dirname, 'temp_concurrency_test')
   const dbPath = path.join(testDir, 'concurrency.db')
   const walPath = path.join(testDir, 'concurrency.wal')
-  let shard: Shard | null = null
+  let dataply: Dataply | null = null
 
   beforeAll(() => {
     if (!fs.existsSync(testDir)) fs.mkdirSync(testDir)
   })
 
   afterAll(async () => {
-    // Ensure shard is closed before deleting directory
-    if (shard) {
-      try { await shard.close() } catch (e) { }
-      shard = null
+    // Ensure dataply is closed before deleting directory
+    if (dataply) {
+      try { await dataply.close() } catch (e) { }
+      dataply = null
     }
     // Wait a bit for file handles to release
     await new Promise(resolve => setTimeout(resolve, 100))
@@ -27,9 +27,9 @@ describe('Concurrency (MVCC)', () => {
   })
 
   afterEach(async () => {
-    if (shard) {
-      try { await shard.close() } catch (e) { }
-      shard = null
+    if (dataply) {
+      try { await dataply.close() } catch (e) { }
+      dataply = null
     }
   })
 
@@ -41,16 +41,16 @@ describe('Concurrency (MVCC)', () => {
   })
 
   test('should serialize concurrent inserts (Writers block Writers)', async () => {
-    shard = new Shard(dbPath, { wal: walPath })
-    await shard.init()
+    dataply = new Dataply(dbPath, { wal: walPath })
+    await dataply.init()
 
     // Sequential inserts to verify correct PK increment
-    const tx1 = shard.createTransaction()
-    const pk1 = await shard.insert('data1', tx1)
+    const tx1 = dataply.createTransaction()
+    const pk1 = await dataply.insert('data1', tx1)
     await tx1.commit()
 
-    const tx2 = shard.createTransaction()
-    const pk2 = await shard.insert('data2', tx2)
+    const tx2 = dataply.createTransaction()
+    const pk2 = await dataply.insert('data2', tx2)
     await tx2.commit()
 
     // Verify PKs are distinct and incremented
@@ -58,42 +58,42 @@ describe('Concurrency (MVCC)', () => {
     expect(pk2).toBe(2)
 
     // Verify data
-    const row1 = await shard.select(pk1, false)
-    const row2 = await shard.select(pk2, false)
+    const row1 = await dataply.select(pk1, false)
+    const row2 = await dataply.select(pk2, false)
     expect(row1).toBe('data1')
     expect(row2).toBe('data2')
   })
 
   test('should restore state via Undo Buffer after rollback (MVCC Isolation)', async () => {
-    shard = new Shard(dbPath, { wal: walPath })
-    await shard.init()
+    dataply = new Dataply(dbPath, { wal: walPath })
+    await dataply.init()
 
     // Insert initial data and commit
-    const tx1 = shard.createTransaction()
-    await shard.insert('initial_data', tx1)
+    const tx1 = dataply.createTransaction()
+    await dataply.insert('initial_data', tx1)
     await tx1.commit()
 
     // Start a write transaction, modify, but rollback
-    const writeTx = shard.createTransaction()
-    await shard.insert('new_data', writeTx)
+    const writeTx = dataply.createTransaction()
+    await dataply.insert('new_data', writeTx)
     await writeTx.rollback()
 
     // Verify that the committed data (pk=1) is still visible
-    const initialResult = await shard.select(1, false)
+    const initialResult = await dataply.select(1, false)
     expect(initialResult).toBe('initial_data')
   })
 
   test('should handle multiple sequential transactions correctly', async () => {
-    shard = new Shard(dbPath, { wal: walPath })
-    await shard.init()
+    dataply = new Dataply(dbPath, { wal: walPath })
+    await dataply.init()
 
     const insertCount = 10
     const pks: number[] = []
 
     // Multiple sequential transactions
     for (let i = 0; i < insertCount; i++) {
-      const tx = shard.createTransaction()
-      const pk = await shard.insert(`data-${i}`, tx)
+      const tx = dataply.createTransaction()
+      const pk = await dataply.insert(`data-${i}`, tx)
       await tx.commit()
       pks.push(pk)
     }
@@ -103,46 +103,46 @@ describe('Concurrency (MVCC)', () => {
 
     // Verify all data is correct
     for (let i = 0; i < insertCount; i++) {
-      const result = await shard.select(pks[i], false)
+      const result = await dataply.select(pks[i], false)
       expect(result).toBe(`data-${i}`)
     }
   })
 
   test('should handle interleaved commit and rollback', async () => {
-    shard = new Shard(dbPath, { wal: walPath })
-    await shard.init()
+    dataply = new Dataply(dbPath, { wal: walPath })
+    await dataply.init()
 
     // First transaction: commit
-    const tx1 = shard.createTransaction()
-    const pk1 = await shard.insert('committed-1', tx1)
+    const tx1 = dataply.createTransaction()
+    const pk1 = await dataply.insert('committed-1', tx1)
     await tx1.commit()
 
     // Second transaction: rollback
-    const tx2 = shard.createTransaction()
-    await shard.insert('rolled-back', tx2)
+    const tx2 = dataply.createTransaction()
+    await dataply.insert('rolled-back', tx2)
     await tx2.rollback()
 
     // Third transaction: commit
-    const tx3 = shard.createTransaction()
-    const pk3 = await shard.insert('committed-2', tx3)
+    const tx3 = dataply.createTransaction()
+    const pk3 = await dataply.insert('committed-2', tx3)
     await tx3.commit()
 
     // Verify committed data is accessible
-    expect(await shard.select(pk1, false)).toBe('committed-1')
-    expect(await shard.select(pk3, false)).toBe('committed-2')
+    expect(await dataply.select(pk1, false)).toBe('committed-1')
+    expect(await dataply.select(pk3, false)).toBe('committed-2')
   })
 
   test('should maintain data integrity with large batch inserts', async () => {
-    shard = new Shard(dbPath, { wal: walPath })
-    await shard.init()
+    dataply = new Dataply(dbPath, { wal: walPath })
+    await dataply.init()
 
     const batchSize = 50
-    const tx = shard.createTransaction()
+    const tx = dataply.createTransaction()
     const pks: number[] = []
 
     // Insert many rows in a single transaction
     for (let i = 0; i < batchSize; i++) {
-      const pk = await shard.insert(`batch-${i}`, tx)
+      const pk = await dataply.insert(`batch-${i}`, tx)
       pks.push(pk)
     }
 
@@ -153,74 +153,74 @@ describe('Concurrency (MVCC)', () => {
 
     // Verify data integrity
     for (let i = 0; i < batchSize; i++) {
-      const result = await shard.select(pks[i], false)
+      const result = await dataply.select(pks[i], false)
       expect(result).toBe(`batch-${i}`)
     }
   })
 
   test('should allow reads during concurrent write transactions via snapshot', async () => {
-    shard = new Shard(dbPath, { wal: walPath })
-    await shard.init()
+    dataply = new Dataply(dbPath, { wal: walPath })
+    await dataply.init()
 
     // Insert and commit initial data
-    const tx1 = shard.createTransaction()
-    await shard.insert('visible-data', tx1)
+    const tx1 = dataply.createTransaction()
+    await dataply.insert('visible-data', tx1)
     await tx1.commit()
 
     // Start a new write transaction
-    const tx2 = shard.createTransaction()
-    await shard.insert('pending-data', tx2)
+    const tx2 = dataply.createTransaction()
+    await dataply.insert('pending-data', tx2)
 
     // Read committed data (should see 'visible-data')
-    const result = await shard.select(1, false)
+    const result = await dataply.select(1, false)
     expect(result).toBe('visible-data')
 
     // Commit the pending transaction
     await tx2.commit()
 
     // Now we should see the new data too
-    const newResult = await shard.select(2, false)
+    const newResult = await dataply.select(2, false)
     expect(newResult).toBe('pending-data')
   })
 
   test('should handle rollback of large batch insert', async () => {
-    shard = new Shard(dbPath, { wal: walPath })
-    await shard.init()
+    dataply = new Dataply(dbPath, { wal: walPath })
+    await dataply.init()
 
     // First, insert some committed data
-    const tx1 = shard.createTransaction()
-    await shard.insert('base-data', tx1)
+    const tx1 = dataply.createTransaction()
+    await dataply.insert('base-data', tx1)
     await tx1.commit()
 
     // Start a large batch insert and rollback
-    const tx2 = shard.createTransaction()
+    const tx2 = dataply.createTransaction()
     for (let i = 0; i < 20; i++) {
-      await shard.insert(`rollback-${i}`, tx2)
+      await dataply.insert(`rollback-${i}`, tx2)
     }
     await tx2.rollback()
 
     // Verify base data is still intact
-    const baseResult = await shard.select(1, false)
+    const baseResult = await dataply.select(1, false)
     expect(baseResult).toBe('base-data')
 
     // Insert new data after rollback (should work correctly)
-    const tx3 = shard.createTransaction()
-    const pk = await shard.insert('after-rollback', tx3)
+    const tx3 = dataply.createTransaction()
+    const pk = await dataply.insert('after-rollback', tx3)
     await tx3.commit()
 
-    const afterResult = await shard.select(pk, false)
+    const afterResult = await dataply.select(pk, false)
     expect(afterResult).toBe('after-rollback')
   })
 
   test('should handle true parallel execution using Promise.all', async () => {
-    shard = new Shard(dbPath, { wal: walPath })
-    await shard.init()
+    dataply = new Dataply(dbPath, { wal: walPath })
+    await dataply.init()
 
     const concurrencyLevel = 50
     const operations = Array(concurrencyLevel).fill(0).map(async (_, i) => {
-      const tx = shard!.createTransaction()
+      const tx = dataply!.createTransaction()
       // insert followed by commit, interleaved by JS event loop
-      const pk = await shard!.insert(`concurrent-data-${i}`, tx)
+      const pk = await dataply!.insert(`concurrent-data-${i}`, tx)
       await tx.commit()
       return { pk, data: `concurrent-data-${i}` }
     })
@@ -234,27 +234,27 @@ describe('Concurrency (MVCC)', () => {
 
     // Verify data integrity for each insertion
     for (const result of results) {
-      const storedData = await shard!.select(result.pk, false)
+      const storedData = await dataply!.select(result.pk, false)
       expect(storedData).toBe(result.data)
     }
 
     // Verify row count matches
-    const metadata = await shard!.getMetadata()
+    const metadata = await dataply!.getMetadata()
     expect(metadata.rowCount).toBe(concurrencyLevel)
   })
 
   test('should simulate batch insert: allow parallel reads but block concurrent writes', async () => {
     // 5초에 걸쳐 천천히 데이터를 삽입하는 상황 시뮬레이션
-    shard = new Shard(dbPath, { wal: walPath })
-    await shard.init()
+    dataply = new Dataply(dbPath, { wal: walPath })
+    await dataply.init()
 
     // 0. 초기 데이터 세팅 (Update/Delete 대상)
-    const txInit = shard.createTransaction()
-    const targetPk = await shard.insert('target-row', txInit)
+    const txInit = dataply.createTransaction()
+    const targetPk = await dataply.insert('target-row', txInit)
     await txInit.commit()
 
     // 1. Batch Insert 트랜잭션 시작 (약 5초 소요 예정)
-    const txBatch = shard.createTransaction()
+    const txBatch = dataply.createTransaction()
     const batchSize = 10
     const insertDelay = 500 // 0.5초 * 10개 = 5초
     const batchPks: number[] = []
@@ -263,7 +263,7 @@ describe('Concurrency (MVCC)', () => {
       for (let i = 0; i < batchSize; i++) {
         // 천천히 삽입
         await new Promise(resolve => setTimeout(resolve, insertDelay))
-        const pk = await shard!.insert(`batch-data-${i}`, txBatch)
+        const pk = await dataply!.insert(`batch-data-${i}`, txBatch)
         batchPks.push(pk)
       }
       await txBatch.commit()
@@ -273,7 +273,7 @@ describe('Concurrency (MVCC)', () => {
     // Batch Insert가 진행되는 도중(예: 1초 후) 조회 시도
     await new Promise(resolve => setTimeout(resolve, 1000))
     const startSelect = Date.now()
-    const selectResult = await shard.select(targetPk, false)
+    const selectResult = await dataply.select(targetPk, false)
     const selectDuration = Date.now() - startSelect
 
     expect(selectResult).toBe('target-row')
@@ -286,9 +286,9 @@ describe('Concurrency (MVCC)', () => {
     let updateFinished = false
     const startUpdate = Date.now()
     const updateTask = (async () => {
-      const txUpdate = shard!.createTransaction()
+      const txUpdate = dataply!.createTransaction()
       // 여기서 Batch Tx가 끝날 때까지 대기해야 함 (메타데이터 락 때문)
-      await shard!.update(targetPk, 'updated-target', txUpdate)
+      await dataply!.update(targetPk, 'updated-target', txUpdate)
       await txUpdate.commit()
       updateFinished = true
     })()
@@ -310,16 +310,16 @@ describe('Concurrency (MVCC)', () => {
     // 6. 데이터 검증
     // - Batch 데이터가 모두 잘 들어갔는지
     for (let i = 0; i < batchSize; i++) {
-      const data = await shard.select(batchPks[i], false)
+      const data = await dataply.select(batchPks[i], false)
       expect(data).toBe(`batch-data-${i}`)
     }
     // - Update가 반영되었는지
-    const targetData = await shard.select(targetPk, false)
+    const targetData = await dataply.select(targetPk, false)
     expect(targetData).toBe('updated-target')
 
     // - Row Count 확인
     // Initial(1) + Batch(10) = 11 rows (Update는 count 변화 없음)
-    const metadata = await shard.getMetadata()
+    const metadata = await dataply.getMetadata()
     expect(metadata.rowCount).toBe(11)
   }, 20000) // 타임아웃 20초로 연장
 })

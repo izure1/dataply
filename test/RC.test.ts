@@ -1,4 +1,4 @@
-import { Shard } from '../src/core/Shard'
+import { Dataply } from '../src/core/Dataply'
 import { TxContext } from '../src/core/transaction/TxContext'
 import { type RowTableEngine } from '../src/core/RowTableEngine'
 import fs from 'node:fs'
@@ -7,22 +7,22 @@ const DB_PATH = 'temp_rc_test.db'
 if (fs.existsSync(DB_PATH)) fs.unlinkSync(DB_PATH)
 
 describe('Row Count Test', () => {
-  let shard: Shard
+  let dataply: Dataply
 
   beforeEach(async () => {
     if (fs.existsSync(DB_PATH)) fs.unlinkSync(DB_PATH)
-    shard = new Shard(DB_PATH)
-    await shard.init()
+    dataply = new Dataply(DB_PATH)
+    await dataply.init()
   })
 
   afterEach(async () => {
-    await shard.close()
+    await dataply.close()
     if (fs.existsSync(DB_PATH)) fs.unlinkSync(DB_PATH)
   })
 
   it('should track row count correctly on insert', async () => {
-    const rowTableEngine = (shard as any).api.rowTableEngine as RowTableEngine
-    const tx = shard.createTransaction()
+    const rowTableEngine = (dataply as any).api.rowTableEngine as RowTableEngine
+    const tx = dataply.createTransaction()
 
     await TxContext.run(tx, async () => {
       let count = await rowTableEngine.getRowCount(tx)
@@ -36,8 +36,8 @@ describe('Row Count Test', () => {
   })
 
   it('should track row count correctly on delete', async () => {
-    const rowTableEngine = (shard as any).api.rowTableEngine as RowTableEngine
-    const tx = shard.createTransaction()
+    const rowTableEngine = (dataply as any).api.rowTableEngine as RowTableEngine
+    const tx = dataply.createTransaction()
 
     await TxContext.run(tx, async () => {
       const pk = await rowTableEngine.insert(new Uint8Array([1, 2, 3]), true, tx)
@@ -49,8 +49,8 @@ describe('Row Count Test', () => {
   })
 
   it('should not change row count on update', async () => {
-    const rowTableEngine = (shard as any).api.rowTableEngine as RowTableEngine
-    const tx = shard.createTransaction()
+    const rowTableEngine = (dataply as any).api.rowTableEngine as RowTableEngine
+    const tx = dataply.createTransaction()
 
     await TxContext.run(tx, async () => {
       const pk = await rowTableEngine.insert(new Uint8Array([1, 2, 3]), true, tx)

@@ -1,13 +1,13 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { Shard } from '../src/core/Shard'
+import { Dataply } from '../src/core/Dataply'
 import { PageManager } from '../src/core/Page'
 
-describe('Page Checksum with Shard API', () => {
+describe('Page Checksum with Dataply API', () => {
   const TEST_DIR = path.join(__dirname, 'temp_checksum_test')
   const DB_FILE = path.join(TEST_DIR, 'test_checksum.db')
-  const PAGE_SIZE = 4096 // Minimum for Shard
+  const PAGE_SIZE = 4096 // Minimum for Dataply
 
   beforeEach(() => {
     if (fs.existsSync(TEST_DIR)) {
@@ -27,13 +27,13 @@ describe('Page Checksum with Shard API', () => {
   })
 
   test('should detect corrupted page checksum', async () => {
-    // 1. Initialize Shard and write data
-    let shard = new Shard(DB_FILE, { pageSize: PAGE_SIZE })
-    await shard.init()
+    // 1. Initialize Dataply and write data
+    let dataply = new Dataply(DB_FILE, { pageSize: PAGE_SIZE })
+    await dataply.init()
 
     const data = new Uint8Array([1, 2, 3, 4, 5])
-    const pk = await shard.insert(data)
-    await shard.close()
+    const pk = await dataply.insert(data)
+    await dataply.close()
 
     // 2. Corrupt the file manually
     const fd = fs.openSync(DB_FILE, 'r+')
@@ -45,12 +45,12 @@ describe('Page Checksum with Shard API', () => {
     fs.writeSync(fd, buffer, 0, 1, corruptOffset)
     fs.closeSync(fd)
 
-    // 3. Re-open Shard and try to read
-    shard = new Shard(DB_FILE, { pageSize: PAGE_SIZE })
-    await shard.init()
+    // 3. Re-open Dataply and try to read
+    dataply = new Dataply(DB_FILE, { pageSize: PAGE_SIZE })
+    await dataply.init()
 
     try {
-      const readData = await shard.select(pk, true)
+      const readData = await dataply.select(pk, true)
       // If we read back data, it should NOT match original if we managed to corrupt it and read checks passed (or were skipped).
       // Or ideally it throws.
       expect(readData).not.toEqual(data)
@@ -59,6 +59,6 @@ describe('Page Checksum with Shard API', () => {
       expect(e).toBeDefined()
     }
 
-    await shard.close()
+    await dataply.close()
   })
 })

@@ -1,22 +1,22 @@
-import type { ShardOptions, ShardMetadata } from '../types'
-import { ShardAPI } from './ShareAPI'
+import type { DataplyOptions, DataplyMetadata } from '../types'
+import { DataplyAPI } from './DataplyAPI'
 import { Transaction } from './transaction/Transaction'
 
 /**
- * Class for managing Shard files.
+ * Class for managing Dataply files.
  */
-export class Shard {
-  protected readonly api: ShardAPI
+export class Dataply {
+  protected readonly api: DataplyAPI
 
-  constructor(file: string, options?: ShardOptions) {
-    this.api = ShardAPI.Use(file, options)
+  constructor(file: string, options?: DataplyOptions) {
+    this.api = DataplyAPI.Use(file, options)
   }
 
   /**
-   * Gets the options used to open the shard.
-   * @returns Options used to open the shard.
+   * Gets the options used to open the dataply.
+   * @returns Options used to open the dataply.
    */
-  get options(): Required<ShardOptions> {
+  get options(): Required<DataplyOptions> {
     return this.api.options
   }
 
@@ -31,19 +31,19 @@ export class Shard {
   }
 
   /**
-   * Initializes the shard instance.
-   * Must be called before using the shard instance.
-   * If not called, the shard instance cannot be used.
+   * Initializes the dataply instance.
+   * Must be called before using the dataply instance.
+   * If not called, the dataply instance cannot be used.
    */
   async init(): Promise<void> {
     return this.api.init()
   }
 
   /**
-   * Retrieves metadata from the shard.
-   * @returns Metadata of the shard.
+   * Retrieves metadata from the dataply.
+   * @returns Metadata of the dataply.
    */
-  async getMetadata(): Promise<ShardMetadata> {
+  async getMetadata(): Promise<DataplyMetadata> {
     return this.api.getMetadata()
   }
 
@@ -102,7 +102,7 @@ export class Shard {
   }
 
   /**
-   * Closes the shard file.
+   * Closes the dataply file.
    */
   async close(): Promise<void> {
     return this.api.close()

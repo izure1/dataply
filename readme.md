@@ -1,11 +1,11 @@
-![node.js workflow](https://github.com/izure1/shard/actions/workflows/node.js.yml/badge.svg)
+![node.js workflow](https://github.com/izure1/dataply/actions/workflows/node.js.yml/badge.svg)
 
-# Shard
+# Dataply
 
 > [!WARNING]
-> **Shard is currently in Alpha version.** It is experimental and not yet suitable for production use.
+> **Dataply is currently in Alpha version.** It is experimental and not yet suitable for production use.
 
-**Shard** is a lightweight, high-performance **Record Store** designed for Node.js. It focuses on storing arbitrary data and providing an auto-generated Primary Key (PK) for ultra-fast retrieval, while supporting core enterprise features like MVCC, WAL, and atomic transactions.
+**Dataply** is a lightweight, high-performance **Record Store** designed for Node.js. It focuses on storing arbitrary data and providing an auto-generated Primary Key (PK) for ultra-fast retrieval, while supporting core enterprise features like MVCC, WAL, and atomic transactions.
 
 ## Key Features
 
@@ -24,41 +24,41 @@
 - **Node.js**: v18.0.0 or higher
 
 ```bash
-npm install shard
+npm install dataply
 ```
 
 ## Quick Start
 
 ```typescript
-import { Shard } from 'shard'
+import { Dataply } from 'dataply'
 
-// Open Shard instance
-const shard = new Shard('./data.db', {
+// Open Dataply instance
+const dataply = new Dataply('./data.db', {
   wal: './data.db.wal'
 })
 
 async function main() {
   // Initialization (Required)
-  await shard.init()
+  await dataply.init()
 
   // Insert data
-  const pk = await shard.insert('Hello, Shard!')
+  const pk = await dataply.insert('Hello, Dataply!')
   console.log(`Inserted row with PK: ${pk}`)
 
   // Update data
-  await shard.update(pk, 'Updated Data')
+  await dataply.update(pk, 'Updated Data')
   console.log(`Updated row with PK: ${pk}`)
 
   // Select data
-  const data = await shard.select(pk)
+  const data = await dataply.select(pk)
   console.log(`Read data: ${data}`)
 
   // Delete data
-  await shard.delete(pk)
+  await dataply.delete(pk)
   console.log(`Deleted row with PK: ${pk}`)
 
-  // Close shard
-  await shard.close()
+  // Close dataply
+  await dataply.close()
 }
 
 main()
@@ -70,11 +70,11 @@ main()
 You can group multiple operations into a single unit of work to ensure atomicity.
 
 ```typescript
-const tx = shard.createTransaction()
+const tx = dataply.createTransaction()
 
 try {
-  await shard.insert('Data 1', tx)
-  await shard.update(pk, 'Updated Data', tx)
+  await dataply.insert('Data 1', tx)
+  await dataply.update(pk, 'Updated Data', tx)
   
   await tx.commit() // Persist changes to disk and clear WAL on success
 } catch (error) {
@@ -83,16 +83,16 @@ try {
 ```
 
 ### Auto-Transaction
-If you omit the `tx` argument when calling methods like `insert`, `update`, or `delete`, Shard internally **creates an individual transaction automatically**.
+If you omit the `tx` argument when calling methods like `insert`, `update`, or `delete`, Dataply internally **creates an individual transaction automatically**.
 
 - **Guaranteed Atomicity**: Even single operations are processed within an internal transaction, ensuring they are only finalized on success and rolled back on failure.
 - **Performance Note**: For batch processing or multiple related operations, wrapping them in a single explicit transaction is significantly faster than relying on auto-transactions due to reduced I/O overhead.
 
 ## API Reference
 
-### Shard Class
+### Dataply Class
 
-#### `constructor(file: string, options?: ShardOptions): Shard`
+#### `constructor(file: string, options?: DataplyOptions): Dataply`
 Opens a database file. If the file does not exist, it creates and initializes a new one.
 - `options.pageSize`: Size of a page (Default: 8192, must be a power of 2)
 - `options.pageCacheCapacity`: Maximum number of pages to keep in memory (Default: 10000)
@@ -116,8 +116,8 @@ Updates existing data.
 #### `async delete(pk: number, tx?: Transaction): Promise<void>`
 Marks data as deleted.
 
-#### `async getMetadata(): Promise<ShardMetadata>`
-Returns the current metadata of the shard, including `pageSize`, `pageCount`, and `rowCount`.
+#### `async getMetadata(): Promise<DataplyMetadata>`
+Returns the current metadata of the dataply, including `pageSize`, `pageCount`, and `rowCount`.
 
 #### `createTransaction(): Transaction`
 Creates a new transaction instance.
@@ -133,16 +133,16 @@ Permanently reflects all changes made during the transaction to disk and release
 #### `async rollback(): Promise<void>`
 Cancels all changes made during the transaction and restores the original state.
 
-## Extending Shard
+## Extending Dataply
 
-If you want to extend Shard's functionality, use the `ShardAPI` class. Unlike the standard `Shard` class, `ShardAPI` provides direct access to internal components like `PageFileSystem` or `RowTableEngine`, offering much more flexibility for custom implementations.
+If you want to extend Dataply's functionality, use the `DataplyAPI` class. Unlike the standard `Dataply` class, `DataplyAPI` provides direct access to internal components like `PageFileSystem` or `RowTableEngine`, offering much more flexibility for custom implementations.
 
-### Using ShardAPI
+### Using DataplyAPI
 
 ```typescript
-import { ShardAPI } from 'shard'
+import { DataplyAPI } from 'dataply'
 
-class CustomShard extends ShardAPI {
+class CustomDataply extends DataplyAPI {
   // Leverage internal protected members (pfs, rowTableEngine, etc.)
   async getInternalStats() {
     return {
@@ -152,7 +152,7 @@ class CustomShard extends ShardAPI {
   }
 }
 
-const custom = CustomShard.Use('./data.db')
+const custom = CustomDataply.Use('./data.db')
 await custom.init()
 
 const stats = await custom.getInternalStats()
@@ -161,12 +161,12 @@ console.log(stats)
 
 ## Internal Architecture
 
-Shard implements the core principles of high-performance storage systems in a lightweight and efficient manner.
+Dataply implements the core principles of high-performance storage systems in a lightweight and efficient manner.
 
 ### 1. Layered Architecture
 ```mermaid
 graph TD
-    API[Shard API] --> RTE[Row Table Engine]
+    API[Dataply API] --> RTE[Row Table Engine]
     RTE --> PFS[Page File System]
     PFS --> VFS[Virtual File System / Cache]
     VFS --> WAL[Write Ahead Log]
@@ -188,7 +188,7 @@ graph TD
 
 ### 4. WAL (Write-Ahead Logging) and Crash Recovery
 - **Performance and Reliability**: All changes are recorded in a sequential log file (WAL) before being written to the actual data file. This converts random writes into sequential writes for better performance and ensures data integrity.
-- **Crash Recovery**: When restarting after an unexpected shutdown, Shard reads the WAL to automatically replay (Redo) any changes that weren't yet reflected in the data file.
+- **Crash Recovery**: When restarting after an unexpected shutdown, Dataply reads the WAL to automatically replay (Redo) any changes that weren't yet reflected in the data file.
 
 ### 5. Concurrency Control and Indexing
 - **Page-level Locking**: Prevents data contention by controlling sequential access to pages through the `LockManager`.
@@ -196,7 +196,7 @@ graph TD
 
 ## Performance
 
-Shard is optimized for high-speed data processing. Below are the results of basic benchmark tests conducted on a local environment.
+Dataply is optimized for high-speed data processing. Below are the results of basic benchmark tests conducted on a local environment.
 
 | Test Case | Count | Total Time | OPS (Operations Per Second) |
 | :--- | :--- | :--- | :--- |
@@ -208,14 +208,14 @@ Shard is optimized for high-speed data processing. Below are the results of basi
 ### Benchmark Analysis
 - **Batching Efficiency**: Grouping operations into a single transaction is approximately **3.9x faster** than individual inserts by minimizing internal transaction management overhead.
 - **WAL Trade-off**: Enabling Write-Ahead Logging ensures data durability but results in a significant performance decrease (approximately **20x slower** for individual inserts) due to synchronous I/O operations.
-- **Node.js Optimization**: Shard is designed to provide competitive performance (over **8,000 OPS** in batch mode) for a pure TypeScript Record Store without native dependencies.
+- **Node.js Optimization**: Dataply is designed to provide competitive performance (over **8,000 OPS** in batch mode) for a pure TypeScript Record Store without native dependencies.
 
 > [!NOTE]
 > Tests were conducted on a standard local environment (Node.js v25+). Performance may vary depending on hardware specifications (especially SSD/HDD) and system load.
 
 ## Limitations
 
-As **Shard** is currently in Alpha, there are several limitations to keep in mind:
+As **Dataply** is currently in Alpha, there are several limitations to keep in mind:
 - **PK-Only Access**: Data can only be retrieved or modified using the Primary Key. No secondary indexes or complex query logic are available yet.
 - **No SQL Support**: This is a low-level **Record Store**. It does not support SQL or any higher-level query language.
 - **Memory Usage**: The VFS cache size is controlled by `pageCacheCapacity`, but excessive use of large records should be handled with care.

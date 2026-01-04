@@ -1,4 +1,4 @@
-import type { DataPage, ShardMetadata, ShardOptions } from '../types'
+import type { DataPage, DataplyMetadata, DataplyOptions } from '../types'
 import { NumericComparator, BPTreeAsync } from 'serializable-bptree'
 import { RowIdentifierStrategy } from './RowIndexStrategy'
 import { PageFileSystem } from './PageFileSystem'
@@ -22,7 +22,7 @@ export class RowTableEngine {
   private readonly pageIdBuffer: Uint8Array
   private initialized = false
 
-  constructor(protected readonly pfs: PageFileSystem, protected readonly options: Required<ShardOptions>) {
+  constructor(protected readonly pfs: PageFileSystem, protected readonly options: Required<DataplyOptions>) {
     this.factory = new PageManagerFactory()
     this.metadataPageManager = this.factory.getManagerFromType(MetadataPageManager.CONSTANT.PAGE_TYPE_METADATA) as MetadataPageManager
     this.dataPageManager = this.factory.getManagerFromType(DataPageManager.CONSTANT.PAGE_TYPE_DATA) as DataPageManager
@@ -92,11 +92,11 @@ export class RowTableEngine {
   }
 
   /**
-   * Returns the metadata of the shard.
+   * Returns the metadata of the dataply.
    * @param tx Transaction
    * @returns Metadata
    */
-  async getMetadata(tx: Transaction): Promise<ShardMetadata> {
+  async getMetadata(tx: Transaction): Promise<DataplyMetadata> {
     if (!this.initialized) {
       throw new Error('RowTableEngine instance is not initialized')
     }

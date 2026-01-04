@@ -1,3 +1,3 @@
-export type { ShardOptions } from './types'
-export { Shard } from './core/Shard'
-export { ShardAPI } from './core/ShareAPI'
+export type { DataplyOptions } from './types'
+export { Dataply } from './core/Dataply'
+export { DataplyAPI } from './core/DataplyAPI'

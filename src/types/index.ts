@@ -1,4 +1,4 @@
-export interface ShardOptions {
+export interface DataplyOptions {
   /**
    * The size of a page in bytes.
    */
@@ -13,17 +13,17 @@ export interface ShardOptions {
   pageCacheCapacity?: number
 }
 
-export interface ShardMetadata {
+export interface DataplyMetadata {
   /**
    * The size of a page in bytes.
    */
   pageSize: number
   /**
-   * The total number of pages in the shard.
+   * The total number of pages in the dataply.
    */
   pageCount: number
   /**
-   * The total number of data rows in the shard.
+   * The total number of data rows in the dataply.
    */
   rowCount: number
 }

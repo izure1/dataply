@@ -755,7 +755,7 @@ export class MetadataPageManager extends PageManager {
 
   static readonly CONSTANT = {
     ...PageManager.CONSTANT,
-    MAGIC_STRING: 'SHARD',
+    MAGIC_STRING: 'DATAPLY',
     OFFSET_MAGIC_STRING: 100,
     OFFSET_PAGE_COUNT: 108,
     OFFSET_PAGE_SIZE: 112,

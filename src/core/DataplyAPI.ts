@@ -1,5 +1,5 @@
 import fs from 'node:fs'
-import type { ShardOptions, MetadataPage, DataPage, ShardMetadata } from '../types'
+import type { DataplyOptions, MetadataPage, DataPage, DataplyMetadata } from '../types'
 import { PageFileSystem } from './PageFileSystem'
 import { MetadataPageManager, DataPageManager } from './Page'
 import { RowTableEngine } from './RowTableEngine'
@@ -10,10 +10,10 @@ import { Transaction } from './transaction/Transaction'
 import { TxContext } from './transaction/TxContext'
 
 /**
- * Class for managing Shard files.
+ * Class for managing Dataply files.
  */
-export class ShardAPI {
-  readonly options: Required<ShardOptions>
+export class DataplyAPI {
+  readonly options: Required<DataplyOptions>
   protected readonly pfs: PageFileSystem
   protected readonly rowTableEngine: RowTableEngine
   protected readonly lockManager: LockManager
@@ -24,7 +24,7 @@ export class ShardAPI {
   protected constructor(
     protected file: string,
     protected fileHandle: number,
-    options: Required<ShardOptions>
+    options: Required<DataplyOptions>
   ) {
     this.options = options
     this.pfs = new PageFileSystem(fileHandle, options.pageSize, options.pageCacheCapacity, options.wal)
@@ -36,10 +36,10 @@ export class ShardAPI {
   }
 
   /**
-   * Verifies if the page file is a valid Shard file.
-   * The metadata page must be located at the beginning of the Shard file.
+   * Verifies if the page file is a valid Dataply file.
+   * The metadata page must be located at the beginning of the Dataply file.
    * @param fileHandle File handle
-   * @returns Whether the page file is a valid Shard file
+   * @returns Whether the page file is a valid Dataply file
    */
   static VerifyFormat(fileHandle: number): boolean {
     const size = MetadataPageManager.CONSTANT.OFFSET_MAGIC_STRING + MetadataPageManager.CONSTANT.MAGIC_STRING.length
@@ -56,7 +56,7 @@ export class ShardAPI {
    * @param options Options
    * @returns Options filled without omissions
    */
-  static VerboseOptions(options?: ShardOptions): Required<ShardOptions> {
+  static VerboseOptions(options?: DataplyOptions): Required<DataplyOptions> {
     return Object.assign({
       pageSize: 8192,
       pageCacheCapacity: 10000,
@@ -70,7 +70,7 @@ export class ShardAPI {
    * The second page is initialized as the first data page.
    * @param fileHandle File handle
    */
-  static InitializeFile(fileHandle: number, options: Required<ShardOptions>): void {
+  static InitializeFile(fileHandle: number, options: Required<DataplyOptions>): void {
     const metadataPageManager = new MetadataPageManager()
     const dataPageManager = new DataPageManager()
     const metadataPage = new Uint8Array(options.pageSize) as MetadataPage
@@ -107,9 +107,9 @@ export class ShardAPI {
    * Opens the database file. If the file does not exist, it initializes it.
    * @param file Database file path
    * @param options Options
-   * @returns Shard instance
+   * @returns Dataply instance
    */
-  static Use(file: string, options?: ShardOptions): ShardAPI {
+  static Use(file: string, options?: DataplyOptions): DataplyAPI {
     const verboseOption = this.VerboseOptions(options)
     let fileHandle: number
     if (verboseOption.pageCacheCapacity < 100) {
@@ -139,17 +139,17 @@ export class ShardAPI {
         }
       }
     }
-    // 메타데이터 확인을 통해 Shard 파일인지 체크합니다.
+    // 메타데이터 확인을 통해 Dataply 파일인지 체크합니다.
     if (!this.VerifyFormat(fileHandle)) {
-      throw new Error('Invalid shard file')
+      throw new Error('Invalid dataply file')
     }
     return new this(file, fileHandle, verboseOption)
   }
 
   /**
-   * Initializes the shard instance.
-   * Must be called before using the shard instance.
-   * If not called, the shard instance cannot be used.
+   * Initializes the dataply instance.
+   * Must be called before using the dataply instance.
+   * If not called, the dataply instance cannot be used.
    */
   async init(): Promise<void> {
     if (this.initialized) {
@@ -197,12 +197,12 @@ export class ShardAPI {
   }
 
   /**
-   * Retrieves metadata from the shard.
-   * @returns Metadata of the shard.
+   * Retrieves metadata from the dataply.
+   * @returns Metadata of the dataply.
    */
-  async getMetadata(): Promise<ShardMetadata> {
+  async getMetadata(): Promise<DataplyMetadata> {
     if (!this.initialized) {
-      throw new Error('Shard instance is not initialized')
+      throw new Error('Dataply instance is not initialized')
     }
     return this.runWithDefault((tx) => this.rowTableEngine.getMetadata(tx))
   }
@@ -216,7 +216,7 @@ export class ShardAPI {
    */
   async insert(data: string | Uint8Array, incrementRowCount?: boolean, tx?: Transaction): Promise<number> {
     if (!this.initialized) {
-      throw new Error('Shard instance is not initialized')
+      throw new Error('Dataply instance is not initialized')
     }
     return this.runWithDefault((tx) => {
       if (typeof data === 'string') {
@@ -236,7 +236,7 @@ export class ShardAPI {
    */
   async insertBatch(dataList: (string | Uint8Array)[], incrementRowCount?: boolean, tx?: Transaction): Promise<number[]> {
     if (!this.initialized) {
-      throw new Error('Shard instance is not initialized')
+      throw new Error('Dataply instance is not initialized')
     }
     return this.runWithDefault(async (tx) => {
       const pks: number[] = []
@@ -257,7 +257,7 @@ export class ShardAPI {
    */
   async update(pk: number, data: string | Uint8Array, tx?: Transaction): Promise<void> {
     if (!this.initialized) {
-      throw new Error('Shard instance is not initialized')
+      throw new Error('Dataply instance is not initialized')
     }
     return this.runWithDefault(async (tx) => {
       if (typeof data === 'string') {
@@ -275,7 +275,7 @@ export class ShardAPI {
    */
   async delete(pk: number, decrementRowCount?: boolean, tx?: Transaction): Promise<void> {
     if (!this.initialized) {
-      throw new Error('Shard instance is not initialized')
+      throw new Error('Dataply instance is not initialized')
     }
     return this.runWithDefault(async (tx) => {
       await this.rowTableEngine.delete(pk, decrementRowCount ?? true, tx)
@@ -294,7 +294,7 @@ export class ShardAPI {
   async select(pk: number, asRaw?: boolean, tx?: Transaction): Promise<string | null>
   async select(pk: number, asRaw: boolean = false, tx?: Transaction): Promise<Uint8Array | string | null> {
     if (!this.initialized) {
-      throw new Error('Shard instance is not initialized')
+      throw new Error('Dataply instance is not initialized')
     }
     return this.runWithDefault(async (tx) => {
       const data = await this.rowTableEngine.selectByPK(pk, tx)
@@ -305,11 +305,11 @@ export class ShardAPI {
   }
 
   /**
-   * Closes the shard file.
+   * Closes the dataply file.
    */
   async close(): Promise<void> {
     if (!this.initialized) {
-      throw new Error('Shard instance is not initialized')
+      throw new Error('Dataply instance is not initialized')
     }
     await this.pfs.close()
     fs.closeSync(this.fileHandle)

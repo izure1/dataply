@@ -1,9 +1,9 @@
 
 import fs from 'node:fs'
 import path from 'node:path'
-import { Shard } from '../src/core/Shard'
+import { Dataply } from '../src/core/Dataply'
 
-describe('Recovery Checksum with Shard API', () => {
+describe('Recovery Checksum with Dataply API', () => {
   const TEST_DIR = path.join(__dirname, 'temp_recovery_checksum_test')
   const DB_FILE = path.join(TEST_DIR, 'test_recovery_checksum.db')
   const WAL_FILE = path.join(TEST_DIR, 'test_recovery_checksum.wal')
@@ -23,18 +23,18 @@ describe('Recovery Checksum with Shard API', () => {
   })
 
   test('should ignore corrupted pages in WAL during recovery', async () => {
-    // 1. Create Shard and generate WAL
-    let shard = new Shard(DB_FILE, { pageSize: PAGE_SIZE, wal: WAL_FILE })
-    await shard.init()
+    // 1. Create Dataply and generate WAL
+    let dataply = new Dataply(DB_FILE, { pageSize: PAGE_SIZE, wal: WAL_FILE })
+    await dataply.init()
 
     const data = new Uint8Array([10, 20, 30])
-    const pk = await shard.insert(data)
+    const pk = await dataply.insert(data)
 
-    const tx = shard.createTransaction()
-    const pk2 = await shard.insert(new Uint8Array([99]), tx)
+    const tx = dataply.createTransaction()
+    const pk2 = await dataply.insert(new Uint8Array([99]), tx)
     await tx.commit()
 
-    await shard.close() // Clean start DB.
+    await dataply.close() // Clean start DB.
 
     const { LogManager } = require('../src/core/LogManager')
     const logManager = new LogManager(WAL_FILE, PAGE_SIZE)
@@ -67,26 +67,26 @@ describe('Recovery Checksum with Shard API', () => {
     walBuf[4 + 50] = 0xFF
     fs.writeFileSync(WAL_FILE, walBuf)
 
-    // 3. Act: Open Shard (Trigger Recovery)
-    const shard2 = new Shard(DB_FILE, { pageSize: PAGE_SIZE, wal: WAL_FILE })
-    await shard2.init() // This runs recovery.
+    // 3. Act: Open Dataply (Trigger Recovery)
+    const dataply2 = new Dataply(DB_FILE, { pageSize: PAGE_SIZE, wal: WAL_FILE })
+    await dataply2.init() // This runs recovery.
 
     // 4. Assert
     // Verify using internal PFS to see if page content is overwritten by WAL
-    const pfs = (shard2 as any).api.pfs
-    const page = await pfs.get(pageId, shard2.createTransaction())
+    const pfs = (dataply2 as any).api.pfs
+    const page = await pfs.get(pageId, dataply2.createTransaction())
 
     // Check a random byte in body
     const bodyStart = 24 // approximate header size
     expect(page[bodyStart + 10]).not.toBe(88)
 
-    await shard2.close()
+    await dataply2.close()
 
   })
 
   test('should recover valid pages correctly', async () => {
     // 1. Setup WAL with VALID page
-    const s = new Shard(DB_FILE, { pageSize: PAGE_SIZE, wal: WAL_FILE })
+    const s = new Dataply(DB_FILE, { pageSize: PAGE_SIZE, wal: WAL_FILE })
     await s.init()
     await s.close()
 
@@ -109,16 +109,16 @@ describe('Recovery Checksum with Shard API', () => {
     await logManager.append(pages)
     await logManager.close()
 
-    // 2. Open Shard
-    const shard = new Shard(DB_FILE, { pageSize: PAGE_SIZE, wal: WAL_FILE })
-    await shard.init()
+    // 2. Open Dataply
+    const dataply = new Dataply(DB_FILE, { pageSize: PAGE_SIZE, wal: WAL_FILE })
+    await dataply.init()
 
     // 3. Verify
-    const pfs = (shard as any).api.pfs
-    const page = await pfs.get(pageId, shard.createTransaction())
+    const pfs = (dataply as any).api.pfs
+    const page = await pfs.get(pageId, dataply.createTransaction())
 
     expect(page[100]).toBe(77) // Should have recovered
 
-    await shard.close()
+    await dataply.close()
   })
 })

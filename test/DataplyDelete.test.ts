@@ -1,9 +1,9 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { Shard } from '../src/core/Shard'
+import { Dataply } from '../src/core/Dataply'
 
-describe('Shard Delete Transaction Tests', () => {
-  const TEST_FILE = path.join(__dirname, 'test_shard_delete.dat')
+describe('Dataply Delete Transaction Tests', () => {
+  const TEST_FILE = path.join(__dirname, 'test_dataply_delete.dat')
 
   beforeEach(() => {
     if (fs.existsSync(TEST_FILE)) {
@@ -22,62 +22,62 @@ describe('Shard Delete Transaction Tests', () => {
   })
 
   test('should rollback a delete operation', async () => {
-    const shard = new Shard(TEST_FILE, { pageSize: 8192 })
-    await shard.init()
+    const dataply = new Dataply(TEST_FILE, { pageSize: 8192 })
+    await dataply.init()
 
     const data = 'persistent data'
-    const pk = await shard.insert(data)
+    const pk = await dataply.insert(data)
 
     // Verify insert
-    expect(await shard.select(pk)).toBe(data)
+    expect(await dataply.select(pk)).toBe(data)
 
     // Start transaction and delete
-    const tx = shard.createTransaction()
-    await shard.delete(pk, tx)
+    const tx = dataply.createTransaction()
+    await dataply.delete(pk, tx)
 
     // Verify deleted within transaction
-    expect(await shard.select(pk, false, tx)).toBeNull()
+    expect(await dataply.select(pk, false, tx)).toBeNull()
 
     // Rollback
     await tx.rollback()
 
     // Verify data is restored
-    expect(await shard.select(pk)).toBe(data)
+    expect(await dataply.select(pk)).toBe(data)
 
-    await shard.close()
+    await dataply.close()
   })
 
   test('should support isolation between transactions (Read Committed / Snapshot)', async () => {
-    const shard = new Shard(TEST_FILE, { pageSize: 8192 })
-    await shard.init()
+    const dataply = new Dataply(TEST_FILE, { pageSize: 8192 })
+    await dataply.init()
 
     const data = 'shared data'
-    const pk = await shard.insert(data)
+    const pk = await dataply.insert(data)
 
     // Create two transactions
-    const tx1 = shard.createTransaction()
-    const tx2 = shard.createTransaction()
+    const tx1 = dataply.createTransaction()
+    const tx2 = dataply.createTransaction()
 
     // Tx1 deletes the row
-    await shard.delete(pk, tx1)
+    await dataply.delete(pk, tx1)
 
     // Tx1 should see it as deleted
-    expect(await shard.select(pk, false, tx1)).toBeNull()
+    expect(await dataply.select(pk, false, tx1)).toBeNull()
 
     // Tx2 should STILL see the data (Isolation)
-    expect(await shard.select(pk, false, tx2)).toBe(data)
+    expect(await dataply.select(pk, false, tx2)).toBe(data)
 
     // Global (no tx) interaction depends on isolation level, but usually new transactions 
     // shouldn't see uncommitted changes or should block. 
     // In this MVCC implementation, usually readers don't block.
     // Let's assume snapshot isolation or read committed where uncommitted changes aren't visible.
-    expect(await shard.select(pk)).toBe(data)
+    expect(await dataply.select(pk)).toBe(data)
 
     // Commit Tx1
     await tx1.commit()
 
     // Now global scope should see it deleted
-    expect(await shard.select(pk)).toBeNull()
+    expect(await dataply.select(pk)).toBeNull()
 
     // Tx2 behavior depends on implementation (Repeatable Read vs Read Committed).
     // If Repeatable Read (Snapshot), it should still see data.
@@ -91,8 +91,8 @@ describe('Shard Delete Transaction Tests', () => {
     await tx2.commit()
 
     // Verify final state
-    expect(await shard.select(pk)).toBeNull()
+    expect(await dataply.select(pk)).toBeNull()
 
-    await shard.close()
+    await dataply.close()
   })
 })

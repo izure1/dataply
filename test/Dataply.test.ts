@@ -1,14 +1,14 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { Shard } from '../src/core/Shard'
+import { Dataply } from '../src/core/Dataply'
 
-describe('Shard', () => {
-  const TEST_FILE = path.join(__dirname, 'test_shard.dat')
+describe('Dataply', () => {
+  const TEST_FILE = path.join(__dirname, 'test_dataply.dat')
 
   afterEach(async () => {
     if (fs.existsSync(TEST_FILE)) {
       try {
-        // new Shard으로 열린 파일 핸들을 닫아줘야 삭제가 가능할 수 있음
+        // new Dataply으로 열린 파일 핸들을 닫아줘야 삭제가 가능할 수 있음
         // 테스트 코드 내에서 close 호출 확인
         await fs.promises.unlink(TEST_FILE)
       } catch (e) {
@@ -17,10 +17,10 @@ describe('Shard', () => {
     }
   })
 
-  test('should create and initialize a new shard file', async () => {
-    const shard = new Shard(TEST_FILE, { pageSize: 4096 })
+  test('should create and initialize a new dataply file', async () => {
+    const dataply = new Dataply(TEST_FILE, { pageSize: 4096 })
 
-    await shard.init()
+    await dataply.init()
 
     expect(fs.existsSync(TEST_FILE)).toBe(true)
 
@@ -28,65 +28,65 @@ describe('Shard', () => {
     const stats = fs.statSync(TEST_FILE)
     expect(stats.size).toBeGreaterThanOrEqual(4096)
 
-    await shard.close()
+    await dataply.close()
   })
 
-  test('should verify a valid shard file', async () => {
+  test('should verify a valid dataply file', async () => {
     // 먼저 파일 생성
-    const shard1 = new Shard(TEST_FILE)
-    await shard1.init()
-    await shard1.close()
+    const dataply1 = new Dataply(TEST_FILE)
+    await dataply1.init()
+    await dataply1.close()
 
     // 다시 열기
-    const shard2 = new Shard(TEST_FILE)
-    await shard2.init()
-    expect(shard2).toBeInstanceOf(Shard)
-    await shard2.close()
+    const dataply2 = new Dataply(TEST_FILE)
+    await dataply2.init()
+    expect(dataply2).toBeInstanceOf(Dataply)
+    await dataply2.close()
   })
 
-  test('should throw error for invalid shard file', () => {
+  test('should throw error for invalid dataply file', () => {
     // 빈 파일 생성
     fs.writeFileSync(TEST_FILE, 'invalid data')
 
     expect(() => {
-      new Shard(TEST_FILE)
-    }).toThrow('Invalid shard file')
+      new Dataply(TEST_FILE)
+    }).toThrow('Invalid dataply file')
   })
 
   describe('insert and select', () => {
-    let shard: Shard
+    let dataply: Dataply
 
     beforeEach(async () => {
-      shard = new Shard(TEST_FILE, { pageSize: 8192 })
-      await shard.init()
+      dataply = new Dataply(TEST_FILE, { pageSize: 8192 })
+      await dataply.init()
     })
 
     afterEach(async () => {
-      await shard.close()
+      await dataply.close()
     })
 
     test('should insert and select a string', async () => {
       const data = 'Hello, World!'
-      const pk = await shard.insert(data)
+      const pk = await dataply.insert(data)
 
-      const result = await shard.select(pk)
+      const result = await dataply.select(pk)
       expect(result).toBe(data)
     })
 
     test('should insert and select a buffer', async () => {
       const data = new Uint8Array([1, 2, 3, 4, 5])
-      const pk = await shard.insert(data)
+      const pk = await dataply.insert(data)
 
-      const result = await shard.select(pk, true)
+      const result = await dataply.select(pk, true)
       expect(result).toEqual(data)
     })
 
     test('should insert and select large data (overflow)', async () => {
       // Create data larger than one page (8192 bytes)
       const data = new Uint8Array(10000).fill(65) // 'A'
-      const pk = await shard.insert(data)
+      const pk = await dataply.insert(data)
 
-      const result = await shard.select(pk, true)
+      const result = await dataply.select(pk, true)
       expect(result).toEqual(data)
     })
 
@@ -95,56 +95,56 @@ describe('Shard', () => {
       const pks: number[] = []
 
       for (let i = 0; i < count; i++) {
-        const pk = await shard.insert(`row-${i}`)
+        const pk = await dataply.insert(`row-${i}`)
         pks.push(pk)
       }
 
       for (let i = 0; i < count; i++) {
-        const result = await shard.select(pks[i])
+        const result = await dataply.select(pks[i])
         expect(result).toBe(`row-${i}`)
       }
     })
 
     test('should return null for non-existent PK', async () => {
       // Insert one row to ensure file is initialized
-      await shard.insert('test')
+      await dataply.insert('test')
 
-      const result = await shard.select(999999)
+      const result = await dataply.select(999999)
       expect(result).toBeNull()
     })
 
     test('should delete a row', async () => {
       const data = 'To be deleted'
-      const pk = await shard.insert(data)
+      const pk = await dataply.insert(data)
 
       // Ensure it exists
-      expect(await shard.select(pk)).toBe(data)
+      expect(await dataply.select(pk)).toBe(data)
 
       // Delete it
-      await shard.delete(pk)
+      await dataply.delete(pk)
 
       // Ensure it is gone
-      const result = await shard.select(pk)
+      const result = await dataply.select(pk)
       expect(result).toBeNull()
 
       // Delete again should not throw
-      await expect(shard.delete(pk)).resolves.not.toThrow()
+      await expect(dataply.delete(pk)).resolves.not.toThrow()
     })
 
     test('should delete large data (overflow)', async () => {
       // Create data larger than one page (8192 bytes)
       const data = new Uint8Array(10000).fill(66) // 'B'
-      const pk = await shard.insert(data)
+      const pk = await dataply.insert(data)
 
       // Ensure it exists
-      const result = await shard.select(pk, true)
+      const result = await dataply.select(pk, true)
       expect(result).toEqual(data)
 
       // Delete it
-      await shard.delete(pk)
+      await dataply.delete(pk)
 
       // Ensure it is gone (returns null)
-      const resultDeleted = await shard.select(pk, true)
+      const resultDeleted = await dataply.select(pk, true)
       expect(resultDeleted).toBeNull()
     })
   })
