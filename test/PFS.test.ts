@@ -1,5 +1,5 @@
 import fs from 'node:fs'
-import path from 'path'
+import path from 'node:path'
 import { PageFileSystem } from '../src/core/PageFileSystem'
 import { MetadataPageManager, PageManager, PageManagerFactory } from '../src/core/Page'
 import { MetadataPage } from '../src/types'

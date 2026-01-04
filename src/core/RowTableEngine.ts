@@ -11,15 +11,15 @@ import { Transaction } from './transaction/Transaction'
 export class RowTableEngine {
   protected readonly bptree: BPTreeAsync<number, number>
   protected readonly order: number
-  private readonly factory: PageManagerFactory
+  protected readonly factory: PageManagerFactory
   private readonly metadataPageManager: MetadataPageManager
   private readonly dataPageManager: DataPageManager
   private readonly overflowPageManager: OverflowPageManager
-  private readonly keyManager: KeyManager
-  private readonly rowManager: Row
+  protected readonly keyManager: KeyManager
+  protected readonly rowManager: Row
+  protected readonly maxBodySize: number
   private readonly ridBuffer: Uint8Array
   private readonly pageIdBuffer: Uint8Array
-  private readonly maxBodySize: number
   private initialized = false
 
   constructor(protected readonly pfs: PageFileSystem) {
@@ -33,7 +33,11 @@ export class RowTableEngine {
     this.pageIdBuffer = new Uint8Array(DataPageManager.CONSTANT.SIZE_PAGE_ID)
     this.maxBodySize = this.pfs.pageSize - DataPageManager.CONSTANT.SIZE_PAGE_HEADER
     this.order = this.getOptimalOrder(pfs.pageSize, IndexPageManager.CONSTANT.SIZE_KEY, IndexPageManager.CONSTANT.SIZE_VALUE)
-    this.bptree = new BPTreeAsync(new RowIdentifierStrategy(this.order, pfs), new NumericComparator())
+    this.bptree = new BPTreeAsync(
+      new RowIdentifierStrategy(this.order, pfs),
+      new NumericComparator(), {
+      lifespan: '3 minutes'
+    })
   }
 
   /**
@@ -53,7 +57,7 @@ export class RowTableEngine {
    * @param pointerSize Pointer size
    * @returns Optimal order
    */
-  private getOptimalOrder(pageSize: number, keySize: number, pointerSize: number): number {
+  protected getOptimalOrder(pageSize: number, keySize: number, pointerSize: number): number {
     pageSize -= IndexPageManager.CONSTANT.OFFSET_KEYS_AND_VALUES
     return Math.floor((pageSize + keySize) / (keySize + pointerSize))
   }
@@ -63,7 +67,7 @@ export class RowTableEngine {
    * @param rowBody Data
    * @returns Actual row size generated
    */
-  private getRequiredRowSize(rowBody: Uint8Array): number {
+  protected getRequiredRowSize(rowBody: Uint8Array): number {
     return Row.CONSTANT.SIZE_HEADER + DataPageManager.CONSTANT.SIZE_SLOT_OFFSET + rowBody.length
   }
 

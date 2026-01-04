@@ -41,7 +41,7 @@ export class ShardAPI {
    * @param fileHandle File handle
    * @returns Whether the page file is a valid Shard file
    */
-  static Verify(fileHandle: number): boolean {
+  static VerifyFormat(fileHandle: number): boolean {
     const size = MetadataPageManager.CONSTANT.OFFSET_MAGIC_STRING + MetadataPageManager.CONSTANT.MAGIC_STRING.length
     const metadataPage = new Uint8Array(size)
     fs.readSync(fileHandle, metadataPage, 0, size, 0)
@@ -66,7 +66,7 @@ export class ShardAPI {
    * The second page is initialized as the first data page.
    * @param fileHandle File handle
    */
-  static Initialize(fileHandle: number, options: Required<ShardOptions>): void {
+  static InitializeFile(fileHandle: number, options: Required<ShardOptions>): void {
     const metadataPageManager = new MetadataPageManager()
     const dataPageManager = new DataPageManager()
     const metadataPage = new Uint8Array(options.pageSize) as MetadataPage
@@ -114,13 +114,16 @@ export class ShardAPI {
       }
       fileHandle = fs.openSync(file, 'w+')
       // 파일이 없으면 생성하고 메타데이터 페이지를 추가합니다.
-      this.Initialize(fileHandle, verboseOption)
+      this.InitializeFile(fileHandle, verboseOption)
     } else {
       fileHandle = fs.openSync(file, 'r+')
       // 메타데이터 페이지에서 페이지 크기를 읽어옵니다.
       // 메타데이터 헤더 + 페이지 크기 필드(4바이트)까지 읽기 위해 충분한 크기를 읽습니다.
-      const buffer = new Uint8Array(128)
-      fs.readSync(fileHandle, buffer, 0, 128, 0)
+      const buffer = new Uint8Array(
+        MetadataPageManager.CONSTANT.OFFSET_PAGE_SIZE +
+        MetadataPageManager.CONSTANT.SIZE_PAGE_SIZE
+      )
+      fs.readSync(fileHandle, buffer)
       const metadataManager = new MetadataPageManager()
       if (metadataManager.isMetadataPage(buffer)) {
         const storedPageSize = metadataManager.getPageSize(buffer)
@@ -130,7 +133,7 @@ export class ShardAPI {
       }
     }
     // 메타데이터 확인을 통해 Shard 파일인지 체크합니다.
-    if (!this.Verify(fileHandle)) {
+    if (!this.VerifyFormat(fileHandle)) {
       throw new Error('Invalid shard file')
     }
     return new this(file, fileHandle, verboseOption)

@@ -1,5 +1,5 @@
 import fs from 'node:fs'
-import path from 'path'
+import path from 'node:path'
 import { VirtualFileSystem } from '../src/core/VirtualFileSystem'
 import { Transaction } from '../src/core/transaction/Transaction'
 import { LockManager } from '../src/core/transaction/LockManager'

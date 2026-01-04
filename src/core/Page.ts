@@ -471,13 +471,13 @@ export class IndexPageManager extends PageManager {
 
   static readonly CONSTANT = {
     ...PageManager.CONSTANT,
-    OFFSET_INDEX_ID: PageManager.CONSTANT.SIZE_PAGE_HEADER,
-    OFFSET_PARENT_INDEX_ID: PageManager.CONSTANT.SIZE_PAGE_HEADER + 4,
-    OFFSET_NEXT_INDEX_ID: PageManager.CONSTANT.SIZE_PAGE_HEADER + 8,
-    OFFSET_PREV_INDEX_ID: PageManager.CONSTANT.SIZE_PAGE_HEADER + 12,
-    OFFSET_IS_LEAF: PageManager.CONSTANT.SIZE_PAGE_HEADER + 16,
-    OFFSET_KEYS_COUNT: PageManager.CONSTANT.SIZE_PAGE_HEADER + 17,
-    OFFSET_VALUES_COUNT: PageManager.CONSTANT.SIZE_PAGE_HEADER + 21,
+    OFFSET_INDEX_ID: 100,
+    OFFSET_PARENT_INDEX_ID: 104,
+    OFFSET_NEXT_INDEX_ID: 108,
+    OFFSET_PREV_INDEX_ID: 112,
+    OFFSET_IS_LEAF: 116,
+    OFFSET_KEYS_COUNT: 117,
+    OFFSET_VALUES_COUNT: 121,
     OFFSET_KEYS_AND_VALUES: 128, // 8-byte aligned (original 125 -> 128)
     SIZE_INDEX_ID: 4,
     SIZE_PARENT_INDEX_ID: 4,
@@ -756,14 +756,19 @@ export class MetadataPageManager extends PageManager {
   static readonly CONSTANT = {
     ...PageManager.CONSTANT,
     MAGIC_STRING: 'SHARD',
-    OFFSET_MAGIC_STRING: PageManager.CONSTANT.SIZE_PAGE_HEADER,
-    OFFSET_PAGE_COUNT: PageManager.CONSTANT.SIZE_PAGE_HEADER + 8,
-    OFFSET_PAGE_SIZE: PageManager.CONSTANT.SIZE_PAGE_HEADER + 12,
-    OFFSET_ROW_COUNT: PageManager.CONSTANT.SIZE_PAGE_HEADER + 16,
-    OFFSET_ROOT_INDEX_PAGE_ID: PageManager.CONSTANT.SIZE_PAGE_HEADER + 22,
-    OFFSET_ROOT_INDEX_ORDER: PageManager.CONSTANT.SIZE_PAGE_HEADER + 26,
-    OFFSET_LAST_INSERT_PAGE_ID: PageManager.CONSTANT.SIZE_PAGE_HEADER + 30,
-    OFFSET_LAST_ROW_PK: PageManager.CONSTANT.SIZE_PAGE_HEADER + 34,
+    OFFSET_MAGIC_STRING: 100,
+    OFFSET_PAGE_COUNT: 108,
+    OFFSET_PAGE_SIZE: 112,
+    OFFSET_ROW_COUNT: 116,
+    OFFSET_ROOT_INDEX_PAGE_ID: 122,
+    OFFSET_ROOT_INDEX_ORDER: 126,
+    OFFSET_LAST_INSERT_PAGE_ID: 130,
+    OFFSET_LAST_ROW_PK: 134,
+    SIZE_PAGE_COUNT: 4,
+    SIZE_PAGE_SIZE: 4,
+    SIZE_ROOT_INDEX_PAGE_ID: 4,
+    SIZE_ROOT_INDEX_ORDER: 4,
+    SIZE_LAST_INSERT_PAGE_ID: 4,
   } as const
 
   /**
@@ -808,7 +813,7 @@ export class MetadataPageManager extends PageManager {
     return bytesToNumber(
       page,
       MetadataPageManager.CONSTANT.OFFSET_PAGE_COUNT,
-      4
+      MetadataPageManager.CONSTANT.SIZE_PAGE_COUNT
     )
   }
 
@@ -821,7 +826,7 @@ export class MetadataPageManager extends PageManager {
     return bytesToNumber(
       page,
       MetadataPageManager.CONSTANT.OFFSET_PAGE_SIZE,
-      4
+      MetadataPageManager.CONSTANT.SIZE_PAGE_SIZE
     )
   }
 
@@ -834,7 +839,7 @@ export class MetadataPageManager extends PageManager {
     const id = bytesToNumber(
       page,
       MetadataPageManager.CONSTANT.OFFSET_ROOT_INDEX_PAGE_ID,
-      4
+      MetadataPageManager.CONSTANT.SIZE_ROOT_INDEX_PAGE_ID
     )
     return id === 0xFFFFFFFF ? -1 : id
   }
@@ -848,7 +853,7 @@ export class MetadataPageManager extends PageManager {
     return bytesToNumber(
       page,
       MetadataPageManager.CONSTANT.OFFSET_ROOT_INDEX_ORDER,
-      4
+      MetadataPageManager.CONSTANT.SIZE_ROOT_INDEX_ORDER
     )
   }
 
@@ -861,7 +866,7 @@ export class MetadataPageManager extends PageManager {
     return bytesToNumber(
       page,
       MetadataPageManager.CONSTANT.OFFSET_LAST_INSERT_PAGE_ID,
-      4
+      MetadataPageManager.CONSTANT.SIZE_LAST_INSERT_PAGE_ID
     )
   }
 
@@ -901,7 +906,7 @@ export class MetadataPageManager extends PageManager {
       pageCount,
       page,
       MetadataPageManager.CONSTANT.OFFSET_PAGE_COUNT,
-      4
+      MetadataPageManager.CONSTANT.SIZE_PAGE_COUNT
     )
   }
 
@@ -915,7 +920,7 @@ export class MetadataPageManager extends PageManager {
       pageSize,
       page,
       MetadataPageManager.CONSTANT.OFFSET_PAGE_SIZE,
-      4
+      MetadataPageManager.CONSTANT.SIZE_PAGE_SIZE
     )
   }
 
@@ -929,7 +934,7 @@ export class MetadataPageManager extends PageManager {
       rootIndexPageId,
       page,
       MetadataPageManager.CONSTANT.OFFSET_ROOT_INDEX_PAGE_ID,
-      4
+      MetadataPageManager.CONSTANT.SIZE_ROOT_INDEX_PAGE_ID
     )
   }
 
@@ -943,7 +948,7 @@ export class MetadataPageManager extends PageManager {
       order,
       page,
       MetadataPageManager.CONSTANT.OFFSET_ROOT_INDEX_ORDER,
-      4
+      MetadataPageManager.CONSTANT.SIZE_ROOT_INDEX_ORDER
     )
   }
 
@@ -967,7 +972,7 @@ export class MetadataPageManager extends PageManager {
       lastInsertPageId,
       page,
       MetadataPageManager.CONSTANT.OFFSET_LAST_INSERT_PAGE_ID,
-      4
+      MetadataPageManager.CONSTANT.SIZE_LAST_INSERT_PAGE_ID
     )
   }
 

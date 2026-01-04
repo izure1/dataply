@@ -2,6 +2,9 @@
 
 # Shard
 
+> [!WARNING]
+> **Shard is currently in Alpha version.** It is experimental and not yet suitable for production use.
+
 **Shard** is a lightweight, high-performance storage engine designed for Node.js. It provides reliable and fast data management by supporting MVCC (Multi-Version Concurrency Control), WAL (Write-Ahead Logging), and B+Tree indexing.
 
 ## Key Features
@@ -38,9 +41,17 @@ async function main() {
   const pk = await shard.insert('Hello, Shard!')
   console.log(`Inserted row with PK: ${pk}`)
 
+  // Update data
+  await shard.update(pk, 'Updated Data')
+  console.log(`Updated row with PK: ${pk}`)
+
   // Select data
   const data = await shard.select(pk)
   console.log(`Read data: ${data}`)
+
+  // Delete data
+  await shard.delete(pk)
+  console.log(`Deleted row with PK: ${pk}`)
 
   // Close shard
   await shard.close()

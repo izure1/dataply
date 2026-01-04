@@ -1,6 +1,6 @@
 import { Shard } from '../src/core/Shard'
-import path from 'path'
-import fs from 'fs'
+import path from 'node:path'
+import fs from 'node:fs'
 
 describe('Performance Benchmark', () => {
   const TEST_FILE = path.join(__dirname, 'perf_shard.dat')
