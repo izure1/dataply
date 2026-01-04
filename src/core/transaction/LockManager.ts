@@ -6,12 +6,11 @@ import { Ryoiki } from 'ryoiki'
  * Implemented using the Ryoiki library.
  */
 export class LockManager {
-  private ryoiki: Ryoiki
-  // LockID -> Unlock Function Mapping
+  private lock: Ryoiki
   private unlockMap: Map<string, () => void> = new Map()
 
   constructor() {
-    this.ryoiki = new Ryoiki()
+    this.lock = new Ryoiki()
   }
 
   /**
@@ -22,8 +21,8 @@ export class LockManager {
    */
   async acquireRead(pageId: number): Promise<string> {
     return new Promise<string>((resolve) => {
-      this.ryoiki.readLock([pageId, pageId + 1], async (lockId) => {
-        this.unlockMap.set(lockId, () => this.ryoiki.readUnlock(lockId))
+      this.lock.readLock([pageId, pageId + 1], async (lockId) => {
+        this.unlockMap.set(lockId, () => this.lock.readUnlock(lockId))
         resolve(lockId)
       })
     })
@@ -36,8 +35,8 @@ export class LockManager {
    */
   async acquireWrite(pageId: number): Promise<string> {
     return new Promise<string>((resolve) => {
-      this.ryoiki.writeLock([pageId, pageId + 1], async (lockId) => {
-        this.unlockMap.set(lockId, () => this.ryoiki.writeUnlock(lockId))
+      this.lock.writeLock([pageId, pageId + 1], async (lockId) => {
+        this.unlockMap.set(lockId, () => this.lock.writeUnlock(lockId))
         resolve(lockId)
       })
     })
