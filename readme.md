@@ -177,9 +177,17 @@ graph TD
 ```
 
 ### 2. Page-Based Storage and VFS Caching
+
 - **Fixed-size Pages**: All data is managed in fixed-size units (default 8KB) called pages.
 - **VFS Cache**: Minimizes disk I/O by caching frequently accessed pages in memory.
 - **Dirty Page Tracking**: Tracks modified pages (Dirty) to synchronize them with disk efficiently only at the time of commit.
+- **Detailed Structure**: For technical details on the physical layout, see [structure.md](structure.md).
+
+#### Page & Row Layout
+Dataply uses a **Slotted Page** architecture to manage records efficiently:
+- **Pages**: Consists of a 100-byte header (containing `type`, `id`, `checksum`, etc.) and a body where rows are stored. Slot offsets are stored at the end of the page to track row positions.
+- **Rows**: Each row has a 9-byte header (`flags`, `size`, `PK`) followed by the actual data. Large records automatically trigger **Overflow Pages** to handle data exceeding page capacity.
+- **Keys & Identifiers**: Uses a 6-byte **Primary Key (PK)** for logical mapping and a 6-byte **Record Identifier (RID)** (Slot + Page ID) for direct physical addressing.
 
 ### 3. MVCC and Snapshot Isolation
 - **Non-blocking Reads**: Read operations are not blocked by write operations.
