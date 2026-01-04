@@ -229,7 +229,7 @@ Dataply is a low-level record store that provides the essential building blocks 
 Absolutely! By leveraging `DataplyAPI`, you can implement custom indexing (like secondary indexes), query parsers, and complex data schemas. Dataply handles the difficult aspects of transaction management, crash recovery (WAL), and concurrency control, letting you focus on your database's unique features.
 
 ### Q: How many rows can be inserted per page?
-Dataply uses a 4-byte Page ID and 2-byte slots for data positioning within a page. This allows for a theoretical maximum of **65,536 ($2^{16}$)** rows per page.
+Dataply uses a 2-byte slots for data positioning within a page. This allows for a theoretical maximum of **65,536 ($2^{16}$)** rows per page.
 
 ### Q: What is the total maximum number of rows a database can hold?
 With $2^{32}$ possible pages and $2^{16}$ rows per page, the theoretical limit is **281 trillion ($2^{48}$)** rows. In practice, the limit is typically governed by the physical storage size (approx. 32TB for default settings).
