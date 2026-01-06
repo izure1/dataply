@@ -18,7 +18,7 @@ describe('Page Deallocation', () => {
   afterEach(cleanup)
 
   test('should free data page when it becomes empty', async () => {
-    const db = DataplyAPI.Use(TEST_DB, { pageSize: 4096, pageCacheCapacity: 100 })
+    const db = new DataplyAPI(TEST_DB, { pageSize: 4096, pageCacheCapacity: 100 })
     await db.init()
 
     // 1. Insert rows to fill a page partially
@@ -51,7 +51,7 @@ describe('Page Deallocation', () => {
   })
 
   test('should free overflow pages when overflow row is deleted', async () => {
-    const db = DataplyAPI.Use(TEST_DB, { pageSize: 4096, pageCacheCapacity: 100 })
+    const db = new DataplyAPI(TEST_DB, { pageSize: 4096, pageCacheCapacity: 100 })
     await db.init()
 
     // 1. Insert a large row that creates overflow pages
@@ -99,7 +99,7 @@ describe('Page Deallocation', () => {
 
   test('should handle bitmap overflow', async () => {
     // PageSize 4096 bytes (Minimum allowed)
-    const db = DataplyAPI.Use(TEST_DB, { pageSize: 4096, pageCacheCapacity: 100 })
+    const db = new DataplyAPI(TEST_DB, { pageSize: 4096, pageCacheCapacity: 100 })
     await db.init()
 
     const pfs = (db as any).pfs as PageFileSystem

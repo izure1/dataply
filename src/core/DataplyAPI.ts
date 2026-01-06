@@ -1,5 +1,6 @@
 import fs from 'node:fs'
 import type { DataplyOptions, MetadataPage, BitmapPage, DataPage, DataplyMetadata } from '../types'
+import { type IHookall, type IHookallSync, useHookall, useHookallSync } from 'hookall'
 import { PageFileSystem } from './PageFileSystem'
 import { MetadataPageManager, DataPageManager, BitmapPageManager } from './Page'
 import { RowTableEngine } from './RowTableEngine'
@@ -9,25 +10,48 @@ import { LockManager } from './transaction/LockManager'
 import { Transaction } from './transaction/Transaction'
 import { TxContext } from './transaction/TxContext'
 
+interface DataplyAPISyncHook {
+  create: (fileData: Uint8Array, file: string, fileHandle: number, options: Required<DataplyOptions>) => Uint8Array
+}
+
+interface DataplyAPIAsyncHook {
+  init: () => Promise<void>
+  close: () => Promise<void>
+}
+
 /**
  * Class for managing Dataply files.
  */
 export class DataplyAPI {
   readonly options: Required<DataplyOptions>
+  protected readonly fileHandle: number
   protected readonly pfs: PageFileSystem
   protected readonly rowTableEngine: RowTableEngine
   protected readonly lockManager: LockManager
   protected readonly textCodec: TextCodec
+  protected readonly hook: {
+    sync: IHookallSync<DataplyAPISyncHook>
+    async: IHookall<DataplyAPIAsyncHook>
+  }
   protected initialized: boolean
   private txIdCounter: number
 
-  protected constructor(
-    protected file: string,
-    protected fileHandle: number,
-    options: Required<DataplyOptions>
+  constructor(
+    protected readonly file: string,
+    options: DataplyOptions
   ) {
-    this.options = options
-    this.pfs = new PageFileSystem(fileHandle, options.pageSize, options.pageCacheCapacity, options.wal)
+    this.hook = {
+      sync: useHookallSync(this),
+      async: useHookall(this),
+    }
+    this.options = this.verboseOptions(options)
+    this.fileHandle = this.createOrOpen(file, this.options)
+    this.pfs = new PageFileSystem(
+      this.fileHandle,
+      this.options.pageSize,
+      this.options.pageCacheCapacity,
+      this.options.wal
+    )
     this.textCodec = new TextCodec()
     this.lockManager = new LockManager()
     this.rowTableEngine = new RowTableEngine(this.pfs, this.options)
@@ -41,7 +65,7 @@ export class DataplyAPI {
    * @param fileHandle File handle
    * @returns Whether the page file is a valid Dataply file
    */
-  static VerifyFormat(fileHandle: number): boolean {
+  private verifyFormat(fileHandle: number): boolean {
     const size = MetadataPageManager.CONSTANT.OFFSET_MAGIC_STRING + MetadataPageManager.CONSTANT.MAGIC_STRING.length
     const metadataPage = new Uint8Array(size)
     fs.readSync(fileHandle, metadataPage, 0, size, 0)
@@ -56,7 +80,7 @@ export class DataplyAPI {
    * @param options Options
    * @returns Options filled without omissions
    */
-  static VerboseOptions(options?: DataplyOptions): Required<DataplyOptions> {
+  private verboseOptions(options?: DataplyOptions): Required<DataplyOptions> {
     return Object.assign({
       pageSize: 8192,
       pageCacheCapacity: 10000,
@@ -68,78 +92,83 @@ export class DataplyAPI {
    * Initializes the database file.
    * The first page is initialized as the metadata page.
    * The second page is initialized as the first data page.
+   * @param file Database file path
    * @param fileHandle File handle
    */
-  static InitializeFile(fileHandle: number, options: Required<DataplyOptions>): void {
-    const metadataPageManager = new MetadataPageManager()
-    const bitmapPageManager = new BitmapPageManager()
-    const dataPageManager = new DataPageManager()
-    const metadataPage = new Uint8Array(options.pageSize) as MetadataPage
-    const dataPage = new Uint8Array(options.pageSize) as DataPage
+  private initializeFile(file: string, fileHandle: number, options: Required<DataplyOptions>): void {
+    const fileData = this.hook.sync.trigger('create', new Uint8Array(), (prepareFileData) => {
+      const metadataPageManager = new MetadataPageManager()
+      const bitmapPageManager = new BitmapPageManager()
+      const dataPageManager = new DataPageManager()
+      const metadataPage = new Uint8Array(options.pageSize) as MetadataPage
+      const dataPage = new Uint8Array(options.pageSize) as DataPage
 
-    // Initialize the first metadata page
-    metadataPageManager.initial(
-      metadataPage,
-      MetadataPageManager.CONSTANT.PAGE_TYPE_METADATA,
-      0,
-      0,
-      options.pageSize - MetadataPageManager.CONSTANT.SIZE_PAGE_HEADER
-    )
-    metadataPageManager.setMagicString(metadataPage)
-    metadataPageManager.setPageSize(metadataPage, options.pageSize)
+      // Initialize the first metadata page
+      metadataPageManager.initial(
+        metadataPage,
+        MetadataPageManager.CONSTANT.PAGE_TYPE_METADATA,
+        0,
+        0,
+        options.pageSize - MetadataPageManager.CONSTANT.SIZE_PAGE_HEADER
+      )
+      metadataPageManager.setMagicString(metadataPage)
+      metadataPageManager.setPageSize(metadataPage, options.pageSize)
 
-    metadataPageManager.setRootIndexPageId(metadataPage, -1)
-    metadataPageManager.setBitmapPageId(metadataPage, 1)
-    metadataPageManager.setLastInsertPageId(metadataPage, 2)
+      metadataPageManager.setRootIndexPageId(metadataPage, -1)
+      metadataPageManager.setBitmapPageId(metadataPage, 1)
+      metadataPageManager.setLastInsertPageId(metadataPage, 2)
 
-    metadataPageManager.setPageCount(metadataPage, 3)
-    metadataPageManager.setFreePageId(metadataPage, -1)
+      metadataPageManager.setPageCount(metadataPage, 3)
+      metadataPageManager.setFreePageId(metadataPage, -1)
 
-    // Initialize the second bitmap page
-    const bitmapPage = new Uint8Array(options.pageSize) as BitmapPage
-    bitmapPageManager.initial(
-      bitmapPage,
-      BitmapPageManager.CONSTANT.PAGE_TYPE_BITMAP,
-      1,
-      -1,
-      options.pageSize - BitmapPageManager.CONSTANT.SIZE_PAGE_HEADER
-    )
+      // Initialize the second bitmap page
+      const bitmapPage = new Uint8Array(options.pageSize) as BitmapPage
+      bitmapPageManager.initial(
+        bitmapPage,
+        BitmapPageManager.CONSTANT.PAGE_TYPE_BITMAP,
+        1,
+        -1,
+        options.pageSize - BitmapPageManager.CONSTANT.SIZE_PAGE_HEADER
+      )
 
-    // Initialize the third data page
-    dataPageManager.initial(
-      dataPage,
-      DataPageManager.CONSTANT.PAGE_TYPE_DATA,
-      2,
-      -1,
-      options.pageSize - DataPageManager.CONSTANT.SIZE_PAGE_HEADER
-    )
+      // Initialize the third data page
+      dataPageManager.initial(
+        dataPage,
+        DataPageManager.CONSTANT.PAGE_TYPE_DATA,
+        2,
+        -1,
+        options.pageSize - DataPageManager.CONSTANT.SIZE_PAGE_HEADER
+      )
 
-    fs.appendFileSync(fileHandle, new Uint8Array([
-      ...metadataPage,
-      ...bitmapPage,
-      ...dataPage,
-    ]))
+      return new Uint8Array([
+        ...prepareFileData,
+        ...metadataPage,
+        ...bitmapPage,
+        ...dataPage,
+      ])
+    }, file, fileHandle, options)
+
+    fs.appendFileSync(fileHandle, fileData)
   }
 
   /**
    * Opens the database file. If the file does not exist, it initializes it.
    * @param file Database file path
    * @param options Options
-   * @returns Dataply instance
+   * @returns File handle
    */
-  static Use(file: string, options?: DataplyOptions): DataplyAPI {
-    const verboseOption = this.VerboseOptions(options)
+  private createOrOpen(file: string, options: Required<DataplyOptions>): number {
     let fileHandle: number
-    if (verboseOption.pageCacheCapacity < 100) {
+    if (options.pageCacheCapacity < 100) {
       throw new Error('Page cache capacity must be at least 100')
     }
     if (!fs.existsSync(file)) {
-      if (verboseOption.pageSize < 4096) {
+      if (options.pageSize < 4096) {
         throw new Error('Page size must be at least 4096 bytes')
       }
       fileHandle = fs.openSync(file, 'w+')
       // 파일이 없으면 생성하고 메타데이터 페이지를 추가합니다.
-      this.InitializeFile(fileHandle, verboseOption)
+      this.initializeFile(file, fileHandle, options)
     } else {
       fileHandle = fs.openSync(file, 'r+')
       // 메타데이터 페이지에서 페이지 크기를 읽어옵니다.
@@ -153,15 +182,15 @@ export class DataplyAPI {
       if (metadataManager.isMetadataPage(buffer)) {
         const storedPageSize = metadataManager.getPageSize(buffer)
         if (storedPageSize > 0) {
-          verboseOption.pageSize = storedPageSize
+          options.pageSize = storedPageSize
         }
       }
     }
     // 메타데이터 확인을 통해 Dataply 파일인지 체크합니다.
-    if (!this.VerifyFormat(fileHandle)) {
+    if (!this.verifyFormat(fileHandle)) {
       throw new Error('Invalid dataply file')
     }
-    return new this(file, fileHandle, verboseOption)
+    return fileHandle
   }
 
   /**
@@ -173,8 +202,12 @@ export class DataplyAPI {
     if (this.initialized) {
       return
     }
-    await this.runWithDefault(() => this.rowTableEngine.init())
-    this.initialized = true
+    await this.runWithDefault(() => {
+      return this.hook.async.trigger('init', void 0, async () => {
+        await this.rowTableEngine.init()
+        this.initialized = true
+      })
+    })
   }
 
   /**
@@ -237,10 +270,11 @@ export class DataplyAPI {
       throw new Error('Dataply instance is not initialized')
     }
     return this.runWithDefault((tx) => {
+      incrementRowCount = incrementRowCount ?? true
       if (typeof data === 'string') {
         data = this.textCodec.encode(data)
       }
-      return this.rowTableEngine.insert(data, incrementRowCount ?? true, tx)
+      return this.rowTableEngine.insert(data, incrementRowCount, tx)
     }, tx)
   }
 
@@ -257,10 +291,11 @@ export class DataplyAPI {
       throw new Error('Dataply instance is not initialized')
     }
     return this.runWithDefault(async (tx) => {
+      incrementRowCount = incrementRowCount ?? true
       const pks: number[] = []
       for (const data of dataList) {
         const encoded = typeof data === 'string' ? this.textCodec.encode(data) : data
-        const pk = await this.rowTableEngine.insert(encoded, incrementRowCount ?? true, tx)
+        const pk = await this.rowTableEngine.insert(encoded, incrementRowCount, tx)
         pks.push(pk)
       }
       return pks
@@ -296,7 +331,8 @@ export class DataplyAPI {
       throw new Error('Dataply instance is not initialized')
     }
     return this.runWithDefault(async (tx) => {
-      await this.rowTableEngine.delete(pk, decrementRowCount ?? true, tx)
+      decrementRowCount = decrementRowCount ?? true
+      await this.rowTableEngine.delete(pk, decrementRowCount, tx)
     }, tx)
   }
 
@@ -329,7 +365,9 @@ export class DataplyAPI {
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
-    await this.pfs.close()
-    fs.closeSync(this.fileHandle)
+    return this.hook.async.trigger('close', void 0, async () => {
+      await this.pfs.close()
+      fs.closeSync(this.fileHandle)
+    })
   }
 }

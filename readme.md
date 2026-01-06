@@ -152,7 +152,7 @@ class CustomDataply extends DataplyAPI {
   }
 }
 
-const custom = CustomDataply.Use('./data.db')
+const custom = new CustomDataply('./data.db')
 await custom.init()
 
 const stats = await custom.getInternalStats()

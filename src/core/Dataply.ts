@@ -9,7 +9,7 @@ export class Dataply {
   protected readonly api: DataplyAPI
 
   constructor(file: string, options?: DataplyOptions) {
-    this.api = DataplyAPI.Use(file, options)
+    this.api = new DataplyAPI(file, options ?? {})
   }
 
   /**

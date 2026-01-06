@@ -17,7 +17,7 @@ describe('Page Reuse', () => {
   afterEach(cleanup)
 
   test('should reuse freed pages', async () => {
-    const db = DataplyAPI.Use(TEST_DB, { pageSize: 4096, pageCacheCapacity: 100 })
+    const db = new DataplyAPI(TEST_DB, { pageSize: 4096, pageCacheCapacity: 100 })
 
     await db.init()
     const pfs = (db as any).pfs as PageFileSystem
