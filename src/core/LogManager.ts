@@ -66,7 +66,40 @@ export class LogManager {
       })
     }
 
-    // 3. 디스크 동기화 (배치 작업 당 1회)
+    // 3. 디스크 동기화 (배치 작업 당 1회) -> 2PC를 위해 즉시 Sync하지 않고 호출자가 제어할 수도 있으나,
+    // 현재 구조상 'prepare' 단계에서 확실히 내려쓰는게 안전함.
+    await new Promise<void>((resolve, reject) => {
+      fs.fsync(this.fd!, (err) => {
+        if (err) return reject(err)
+        resolve()
+      })
+    })
+  }
+
+  /**
+   * Writes a commit marker to the log file.
+   * This indicates that the preceding logs are part of a committed transaction.
+   */
+  async writeCommitMarker(): Promise<void> {
+    if (this.fd === null) {
+      this.open()
+    }
+
+    // Commit Marker: PageID = 0xFFFFFFFF (4294967295)
+    // Data = 0 (Empty) or Checksum/TxID
+    this.view.setUint32(0, 0xFFFFFFFF, true)
+
+    // 마커 뒤에 더미 데이터나 메타데이터를 채울 수 있음. 
+    // 여기서는 0으로 채움.
+    this.buffer.fill(0, 4)
+
+    await new Promise<void>((resolve, reject) => {
+      fs.write(this.fd!, this.buffer, 0, this.entrySize, null, (err) => {
+        if (err) return reject(err)
+        resolve()
+      })
+    })
+
     await new Promise<void>((resolve, reject) => {
       fs.fsync(this.fd!, (err) => {
         if (err) return reject(err)
@@ -78,6 +111,7 @@ export class LogManager {
   /**
    * Reads the log file to recover the page map.
    * Runs synchronously as it is called by the VFS constructor.
+   * Only returns pages from committed transactions (ended with a commit marker).
    * @returns Recovered page map
    */
   readAllSync(): Map<number, Uint8Array> {
@@ -90,18 +124,34 @@ export class LogManager {
     const currentFileSize = fs.fstatSync(this.fd!).size
     let offset = 0
 
+    // 트랜잭션 단위로 버퍼링
+    // 커밋 마커를 만나면 pendingPages를 restoredPages에 반영
+    let pendingPages = new Map<number, Uint8Array>()
+
     // 엔트리 단위로 반복해서 읽기
-    // 무한 루프 방지를 위해 entrySize가 0보다 커야 함 (생성자에서 보장됨)
     while (offset + this.entrySize <= currentFileSize) {
       fs.readSync(this.fd!, this.buffer, 0, this.entrySize, offset)
 
       const pageId = this.view.getUint32(0, true)
-      // Restore 시에는 데이터를 복사해서 맵에 저장해야 함 (버퍼가 재사용되므로)
-      const pageData = this.buffer.slice(4, 4 + this.pageSize)
 
-      restoredPages.set(pageId, pageData)
+      if (pageId === 0xFFFFFFFF) {
+        // 커밋 마커 발견: 펜딩된 페이지들을 확정
+        for (const [pId, pData] of pendingPages) {
+          restoredPages.set(pId, pData)
+        }
+        pendingPages.clear()
+      } else {
+        // 일반 페이지 로그: 펜딩 버퍼에 추가
+        const pageData = this.buffer.slice(4, 4 + this.pageSize)
+        // 같은 페이지가 여러 번 수정되었을 수 있으므로 덮어씀 (최신본 유지)
+        // 하지만 Uint8Array.slice()는 새로운 버퍼를 생성하므로 안전함.
+        pendingPages.set(pageId, pageData)
+      }
+
       offset += this.entrySize
     }
+
+    // 루프가 끝난 후 pendingPages에 남아있는 데이터는 커밋 마커가 없는(쓰다 만) 트랜잭션이므로 버림.
 
     return restoredPages
   }

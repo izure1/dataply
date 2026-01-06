@@ -28,19 +28,33 @@ describe('Recovery Integration Test', () => {
 
   beforeEach(async () => {
     // 각 테스트 전에 기존 파일 삭제
-    if (fs.existsSync(dbPath)) await fs.promises.unlink(dbPath)
-    if (fs.existsSync(walPath)) await fs.promises.unlink(walPath)
+    await cleanup()
   })
 
   afterEach(async () => {
     // 각 테스트 후에 파일 정리
-    try {
-      if (fs.existsSync(dbPath)) await fs.promises.unlink(dbPath)
-      if (fs.existsSync(walPath)) await fs.promises.unlink(walPath)
-    } catch (e) {
-      // 파일이 잠겨있을 수 있음
-    }
+    await cleanup()
   })
+
+  const cleanup = async () => {
+    const files = [dbPath, walPath]
+    for (const file of files) {
+      for (let i = 0; i < 5; i++) {
+        try {
+          if (fs.existsSync(file)) await fs.promises.unlink(file)
+          break
+        } catch (e: any) {
+          if (e.code === 'EBUSY' && i < 4) {
+            await new Promise(resolve => setTimeout(resolve, 100))
+            continue
+          }
+          if (e.code !== 'ENOENT') {
+            // Ignore
+          }
+        }
+      }
+    }
+  }
 
   /**
    * 시나리오 1: 정상 종료 후 재시작

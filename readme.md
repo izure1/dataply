@@ -82,6 +82,36 @@ try {
 }
 ```
 
+### Global Transactions
+You can perform atomic operations across multiple `Dataply` instances using the `GlobalTransaction` class. This uses a **2-Phase Commit (2PC)** mechanism to ensure that either all instances commit successfully or all are rolled back.
+
+```typescript
+import { Dataply, GlobalTransaction } from 'dataply'
+
+const db1 = new Dataply('./db1.db', { wal: './db1.wal' })
+const db2 = new Dataply('./db2.db', { wal: './db2.wal' })
+
+await db1.init()
+await db2.init()
+
+const tx1 = db1.createTransaction()
+const tx2 = db2.createTransaction()
+
+const globalTx = new GlobalTransaction()
+globalTx.add(tx1)
+globalTx.add(tx2)
+
+try {
+  await db1.insert('Data for DB1', tx1)
+  await db2.insert('Data for DB2', tx2)
+  
+  // Phase 1: Prepare (WAL write) -> Phase 2: Commit (Marker write)
+  await globalTx.commit() 
+} catch (error) {
+  await globalTx.rollback()
+}
+```
+
 ### Auto-Transaction
 If you omit the `tx` argument when calling methods like `insert`, `update`, or `delete`, Dataply internally **creates an individual transaction automatically**.
 
@@ -132,6 +162,17 @@ Permanently reflects all changes made during the transaction to disk and release
 
 #### `async rollback(): Promise<void>`
 Cancels all changes made during the transaction and restores the original state.
+
+### GlobalTransaction Class
+
+#### `add(tx: Transaction): void`
+Adds an individual transaction from a `Dataply` instance to the global transaction.
+
+#### `async commit(): Promise<void>`
+Atomically commits all added transactions using a 2-Phase Commit (2PC) process.
+
+#### `async rollback(): Promise<void>`
+Rolls back all added transactions.
 
 ## Extending Dataply
 

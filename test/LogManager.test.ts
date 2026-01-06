@@ -38,11 +38,12 @@ describe('LogManager', () => {
     pages.set(2, page2Data)
 
     await logManager.append(pages)
+    await logManager.writeCommitMarker()
     logManager.close()
 
-    // Verify file size: (4 + 1024) * 2 = 2056 bytes
+    // Verify file size: (4 + 1024) * 2 + (4 + 1024) = 1028 * 3 = 3084 bytes
     const stats = fs.statSync(walPath)
-    expect(stats.size).toBe(2056)
+    expect(stats.size).toBe(3084)
   })
 
   test('should read all pages from log', async () => {
@@ -54,16 +55,19 @@ describe('LogManager', () => {
     // Update page 1 later
     const page1DataUpdated = new Uint8Array(pageSize).fill(3)
 
+
     // First transaction
     const pages1 = new Map<number, Uint8Array>()
     pages1.set(1, page1Data)
     pages1.set(2, page2Data)
     await logManager.append(pages1)
+    await logManager.writeCommitMarker()
 
     // Second transaction (update page 1)
     const pages2 = new Map<number, Uint8Array>()
     pages2.set(1, page1DataUpdated)
     await logManager.append(pages2)
+    await logManager.writeCommitMarker()
 
     logManager.close()
 
@@ -84,6 +88,7 @@ describe('LogManager', () => {
     const pages = new Map<number, Uint8Array>()
     pages.set(1, new Uint8Array(pageSize).fill(1))
     await logManager.append(pages)
+    await logManager.writeCommitMarker()
 
     await logManager.clear()
 
@@ -105,6 +110,7 @@ describe('LogManager', () => {
     pages.set(1, page1Data)
 
     await logManager.append(pages)
+    await logManager.writeCommitMarker()
     logManager.close()
 
     // Reopen
@@ -128,6 +134,7 @@ describe('LogManager', () => {
     }
 
     await logManager.append(pages)
+    await logManager.writeCommitMarker()
 
     const restored = logManager.readAllSync()
     logManager.close()

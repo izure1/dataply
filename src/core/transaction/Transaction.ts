@@ -122,10 +122,25 @@ export class Transaction {
   }
 
   /**
+   * Prepares the transaction for commit (Phase 1 of 2PC).
+   * Writes dirty pages to WAL but does not update the database file yet.
+   */
+  async prepare(): Promise<void> {
+    await this.vfs.prepareCommit(this)
+  }
+
+  /**
    * Commits the transaction.
    */
   async commit(): Promise<void> {
-    await this.vfs.commit(this)
+    // If prepare was not called externally, call it now (Auto-Commit mode)
+    // We can check this by seeing if WAL has been written? 
+    // Or we can rely on VFS to handle idempotency of prepareCommit.
+    // For now, we assume simple local commit flow executes both.
+
+    await this.vfs.prepareCommit(this)
+    await this.vfs.finalizeCommit(this)
+
     await TxContext.run(this, async () => {
       for (const hook of this.commitHooks) {
         await hook()

@@ -103,13 +103,13 @@ export class VirtualFileSystem {
   }
 
   /**
-   * Commits the transaction.
+   * Prepares the transaction for commit (Phase 1).
+   * Writes dirty pages to WAL but does not update the main database file.
    * @param tx Transaction
    */
-  async commit(tx: Transaction): Promise<void> {
+  async prepareCommit(tx: Transaction): Promise<void> {
     const dirtyPages = tx.__getDirtyPages()
     if (dirtyPages.size === 0) {
-      this.cleanupTransaction(tx)
       return
     }
 
@@ -125,6 +125,24 @@ export class VirtualFileSystem {
     if (this.logManager && dirtyPageMap.size > 0) {
       // WAL에 기록 (원자적)
       await this.logManager.append(dirtyPageMap)
+    }
+  }
+
+  /**
+   * Finalizes the transaction commit (Phase 2).
+   * Writes commit marker to WAL and updates the main database file (Checkpoint).
+   * @param tx Transaction
+   */
+  async finalizeCommit(tx: Transaction): Promise<void> {
+    const dirtyPages = tx.__getDirtyPages()
+    if (dirtyPages.size === 0) {
+      this.cleanupTransaction(tx)
+      return
+    }
+
+    // 1. Commit Marker 기록 (WAL 유효성 보장)
+    if (this.logManager) {
+      await this.logManager.writeCommitMarker()
     }
 
     // 2. 디스크 동기화 (Checkpoint) - 해당 트랜잭션의 페이지만 반영
@@ -148,33 +166,24 @@ export class VirtualFileSystem {
     await Promise.all(promises)
 
     // 3. 로그 비우기
-    // 주의: 다중 트랜잭션 환경에서는 다른 트랜잭션의 로그가 섞여 있을 수 있음.
-    // 하지만 현재 구조는 커밋 시 즉시 동기화를 수행하므로 (해당 tx에 대해) WAL은 비워도 되는 상태가 됨.
-    // 다른 트랜잭션의 WAL 로그가 섞여 있다면? 
-    // LogManager.append는 파일 끝에 추가함.
-    // LogManager.clear()는 파일을 비움.
-    // 만약 Tx A 커밋 중 Tx B가 로그를 썼다면? -> LockManager가 페이지 단위 락을 걸지만 WAL 파일 자체는?
-    // LogManager가 내부적으로 파일 락을 쓰거나 Append 시 순서를 보장해야 함.
-    // 일단 현재는 clear()를 함부로 하면 위험할 수 있음 (다른 트랜잭션의 Redo 로그 유실 가능).
-    // *해결책*: WAL은 Crash Recovery용이므로, 동기화가 완료된 데이터에 대한 로그는 더 이상 필요 없음.
-    // 다만 아직 동기화되지 않은 다른 활성 트랜잭션의 로그는 지우면 안 됨.
-    // 따라서 활성 트랜잭션이 하나도 없을 때만 비우거나, 체크포인트 메커니즘이 필요함.
-    // 간단한 타협: 활성 트랜잭션 수가 0일 때 비우기.
-    // 하지만 파일이 무한히 커지는 것을 막아야 함.
-    // -> 커밋 시마다 동기화를 하므로, WAL은 "현재 진행 중인 트랜잭션들"의 로그만 관리하면 됨.
-    // Tx A 커밋 -> 동기화 A -> A의 로그 필요 없음.
-    // Tx B 활성 -> B의 로그 필요함.
-    // B의 로그가 A 뒤에 있다면? A 로그만 지울 수 있나?
-    // WAL 파일의 앞부분을 잘라내는 Truncate 기능이 필요함.
-    // 현재는 복잡성을 낮추기 위해 '활성 트랜잭션 수 0'일 때 비우는 것으로 타협.
-
-    if (this.activeTransactions.size <= 1) { // 본인(self)만 남은 경우 (곧 0이 됨)
+    // 본인(self)만 남은 경우 (곧 0이 됨)
+    if (this.activeTransactions.size <= 1) {
       if (this.logManager) {
         await this.logManager.clear()
       }
     }
 
     this.cleanupTransaction(tx)
+  }
+
+  /**
+   * Commits the transaction (Single Phase).
+   * Wrapper for prepare + finalize for backward compatibility.
+   * @param tx Transaction
+   */
+  async commit(tx: Transaction): Promise<void> {
+    await this.prepareCommit(tx)
+    await this.finalizeCommit(tx)
   }
 
   /**

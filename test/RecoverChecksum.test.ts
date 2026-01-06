@@ -9,17 +9,35 @@ describe('Recovery Checksum with Dataply API', () => {
   const WAL_FILE = path.join(TEST_DIR, 'test_recovery_checksum.wal')
   const PAGE_SIZE = 4096
 
-  beforeEach(async () => {
-    if (fs.existsSync(TEST_DIR)) {
-      await fs.promises.rm(TEST_DIR, { recursive: true, force: true })
+  const cleanup = async () => {
+    for (let i = 0; i < 5; i++) {
+      try {
+        if (fs.existsSync(TEST_DIR)) {
+          await fs.promises.rm(TEST_DIR, { recursive: true, force: true })
+        }
+        await fs.promises.mkdir(TEST_DIR)
+        break
+      } catch (e: any) {
+        if ((e.code === 'EBUSY' || e.code === 'ENOTEMPTY') && i < 4) {
+          await new Promise(resolve => setTimeout(resolve, 100))
+          continue
+        }
+        throw e
+      }
     }
-    await fs.promises.mkdir(TEST_DIR)
+  }
+
+  beforeEach(async () => {
+    await cleanup()
   })
 
   afterEach(async () => {
-    if (fs.existsSync(TEST_DIR)) {
-      await fs.promises.rm(TEST_DIR, { recursive: true, force: true })
-    }
+    // Just remove
+    try {
+      if (fs.existsSync(TEST_DIR)) {
+        await fs.promises.rm(TEST_DIR, { recursive: true, force: true })
+      }
+    } catch (e) { }
   })
 
   test('should ignore corrupted pages in WAL during recovery', async () => {
@@ -56,6 +74,7 @@ describe('Recovery Checksum with Dataply API', () => {
     const pages = new Map()
     pages.set(pageId, pageData)
     await logManager.append(pages) // Valid entry
+    await logManager.writeCommitMarker()
 
     await logManager.close()
 
@@ -107,6 +126,7 @@ describe('Recovery Checksum with Dataply API', () => {
     const pages = new Map()
     pages.set(pageId, pageData)
     await logManager.append(pages)
+    await logManager.writeCommitMarker()
     await logManager.close()
 
     // 2. Open Dataply
