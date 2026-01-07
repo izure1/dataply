@@ -305,14 +305,11 @@ export class PageFileSystem {
       // 데이터 쓰기
       page.set(chunk, bodyStart + currentOffset)
 
-      // 남은 용량 업데이트 (더 많이 썼을 경우에만 줄어듦)
+      // 남은 용량 업데이트
+      // 기존 데이터보다 짧아져서 남은 용량이 늘어나는 경우도 반영해야 하므로 조건문 제거
       const currentUsedSize = currentOffset + writeSize
-      const currentRemaining = manager.getRemainingCapacity(page)
       const newRemaining = bodySize - currentUsedSize
-
-      if (newRemaining < currentRemaining) {
-        manager.setRemainingCapacity(page, newRemaining)
-      }
+      manager.setRemainingCapacity(page, newRemaining)
 
       await this.setPage(currentPageId, page, tx)
 
@@ -329,6 +326,22 @@ export class PageFileSystem {
           currentPageId = newPageId
         } else {
           currentPageId = nextPageId
+        }
+      } else {
+        // 데이터 쓰기가 완료되었는데 다음 페이지가 남아있다면 잘라내기(Truncate)
+        let nextPageId = manager.getNextPageId(page)
+        if (nextPageId !== -1) {
+          let pendingFreePageId = nextPageId
+          while (pendingFreePageId !== -1) {
+            const pendingPage = await this.get(pendingFreePageId, tx)
+            const pendingManager = this.pageFactory.getManager(pendingPage)
+            const next = pendingManager.getNextPageId(pendingPage)
+
+            await this.setFreePage(pendingFreePageId, tx)
+            pendingFreePageId = next
+          }
+          manager.setNextPageId(page, -1)
+          await this.setPage(currentPageId, page, tx)
         }
       }
     }
