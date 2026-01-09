@@ -271,7 +271,27 @@ export class DataplyAPI {
       if (typeof data === 'string') {
         data = this.textCodec.encode(data)
       }
-      return this.rowTableEngine.insert(data, incrementRowCount, tx)
+      return this.rowTableEngine.insert(data, incrementRowCount, false, tx)
+    }, tx)
+  }
+
+  /**
+   * Inserts overflow data forcly. Returns the PK of the added row.
+   * @param data Data to add
+   * @param incrementRowCount Whether to increment the row count to metadata
+   * @param tx Transaction
+   * @returns PK of the added data
+   */
+  async insertAsOverflow(data: string | Uint8Array, incrementRowCount?: boolean, tx?: Transaction): Promise<number> {
+    if (!this.initialized) {
+      throw new Error('Dataply instance is not initialized')
+    }
+    return this.runWithDefault((tx) => {
+      incrementRowCount = incrementRowCount ?? true
+      if (typeof data === 'string') {
+        data = this.textCodec.encode(data)
+      }
+      return this.rowTableEngine.insert(data, incrementRowCount, true, tx)
     }, tx)
   }
 
@@ -292,7 +312,7 @@ export class DataplyAPI {
       const pks: number[] = []
       for (const data of dataList) {
         const encoded = typeof data === 'string' ? this.textCodec.encode(data) : data
-        const pk = await this.rowTableEngine.insert(encoded, incrementRowCount, tx)
+        const pk = await this.rowTableEngine.insert(encoded, incrementRowCount, false, tx)
         pks.push(pk)
       }
       return pks

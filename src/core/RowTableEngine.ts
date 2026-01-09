@@ -117,7 +117,7 @@ export class RowTableEngine {
    * @param tx Transaction
    * @returns PK of the inserted data
    */
-  async insert(data: Uint8Array, incrementRowCount: boolean, tx: Transaction): Promise<number> {
+  async insert(data: Uint8Array, incrementRowCount: boolean, overflowForcly: boolean, tx: Transaction): Promise<number> {
     // 메타데이터(Page 0) 쓰기 락 획득 (Writers serialize)
     // Select(Readers)는 락을 체크하지 않으므로(Snapshot) 조회가 차단되지 않습니다.
     await tx.__acquireWriteLock(0)
@@ -134,7 +134,7 @@ export class RowTableEngine {
     const willRowSize = this.getRequiredRowSize(data)
 
     // overflow page를 생성해야하는 거대한 데이터라면 overflow page를 생성하고, 해당 페이지에 행을 삽입합니다.
-    if (willRowSize > this.maxBodySize) {
+    if ((willRowSize > this.maxBodySize) || overflowForcly) {
       // overflow page를 생성합니다.
       const overflowPageId = await this.pfs.appendNewPage(this.overflowPageManager.pageType, tx)
 

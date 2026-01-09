@@ -27,7 +27,7 @@ describe('Row Count Test', () => {
       let count = await rowTableEngine.getRowCount(tx)
       expect(count).toBe(0)
 
-      await rowTableEngine.insert(new Uint8Array([1, 2, 3]), true, tx)
+      await rowTableEngine.insert(new Uint8Array([1, 2, 3]), true, false, tx)
 
       count = await rowTableEngine.getRowCount(tx)
       expect(count).toBe(1)
@@ -39,7 +39,7 @@ describe('Row Count Test', () => {
     const tx = dataply.createTransaction()
 
     await TxContext.run(tx, async () => {
-      const pk = await rowTableEngine.insert(new Uint8Array([1, 2, 3]), true, tx)
+      const pk = await rowTableEngine.insert(new Uint8Array([1, 2, 3]), true, false, tx)
       expect(await rowTableEngine.getRowCount(tx)).toBe(1)
 
       await rowTableEngine.delete(pk, true, tx)
@@ -52,7 +52,7 @@ describe('Row Count Test', () => {
     const tx = dataply.createTransaction()
 
     await TxContext.run(tx, async () => {
-      const pk = await rowTableEngine.insert(new Uint8Array([1, 2, 3]), true, tx)
+      const pk = await rowTableEngine.insert(new Uint8Array([1, 2, 3]), true, false, tx)
       expect(await rowTableEngine.getRowCount(tx)).toBe(1)
 
       // Update with same size
