@@ -133,11 +133,6 @@ export class Transaction {
    * Commits the transaction.
    */
   async commit(): Promise<void> {
-    // If prepare was not called externally, call it now (Auto-Commit mode)
-    // We can check this by seeing if WAL has been written? 
-    // Or we can rely on VFS to handle idempotency of prepareCommit.
-    // For now, we assume simple local commit flow executes both.
-
     await this.vfs.prepareCommit(this)
     await this.vfs.finalizeCommit(this)
 
