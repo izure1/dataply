@@ -3,7 +3,7 @@ export * from 'ryoiki'
 export * from 'cache-entanglement'
 
 export type { DataplyOptions } from './types'
-export type * from './core/Page'
+export * from './core/Page'
 export { Dataply } from './core/Dataply'
 export { DataplyAPI } from './core/DataplyAPI'
 export { Transaction } from './core/transaction/Transaction'
