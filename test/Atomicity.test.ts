@@ -1,6 +1,5 @@
 
 import { Dataply } from '../src/core/Dataply'
-import { Transaction } from '../src/core/transaction/Transaction'
 import fs from 'node:fs'
 import path from 'node:path'
 

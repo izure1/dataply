@@ -11,7 +11,7 @@ import { Transaction } from './transaction/Transaction'
 import { TxContext } from './transaction/TxContext'
 
 interface DataplyAPISyncHook {
-  create: (fileData: Uint8Array, file: string, fileHandle: number, options: Required<DataplyOptions>) => Uint8Array
+  create: (_: void, file: string, fileHandle: number, options: Required<DataplyOptions>) => void
 }
 
 interface DataplyAPIAsyncHook {
@@ -65,7 +65,7 @@ export class DataplyAPI {
    * @param fileHandle File handle
    * @returns Whether the page file is a valid Dataply file
    */
-  private verifyFormat(fileHandle: number): boolean {
+  protected verifyFormat(fileHandle: number): boolean {
     const size = MetadataPageManager.CONSTANT.OFFSET_MAGIC_STRING + MetadataPageManager.CONSTANT.MAGIC_STRING.length
     const metadataPage = new Uint8Array(size)
     fs.readSync(fileHandle, metadataPage, 0, size, 0)
@@ -80,7 +80,7 @@ export class DataplyAPI {
    * @param options Options
    * @returns Options filled without omissions
    */
-  private verboseOptions(options?: DataplyOptions): Required<DataplyOptions> {
+  protected verboseOptions(options?: DataplyOptions): Required<DataplyOptions> {
     return Object.assign({
       pageSize: 8192,
       pageCacheCapacity: 10000,
@@ -95,8 +95,8 @@ export class DataplyAPI {
    * @param file Database file path
    * @param fileHandle File handle
    */
-  private initializeFile(file: string, fileHandle: number, options: Required<DataplyOptions>): void {
-    const fileData = this.hook.sync.trigger('create', new Uint8Array(), (prepareFileData) => {
+  protected initializeFile(file: string, fileHandle: number, options: Required<DataplyOptions>): void {
+    this.hook.sync.trigger('create', undefined, () => {
       const metadataPageManager = new MetadataPageManager()
       const bitmapPageManager = new BitmapPageManager()
       const dataPageManager = new DataPageManager()
@@ -140,15 +140,12 @@ export class DataplyAPI {
         options.pageSize - DataPageManager.CONSTANT.SIZE_PAGE_HEADER
       )
 
-      return new Uint8Array([
-        ...prepareFileData,
+      fs.appendFileSync(fileHandle, new Uint8Array([
         ...metadataPage,
         ...bitmapPage,
         ...dataPage,
-      ])
+      ]))
     }, file, fileHandle, options)
-
-    fs.appendFileSync(fileHandle, fileData)
   }
 
   /**
@@ -157,7 +154,7 @@ export class DataplyAPI {
    * @param options Options
    * @returns File handle
    */
-  private createOrOpen(file: string, options: Required<DataplyOptions>): number {
+  protected createOrOpen(file: string, options: Required<DataplyOptions>): number {
     let fileHandle: number
     if (options.pageCacheCapacity < 100) {
       throw new Error('Page cache capacity must be at least 100')
@@ -229,7 +226,7 @@ export class DataplyAPI {
    * @param tx The transaction to use. If not provided, a new transaction is created.
    * @returns The result of the callback function.
    */
-  private async runWithDefault<T>(callback: (tx: Transaction) => Promise<T>, tx?: Transaction): Promise<T> {
+  protected async runWithDefault<T>(callback: (tx: Transaction) => Promise<T>, tx?: Transaction): Promise<T> {
     const isInternalTx = !tx
     if (!tx) {
       tx = this.createTransaction()
