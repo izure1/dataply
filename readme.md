@@ -178,6 +178,8 @@ Rolls back all added transactions.
 
 If you want to extend Dataply's functionality, use the `DataplyAPI` class. Unlike the standard `Dataply` class, `DataplyAPI` provides direct access to internal components like `PageFileSystem` or `RowTableEngine`, offering much more flexibility for custom implementations.
 
+For a detailed guide and examples on how to extend Dataply using Hooks, see [Extending Dataply Guide](docs/extension.md).
+
 ### Using DataplyAPI
 
 ```typescript
@@ -222,7 +224,7 @@ graph TD
 - **Fixed-size Pages**: All data is managed in fixed-size units (default 8KB) called pages.
 - **VFS Cache**: Minimizes disk I/O by caching frequently accessed pages in memory.
 - **Dirty Page Tracking**: Tracks modified pages (Dirty) to synchronize them with disk efficiently only at the time of commit.
-- **Detailed Structure**: For technical details on the physical layout, see [structure.md](structure.md).
+- **Detailed Structure**: For technical details on the physical layout, see [structure.md](docs/structure.md).
 
 #### Page & Row Layout
 Dataply uses a **Slotted Page** architecture to manage records efficiently:

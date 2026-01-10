@@ -1,6 +1,6 @@
 import fs from 'node:fs'
 import type { DataplyOptions, MetadataPage, BitmapPage, DataPage, DataplyMetadata } from '../types'
-import { type IHookall, type IHookallSync, useHookall, useHookallSync } from 'hookall'
+import { type IHookall, useHookall } from 'hookall'
 import { PageFileSystem } from './PageFileSystem'
 import { MetadataPageManager, DataPageManager, BitmapPageManager } from './Page'
 import { RowTableEngine } from './RowTableEngine'
@@ -10,12 +10,8 @@ import { LockManager } from './transaction/LockManager'
 import { Transaction } from './transaction/Transaction'
 import { TxContext } from './transaction/TxContext'
 
-interface DataplyAPISyncHook {
-  create: (_: void, file: string, fileHandle: number, options: Required<DataplyOptions>) => void
-}
-
 interface DataplyAPIAsyncHook {
-  init: () => Promise<void>
+  init: (tx: Transaction, isNewlyCreated: boolean) => Promise<Transaction>
   close: () => Promise<void>
 }
 
@@ -23,28 +19,37 @@ interface DataplyAPIAsyncHook {
  * Class for managing Dataply files.
  */
 export class DataplyAPI {
+  /**
+   * These are not the same options that were used when the database was created.
+   * They are simply the options received when the instance was created.
+   * If you want to retrieve the options used during database creation, use `getMetadata()` instead.
+   */
   readonly options: Required<DataplyOptions>
+  /** File handle. Database file descriptor */
   protected readonly fileHandle: number
+  /** Page file system. Used for managing pages. If you know what it is, you can skip this. */
   protected readonly pfs: PageFileSystem
+  /** Row table engine. Used for managing rows. If you know what it is, you can skip this. */
   protected readonly rowTableEngine: RowTableEngine
+  /** Lock manager. Used for managing transactions */
   protected readonly lockManager: LockManager
+  /** Text codec. Used for encoding and decoding text data */
   protected readonly textCodec: TextCodec
-  protected readonly hook: {
-    sync: IHookallSync<DataplyAPISyncHook>
-    async: IHookall<DataplyAPIAsyncHook>
-  }
+  /** Hook */
+  protected readonly hook: IHookall<DataplyAPIAsyncHook>
+  /** Whether the database was initialized via `init()` */
   protected initialized: boolean
+  /** Whether the database was created this time. */
+  private readonly isNewlyCreated: boolean
   private txIdCounter: number
 
   constructor(
     protected readonly file: string,
     options: DataplyOptions
   ) {
-    this.hook = {
-      sync: useHookallSync(this),
-      async: useHookall(this),
-    }
+    this.hook = useHookall(this)
     this.options = this.verboseOptions(options)
+    this.isNewlyCreated = !fs.existsSync(file)
     this.fileHandle = this.createOrOpen(file, this.options)
     this.pfs = new PageFileSystem(
       this.fileHandle,
@@ -96,56 +101,54 @@ export class DataplyAPI {
    * @param fileHandle File handle
    */
   protected initializeFile(file: string, fileHandle: number, options: Required<DataplyOptions>): void {
-    this.hook.sync.trigger('create', undefined, () => {
-      const metadataPageManager = new MetadataPageManager()
-      const bitmapPageManager = new BitmapPageManager()
-      const dataPageManager = new DataPageManager()
-      const metadataPage = new Uint8Array(options.pageSize) as MetadataPage
-      const dataPage = new Uint8Array(options.pageSize) as DataPage
+    const metadataPageManager = new MetadataPageManager()
+    const bitmapPageManager = new BitmapPageManager()
+    const dataPageManager = new DataPageManager()
+    const metadataPage = new Uint8Array(options.pageSize) as MetadataPage
+    const dataPage = new Uint8Array(options.pageSize) as DataPage
 
-      // Initialize the first metadata page
-      metadataPageManager.initial(
-        metadataPage,
-        MetadataPageManager.CONSTANT.PAGE_TYPE_METADATA,
-        0,
-        0,
-        options.pageSize - MetadataPageManager.CONSTANT.SIZE_PAGE_HEADER
-      )
-      metadataPageManager.setMagicString(metadataPage)
-      metadataPageManager.setPageSize(metadataPage, options.pageSize)
+    // Initialize the first metadata page
+    metadataPageManager.initial(
+      metadataPage,
+      MetadataPageManager.CONSTANT.PAGE_TYPE_METADATA,
+      0,
+      0,
+      options.pageSize - MetadataPageManager.CONSTANT.SIZE_PAGE_HEADER
+    )
+    metadataPageManager.setMagicString(metadataPage)
+    metadataPageManager.setPageSize(metadataPage, options.pageSize)
 
-      metadataPageManager.setRootIndexPageId(metadataPage, -1)
-      metadataPageManager.setBitmapPageId(metadataPage, 1)
-      metadataPageManager.setLastInsertPageId(metadataPage, 2)
+    metadataPageManager.setRootIndexPageId(metadataPage, -1)
+    metadataPageManager.setBitmapPageId(metadataPage, 1)
+    metadataPageManager.setLastInsertPageId(metadataPage, 2)
 
-      metadataPageManager.setPageCount(metadataPage, 3)
-      metadataPageManager.setFreePageId(metadataPage, -1)
+    metadataPageManager.setPageCount(metadataPage, 3)
+    metadataPageManager.setFreePageId(metadataPage, -1)
 
-      // Initialize the second bitmap page
-      const bitmapPage = new Uint8Array(options.pageSize) as BitmapPage
-      bitmapPageManager.initial(
-        bitmapPage,
-        BitmapPageManager.CONSTANT.PAGE_TYPE_BITMAP,
-        1,
-        -1,
-        options.pageSize - BitmapPageManager.CONSTANT.SIZE_PAGE_HEADER
-      )
+    // Initialize the second bitmap page
+    const bitmapPage = new Uint8Array(options.pageSize) as BitmapPage
+    bitmapPageManager.initial(
+      bitmapPage,
+      BitmapPageManager.CONSTANT.PAGE_TYPE_BITMAP,
+      1,
+      -1,
+      options.pageSize - BitmapPageManager.CONSTANT.SIZE_PAGE_HEADER
+    )
 
-      // Initialize the third data page
-      dataPageManager.initial(
-        dataPage,
-        DataPageManager.CONSTANT.PAGE_TYPE_DATA,
-        2,
-        -1,
-        options.pageSize - DataPageManager.CONSTANT.SIZE_PAGE_HEADER
-      )
+    // Initialize the third data page
+    dataPageManager.initial(
+      dataPage,
+      DataPageManager.CONSTANT.PAGE_TYPE_DATA,
+      2,
+      -1,
+      options.pageSize - DataPageManager.CONSTANT.SIZE_PAGE_HEADER
+    )
 
-      fs.appendFileSync(fileHandle, new Uint8Array([
-        ...metadataPage,
-        ...bitmapPage,
-        ...dataPage,
-      ]))
-    }, file, fileHandle, options)
+    fs.appendFileSync(fileHandle, new Uint8Array([
+      ...metadataPage,
+      ...bitmapPage,
+      ...dataPage,
+    ]))
   }
 
   /**
@@ -199,11 +202,12 @@ export class DataplyAPI {
     if (this.initialized) {
       return
     }
-    await this.runWithDefault(() => {
-      return this.hook.async.trigger('init', void 0, async () => {
+    await this.runWithDefault(async (tx) => {
+      await this.hook.trigger('init', tx, async (tx) => {
         await this.rowTableEngine.init()
         this.initialized = true
-      })
+        return tx
+      }, this.isNewlyCreated)
     })
   }
 
@@ -382,7 +386,7 @@ export class DataplyAPI {
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
-    return this.hook.async.trigger('close', void 0, async () => {
+    return this.hook.trigger('close', void 0, async () => {
       await this.pfs.close()
       fs.closeSync(this.fileHandle)
     })
