@@ -3,7 +3,7 @@ import { SerializeStrategyAsync } from 'serializable-bptree'
 import { PageFileSystem } from './PageFileSystem'
 import { IndexPageManager, PageManager, PageManagerFactory } from './Page'
 import { TextCodec } from '../utils/TextCodec'
-import { TxContext } from './transaction/TxContext'
+import { TransactionContext } from './transaction/TxContext'
 
 export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number> {
   protected rootPageId = 0
@@ -11,7 +11,11 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
   protected indexPageManger: IndexPageManager
   protected codec: TextCodec
 
-  constructor(readonly order: number, protected readonly pfs: PageFileSystem) {
+  constructor(
+    readonly order: number,
+    protected readonly pfs: PageFileSystem,
+    protected readonly txContext: TransactionContext
+  ) {
     super(order)
     this.factory = new PageManagerFactory()
     this.indexPageManger = this.factory.getManagerFromType(PageManager.CONSTANT.PAGE_TYPE_INDEX) as IndexPageManager
@@ -19,13 +23,13 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
   }
 
   async id(isLeaf: boolean): Promise<string> {
-    const tx = TxContext.get()!
+    const tx = this.txContext.get()!
     const pageId = await this.pfs.appendNewPage(PageManager.CONSTANT.PAGE_TYPE_INDEX, tx)
     return pageId.toString()
   }
 
   async read(id: string): Promise<BPTreeNode<number, number>> {
-    const tx = TxContext.get()!
+    const tx = this.txContext.get()!
     const pageId = +(id)
     const page = await this.pfs.get(pageId, tx)
 
@@ -60,7 +64,7 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
   }
 
   async write(id: string, node: BPTreeNode<number, number>): Promise<void> {
-    const tx = TxContext.get()!
+    const tx = this.txContext.get()!
     const pageId = +(id)
     const page = await this.pfs.get(pageId, tx)
     if (node.leaf) {
@@ -97,7 +101,7 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
   }
 
   async delete(id: string): Promise<void> {
-    const tx = TxContext.get()!
+    const tx = this.txContext.get()!
     const manager = this.factory.getManagerFromType(PageManager.CONSTANT.PAGE_TYPE_INDEX)
     let pageId = +(id)
     while (true) {
@@ -115,7 +119,7 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
   }
 
   async readHead(): Promise<SerializeStrategyHead | null> {
-    const tx = TxContext.get()!
+    const tx = this.txContext.get()!
     const metadataPage = await this.pfs.getMetadata(tx)
     const manager = this.factory.getManager(metadataPage)
     const rootIndexPageId = manager.getRootIndexPageId(metadataPage)
@@ -130,7 +134,7 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
   }
 
   async writeHead(head: SerializeStrategyHead): Promise<void> {
-    const tx = TxContext.get()!
+    const tx = this.txContext.get()!
     const { root, order } = head
     if (root === null) {
       throw new Error('')

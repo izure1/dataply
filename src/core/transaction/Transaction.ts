@@ -1,6 +1,6 @@
 import { LockManager } from './LockManager'
 import { VirtualFileSystem } from '../VirtualFileSystem'
-import { TxContext } from './TxContext'
+import { TransactionContext } from './TxContext'
 
 /**
  * Transaction class.
@@ -29,8 +29,9 @@ export class Transaction {
    */
   constructor(
     id: number,
-    private vfs: VirtualFileSystem,
-    private lockManager: LockManager
+    readonly context: TransactionContext,
+    private readonly vfs: VirtualFileSystem,
+    private readonly lockManager: LockManager
   ) {
     this.id = id
   }
@@ -136,7 +137,7 @@ export class Transaction {
     await this.vfs.prepareCommit(this)
     await this.vfs.finalizeCommit(this)
 
-    await TxContext.run(this, async () => {
+    await this.context.run(this, async () => {
       for (const hook of this.commitHooks) {
         await hook()
       }

@@ -8,7 +8,7 @@ import { TextCodec } from '../utils/TextCodec'
 import { catchPromise } from '../utils/catchPromise'
 import { LockManager } from './transaction/LockManager'
 import { Transaction } from './transaction/Transaction'
-import { TxContext } from './transaction/TxContext'
+import { TransactionContext } from './transaction/TxContext'
 
 interface DataplyAPIAsyncHook {
   init: (tx: Transaction, isNewlyCreated: boolean) => Promise<Transaction>
@@ -35,6 +35,8 @@ export class DataplyAPI {
   protected readonly lockManager: LockManager
   /** Text codec. Used for encoding and decoding text data */
   protected readonly textCodec: TextCodec
+  /** Transaction context */
+  protected readonly txContext: TransactionContext
   /** Hook */
   protected readonly hook: IHookall<DataplyAPIAsyncHook>
   /** Whether the database was initialized via `init()` */
@@ -58,8 +60,9 @@ export class DataplyAPI {
       this.options.wal
     )
     this.textCodec = new TextCodec()
+    this.txContext = new TransactionContext()
     this.lockManager = new LockManager()
-    this.rowTableEngine = new RowTableEngine(this.pfs, this.options)
+    this.rowTableEngine = new RowTableEngine(this.pfs, this.txContext, this.options)
     this.initialized = false
     this.txIdCounter = 0
   }
@@ -218,7 +221,12 @@ export class DataplyAPI {
    * @returns Transaction object
    */
   createTransaction(): Transaction {
-    return new Transaction(++this.txIdCounter, this.pfs.vfsInstance, this.lockManager)
+    return new Transaction(
+      ++this.txIdCounter,
+      this.txContext,
+      this.pfs.vfsInstance,
+      this.lockManager
+    )
   }
 
   /**
@@ -235,7 +243,7 @@ export class DataplyAPI {
     if (!tx) {
       tx = this.createTransaction()
     }
-    const [error, result] = await catchPromise(TxContext.run(tx, () => callback(tx)))
+    const [error, result] = await catchPromise(this.txContext.run(tx, () => callback(tx)))
     if (error) {
       if (isInternalTx) {
         await tx.rollback()

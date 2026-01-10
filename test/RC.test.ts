@@ -1,5 +1,4 @@
 import { Dataply } from '../src/core/Dataply'
-import { TxContext } from '../src/core/transaction/TxContext'
 import { type RowTableEngine } from '../src/core/RowTableEngine'
 import fs from 'node:fs'
 
@@ -23,7 +22,7 @@ describe('Row Count Test', () => {
     const rowTableEngine = (dataply as any).api.rowTableEngine as RowTableEngine
     const tx = dataply.createTransaction()
 
-    await TxContext.run(tx, async () => {
+    await tx.context.run(tx, async () => {
       let count = await rowTableEngine.getRowCount(tx)
       expect(count).toBe(0)
 
@@ -38,7 +37,7 @@ describe('Row Count Test', () => {
     const rowTableEngine = (dataply as any).api.rowTableEngine as RowTableEngine
     const tx = dataply.createTransaction()
 
-    await TxContext.run(tx, async () => {
+    await tx.context.run(tx, async () => {
       const pk = await rowTableEngine.insert(new Uint8Array([1, 2, 3]), true, false, tx)
       expect(await rowTableEngine.getRowCount(tx)).toBe(1)
 
@@ -51,7 +50,7 @@ describe('Row Count Test', () => {
     const rowTableEngine = (dataply as any).api.rowTableEngine as RowTableEngine
     const tx = dataply.createTransaction()
 
-    await TxContext.run(tx, async () => {
+    await tx.context.run(tx, async () => {
       const pk = await rowTableEngine.insert(new Uint8Array([1, 2, 3]), true, false, tx)
       expect(await rowTableEngine.getRowCount(tx)).toBe(1)
 

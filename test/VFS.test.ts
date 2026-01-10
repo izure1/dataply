@@ -3,12 +3,14 @@ import path from 'node:path'
 import { VirtualFileSystem } from '../src/core/VirtualFileSystem'
 import { Transaction } from '../src/core/transaction/Transaction'
 import { LockManager } from '../src/core/transaction/LockManager'
+import { TransactionContext } from '../src/core/transaction/TxContext'
 
 describe('VirtualFileSystem', () => {
   const TEST_FILE = path.join(__dirname, 'test_vfs.dat')
   let fd: number
   let vfs: VirtualFileSystem
   let lockManager: LockManager
+  let txContext: TransactionContext
 
   afterEach(async () => {
     if (vfs) {
@@ -36,7 +38,8 @@ describe('VirtualFileSystem', () => {
     fd = fs.openSync(TEST_FILE, 'w+')
     vfs = new VirtualFileSystem(fd, pageSize, 10000)
     lockManager = new LockManager()
-    const tx = new Transaction(1, vfs, lockManager)
+    txContext = new TransactionContext()
+    const tx = new Transaction(1, txContext, vfs, lockManager)
 
     const data1 = Buffer.from('Hello World 1234') // 16 bytes
     await vfs.write(0, data1, tx)
@@ -52,7 +55,8 @@ describe('VirtualFileSystem', () => {
     fd = fs.openSync(TEST_FILE, 'w+')
     vfs = new VirtualFileSystem(fd, pageSize, 10000)
     lockManager = new LockManager()
-    const tx = new Transaction(1, vfs, lockManager)
+    txContext = new TransactionContext()
+    const tx = new Transaction(1, txContext, vfs, lockManager)
 
     // Page 0: 0-15
     // Page 1: 16-31
@@ -75,7 +79,8 @@ describe('VirtualFileSystem', () => {
     fd = fs.openSync(TEST_FILE, 'w+')
     vfs = new VirtualFileSystem(fd, pageSize, 10000)
     lockManager = new LockManager()
-    const tx = new Transaction(1, vfs, lockManager)
+    txContext = new TransactionContext()
+    const tx = new Transaction(1, txContext, vfs, lockManager)
 
     const data = Buffer.from('PersistMePlease!')
     await vfs.write(0, data, tx)
@@ -107,7 +112,8 @@ describe('VirtualFileSystem', () => {
     fd = fs.openSync(TEST_FILE, 'w+')
     vfs = new VirtualFileSystem(fd, pageSize, 10000)
     lockManager = new LockManager()
-    const tx = new Transaction(1, vfs, lockManager)
+    txContext = new TransactionContext()
+    const tx = new Transaction(1, txContext, vfs, lockManager)
 
     const data1 = Buffer.from('AAAA')
     const data2 = Buffer.from('BBBB')
@@ -128,7 +134,8 @@ describe('VirtualFileSystem', () => {
     fd = fs.openSync(TEST_FILE, 'w+')
     vfs = new VirtualFileSystem(fd, pageSize, 10000)
     lockManager = new LockManager()
-    const tx = new Transaction(1, vfs, lockManager)
+    txContext = new TransactionContext()
+    const tx = new Transaction(1, txContext, vfs, lockManager)
 
     // 1. Initial State
     expect(fs.fstatSync(fd).size).toBe(0)
@@ -159,7 +166,8 @@ describe('VirtualFileSystem', () => {
     fd = fs.openSync(TEST_FILE, 'w+')
     vfs = new VirtualFileSystem(fd, pageSize, 10000)
     lockManager = new LockManager()
-    const tx = new Transaction(1, vfs, lockManager)
+    txContext = new TransactionContext()
+    const tx = new Transaction(1, txContext, vfs, lockManager)
 
     // 1. Fill first page
     const page1Data = new Uint8Array(pageSize).fill(1)

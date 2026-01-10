@@ -4,8 +4,8 @@ import { PageFileSystem } from '../src/core/PageFileSystem'
 import { MetadataPageManager, PageManager, PageManagerFactory } from '../src/core/Page'
 import { MetadataPage } from '../src/types'
 import { Transaction } from '../src/core/transaction/Transaction'
+import { TransactionContext } from '../src/core/transaction/TxContext'
 import { LockManager } from '../src/core/transaction/LockManager'
-
 
 describe('PageFileSystem', () => {
   const TEST_FILE = path.join(__dirname, 'test_pfs.dat')
@@ -14,6 +14,7 @@ describe('PageFileSystem', () => {
   let fd: number
   let pfs: PageFileSystem
   let tx: Transaction
+  let txContext: TransactionContext
   let lockManager: LockManager
 
   beforeEach(() => {
@@ -21,7 +22,8 @@ describe('PageFileSystem', () => {
     fd = fs.openSync(TEST_FILE, 'w+')
     pfs = new PageFileSystem(fd, PAGE_SIZE, PAGE_CACHE_CAPACITY)
     lockManager = new LockManager()
-    tx = new Transaction(1, pfs.vfsInstance, lockManager)
+    txContext = new TransactionContext()
+    tx = new Transaction(1, txContext, pfs.vfsInstance, lockManager)
   })
 
   afterEach(async () => {

@@ -4,9 +4,10 @@ import { RowIdentifierStrategy } from './RowIndexStrategy'
 import { PageFileSystem } from './PageFileSystem'
 import { Row } from './Row'
 import { KeyManager } from './KeyManager'
-import { DataPageManager, MetadataPageManager, OverflowPageManager, PageManagerFactory, IndexPageManager, PageManager } from './Page'
+import { DataPageManager, MetadataPageManager, OverflowPageManager, PageManagerFactory, IndexPageManager } from './Page'
 import { numberToBytes, bytesToNumber } from '../utils'
 import { Transaction } from './transaction/Transaction'
+import { TransactionContext } from './transaction/TxContext'
 
 export class RowTableEngine {
   protected readonly bptree: BPTreeAsync<number, number>
@@ -22,7 +23,11 @@ export class RowTableEngine {
   private readonly pageIdBuffer: Uint8Array
   private initialized = false
 
-  constructor(protected readonly pfs: PageFileSystem, protected readonly options: Required<DataplyOptions>) {
+  constructor(
+    protected readonly pfs: PageFileSystem,
+    protected readonly txContext: TransactionContext,
+    protected readonly options: Required<DataplyOptions>
+  ) {
     this.factory = new PageManagerFactory()
     this.metadataPageManager = this.factory.getManagerFromType(MetadataPageManager.CONSTANT.PAGE_TYPE_METADATA) as MetadataPageManager
     this.dataPageManager = this.factory.getManagerFromType(DataPageManager.CONSTANT.PAGE_TYPE_DATA) as DataPageManager
@@ -34,7 +39,7 @@ export class RowTableEngine {
     this.maxBodySize = this.pfs.pageSize - DataPageManager.CONSTANT.SIZE_PAGE_HEADER
     this.order = this.getOptimalOrder(pfs.pageSize, IndexPageManager.CONSTANT.SIZE_KEY, IndexPageManager.CONSTANT.SIZE_VALUE)
     this.bptree = new BPTreeAsync(
-      new RowIdentifierStrategy(this.order, pfs),
+      new RowIdentifierStrategy(this.order, pfs, txContext),
       new NumericComparator(), {
       capacity: this.options.pageCacheCapacity
     })
