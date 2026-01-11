@@ -51,6 +51,26 @@ Data pages use a **Slotted Page** architecture for efficient record management.
 - **Rows**: Stored sequentially immediately after the header (starting at Offset 100).
 - **Slot Array**: Occupies 2 bytes per slot starting from the very end of the page, growing backwards. Each slot points to the start offset of a row.
 
+```mermaid
+graph LR
+    subgraph Page ["Data Page (8,192 Bytes)"]
+        direction LR
+        Header["Header (100B)"]
+        Data["Row 0 | Row 1 | ..."]
+        Free["Free Space"]
+        Slots["... | Slot 1 | Slot 0"]
+        
+        Header --> Data
+        Data --> Free
+        Free --> Slots
+    end
+    
+    style Header fill:#f9f,stroke:#333,stroke-width:2px
+    style Data fill:#bbf,stroke:#333,stroke-width:2px
+    style Free fill:#eee,stroke:#333,stroke-dasharray: 5 5
+    style Slots fill:#dfd,stroke:#333,stroke-width:2px
+```
+
 ```text
 [Header (100B)] [Row 0] [Row 1] ... [Free Space] ... [Slot 1 (2B)] [Slot 0 (2B)]
 ```
@@ -72,6 +92,37 @@ A Row is the actual unit of data stored within a data page. It consists of a **H
 ### 3-2. Overflow Handling
 
 If a row's data exceeds the page's remaining capacity or the maximum page size, **Overflow Pages** are used.
+
+#### 1. Overflow Row Structure
+When a row is marked as overflow, the row body no longer contains the actual data but instead holds a pointer to the first overflow page.
+
+```mermaid
+graph TD
+    subgraph DataPage ["Data Page"]
+        subgraph Row ["Overflow Row (9B + 4B)"]
+            RF["Flag (Bit 2=1)"]
+            RS["Body Size (Actual Data Size)"]
+            RP["PK (6B)"]
+            Body["4-byte Page ID Pointer"]
+        end
+    end
+
+    subgraph OverflowChain ["Overflow Pages"]
+        P1["Overflow Page 1 (Data...)"]
+        P2["Overflow Page 2 (Data...)"]
+        PN["..."]
+    end
+
+    Body -- "Points to" --> P1
+    P1 -- "nextPageId" --> P2
+    P2 -- "nextPageId" --> PN
+    
+    style RF fill:#f66,stroke:#333
+    style Body fill:#69f,stroke:#333
+    style P1 fill:#bbf,stroke:#333
+    style P2 fill:#bbf,stroke:#333
+    style PN fill:#eee,stroke:#333,stroke-dasharray: 5 5
+```
 
 1. The **Overflow Bit (Bit 2)** in the row header's `flag` is set to 1.
 2. The row body stores a **4-byte Page ID** of the first overflow page instead of the actual data.

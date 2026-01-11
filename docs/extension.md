@@ -12,6 +12,68 @@ Dataply's internal Hook system is powered by the [hookall](https://github.com/iz
 - **Events**: Register listeners for events like `init`, `close`, and CRUD operations.
 - **Interception**: Modify data or control flow before or after core operations.
 
+### Hook Execution Flow (Waterfall Pattern)
+
+The `trigger` method in Dataply (via `hookall`) acts as a data pipeline. Values are passed through each stage, transformed, and finally returned to the caller.
+
+```mermaid
+graph TD
+    Start(["1. trigger(name, initialValue)"]) --> Before["2. Before Hooks:<br/>f(initialValue) -> val1"]
+    Before --> Main[["3. Main Callback (Core):<br/>f(val1) -> val2"]]
+    Main --> After["4. After Hooks:<br/>f(val2) -> finalValue"]
+    After --> End(["5. Return finalValue to Caller"])
+
+    style Main fill:#f9f,stroke:#333
+    style Before fill:#dfd,stroke:#333
+    style After fill:#dfd,stroke:#333
+    style Start fill:#eee
+    style End fill:#eee
+```
+
+1.  **Before Hooks**: Receive the `initialValue`. If multiple hooks exist, they process the value sequentially.
+2.  **Main Callback**: Receives the processed value from the last Before Hook. This is the "Core Logic."
+3.  **After Hooks**: Receive the return value from the Main Callback for final processing.
+
+---
+
+### Case Study: Database Initialization (`init`)
+
+Now, let's see how the **Waterfall Pattern** above is applied to the actual `init` process. In this case, the `initialValue` is the newly created **Transaction (tx)** object.
+
+```mermaid
+graph TD
+    Call(["1. DataplyAPI.init() called"]) --> NewTx["2. Create new Transaction() -> tx"]
+    NewTx --> GetStatus["3. Check isNewlyCreated status"]
+    GetStatus --> Trigger["4. trigger('init', tx, isNewlyCreated)"]
+
+    subgraph Pipeline ["Waterfall Chain (from Diagram Above)"]
+        direction TB
+        Before["5. Before Hooks: Receive (tx, ...) -> Return tx"]
+        Main[["6. Main Core Logic: Setup DB -> Return tx"]]
+        After["7. After Hooks: Seed Data -> Return tx"]
+        
+        Before --> Main --> After
+    end
+
+    Trigger --> Before
+    After --> Commit["8. Commit Transaction"]
+    Commit --> End([9. Initialization Complete])
+
+    style Main fill:#f9f,stroke:#333
+    style Before fill:#dfd,stroke:#333
+    style After fill:#dfd,stroke:#333
+    style Pipeline fill:#f5f5ff,stroke:#666,stroke-dasharray: 5 5
+```
+
+> [!TIP]
+> **Why this matters**: If you register a hook for `init`, you are stepping into the middle of this pipeline. You receive the `tx` that the Engine just created, perform your own operations (like seeding initial data), and pass the `tx` back so the Engine can finally commit it.
+
+> [!CAUTION]
+> **Value Chain**: If any hook fails to return a value, the subsequent stages will receive `undefined`, which usually leads to errors or transaction failures. Always return the data (or `tx` object).
+
+> [!IMPORTANT]
+> **Sequential Flow**: Hooks are executed sequentially. Each hook must return the `tx` object so the next hook or core logic can continue using the same transaction. If a hook fails to return `tx`, the chain will break.
+
 ---
 
 ## 🚀 Inheritance and Basic Hooks
