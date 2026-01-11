@@ -15,6 +15,7 @@
 - **📝 WAL (Write-Ahead Logging)**: Ensures data integrity and provides recovery capabilities in case of system failures.
 - **💼 Transaction Mechanism**: Supports Commit and Rollback for atomic operations.
 - **📦 Page-Based Storage**: Efficient page caching and disk I/O optimization through Virtual File System (VFS).
+- **📉 Bitmap Space Optimization**: Uses bitmapped management to efficiently track page usage and maximize disk space utilization.
 - **⌨️ TypeScript Support**: Provides comprehensive type definitions for all APIs.
 
 ## Installation
@@ -224,6 +225,7 @@ graph TD
 - **Fixed-size Pages**: All data is managed in fixed-size units (default 8KB) called pages.
 - **VFS Cache**: Minimizes disk I/O by caching frequently accessed pages in memory.
 - **Dirty Page Tracking**: Tracks modified pages (Dirty) to synchronize them with disk efficiently only at the time of commit.
+- **Bitmap Management**: Efficiently tracks the allocation and deallocation of pages using a bitmap structure, facilitating fast space reclamation and reuse. For more details on this mechanism, see [Page Reclamation and Reuse Guide](docs/page_reclamation.md).
 - **Detailed Structure**: For technical details on the physical layout, see [structure.md](docs/structure.md).
 
 #### Page & Row Layout
