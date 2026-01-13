@@ -1,6 +1,6 @@
 {
   "name": "dataply",
-  "version": "0.0.13",
+  "version": "0.0.14",
   "description": "A lightweight storage engine for Node.js with support for MVCC, WAL.",
   "license": "MIT",
   "author": "izure <admin@izure.org>",
@@ -10,7 +10,8 @@
   "exports": {
     ".": {
       "types": "./dist/types/index.d.ts",
-      "require": "./dist/cjs/index.js"
+      "require": "./dist/cjs/index.js",
+      "import": "./dist/cjs/index.js"
     }
   },
   "files": [
