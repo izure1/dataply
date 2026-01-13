@@ -43,8 +43,8 @@ export class Dataply {
    * Retrieves metadata from the dataply.
    * @returns Metadata of the dataply.
    */
-  async getMetadata(): Promise<DataplyMetadata> {
-    return this.api.getMetadata()
+  async getMetadata(tx?: Transaction): Promise<DataplyMetadata> {
+    return this.api.getMetadata(tx)
   }
 
   /**

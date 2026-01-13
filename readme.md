@@ -147,7 +147,7 @@ Updates existing data.
 #### `async delete(pk: number, tx?: Transaction): Promise<void>`
 Marks data as deleted.
 
-#### `async getMetadata(): Promise<DataplyMetadata>`
+#### `async getMetadata(tx?: Transaction): Promise<DataplyMetadata>`
 Returns the current metadata of the dataply, including `pageSize`, `pageCount`, and `rowCount`.
 
 #### `createTransaction(): Transaction`

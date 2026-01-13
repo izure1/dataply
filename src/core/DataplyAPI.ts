@@ -260,11 +260,11 @@ export class DataplyAPI {
    * Retrieves metadata from the dataply.
    * @returns Metadata of the dataply.
    */
-  async getMetadata(): Promise<DataplyMetadata> {
+  async getMetadata(tx?: Transaction): Promise<DataplyMetadata> {
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
-    return this.runWithDefault((tx) => this.rowTableEngine.getMetadata(tx))
+    return this.runWithDefault((tx) => this.rowTableEngine.getMetadata(tx), tx)
   }
 
   /**
