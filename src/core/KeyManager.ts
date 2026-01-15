@@ -1,5 +1,4 @@
 import { bytesToNumber, numberToBytes } from '../utils'
-import { Row } from './Row'
 
 /**
  * Key Manager class.

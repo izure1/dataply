@@ -1,7 +1,7 @@
-import { BitmapPage, IndexPage, type MetadataPage } from '../types'
+import type { BitmapPage, IndexPage, MetadataPage } from '../types'
+import type { Transaction } from './transaction/Transaction'
 import { IndexPageManager, MetadataPageManager, PageManager, PageManagerFactory, BitmapPageManager } from './Page'
 import { VirtualFileSystem } from './VirtualFileSystem'
-import type { Transaction } from './transaction/Transaction'
 
 /**
  * Page File System class.

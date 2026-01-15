@@ -1,4 +1,4 @@
-import { DataPage, IndexPage, BitmapPage, OverflowPage, MetadataPage, EmptyPage, UnknownPage } from '../types'
+import type { DataPage, IndexPage, BitmapPage, OverflowPage, MetadataPage, EmptyPage, UnknownPage } from '../types'
 import { bytesToNumber, numberToBytes, crc32, getBit, setBit } from '../utils'
 import { Row } from './Row'
 
