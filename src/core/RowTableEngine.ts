@@ -1,5 +1,5 @@
 import type { DataPage, DataplyMetadata, DataplyOptions } from '../types'
-import { NumericComparator, BPTreeAsync } from 'serializable-bptree'
+import { NumericComparator, BPTreeAsync, BPTreeAsyncTransaction } from 'serializable-bptree'
 import { RowIdentifierStrategy } from './RowIndexStrategy'
 import { PageFileSystem } from './PageFileSystem'
 import { Row } from './Row'
@@ -11,6 +11,7 @@ import { TransactionContext } from './transaction/TxContext'
 
 export class RowTableEngine {
   protected readonly bptree: BPTreeAsync<number, number>
+  protected readonly strategy: RowIdentifierStrategy
   protected readonly order: number
   protected readonly factory: PageManagerFactory
   private readonly metadataPageManager: MetadataPageManager
@@ -38,11 +39,43 @@ export class RowTableEngine {
     this.pageIdBuffer = new Uint8Array(DataPageManager.CONSTANT.SIZE_PAGE_ID)
     this.maxBodySize = this.pfs.pageSize - DataPageManager.CONSTANT.SIZE_PAGE_HEADER
     this.order = this.getOptimalOrder(pfs.pageSize, IndexPageManager.CONSTANT.SIZE_KEY, IndexPageManager.CONSTANT.SIZE_VALUE)
+    this.strategy = new RowIdentifierStrategy(this.order, pfs, txContext)
     this.bptree = new BPTreeAsync(
-      new RowIdentifierStrategy(this.order, pfs, txContext),
+      this.strategy,
       new NumericComparator(), {
       capacity: this.options.pageCacheCapacity
     })
+  }
+
+  /**
+   * Retrieves the BPTree transaction associated with the given transaction.
+   * If it doesn't exist, it creates a new one and registers commit/rollback hooks.
+   * @param tx Dataply transaction
+   * @returns BPTree transaction
+   */
+  private async getBPTreeTransaction(tx: Transaction): Promise<BPTreeAsyncTransaction<number, number>> {
+    let btx = tx.__getBPTreeTransaction()
+    if (!btx) {
+      btx = await this.bptree.createTransaction()
+      tx.__setBPTreeTransaction(btx)
+      tx.onCommit(async () => {
+        if (!tx.__isBPTreeDirty()) {
+          return
+        }
+        if (!btx) return
+        const result = await btx.commit()
+        if (result.success) {
+          // B+Tree 인스턴스의 루트 정보를 최신화하여 다음 트랜잭션이 올바른 Snapshot을 잡도록 합니다.
+          await this.bptree.init()
+          for (const id of result.obsoleteIds) {
+            await this.strategy.delete(id)
+          }
+        } else {
+          throw new Error(`BPTree transaction commit failed. Current Root: ${this.bptree.getRootId()}`)
+        }
+      })
+    }
+    return btx
   }
 
   /**
@@ -211,7 +244,9 @@ export class RowTableEngine {
     await this.pfs.setMetadata(freshMetadataPage, tx)
 
     // B+트리에 삽입합니다.
-    await this.bptree.insert(this.getRID(), pk)
+    const btx = await this.getBPTreeTransaction(tx)
+    await btx.insert(this.getRID(), pk)
+    tx.__markBPTreeDirty()
 
     return pk
   }
@@ -224,14 +259,8 @@ export class RowTableEngine {
    * @returns RID or null (if not found)
    */
   private async getRidByPK(pk: number, tx: Transaction): Promise<number | null> {
-    // 1. 현재 트랜잭션의 Pending Updates 우선 확인
-    const pendingUpdate = tx.__getPendingIndexUpdate(pk)
-    if (pendingUpdate) {
-      return pendingUpdate.newRid
-    }
-
-    // 2. B+트리에서 조회
-    const keys = await this.bptree.keys({ equal: pk })
+    const btx = await this.getBPTreeTransaction(tx)
+    const keys = await btx.keys({ equal: pk })
     if (keys.size === 0) {
       return null
     }
@@ -251,6 +280,9 @@ export class RowTableEngine {
    * @param tx Transaction
    */
   async update(pk: number, data: Uint8Array, tx: Transaction): Promise<void> {
+    // 쓰기 작업 전 메타데이터 락을 획득하여 동시성 충돌을 방지합니다.
+    await tx.__acquireWriteLock(0)
+
     // B+트리에서 pk에 해당하는 rid를 조회합니다.
     const rid = await this.getRidByPK(pk, tx)
     if (rid === null) {
@@ -359,20 +391,11 @@ export class RowTableEngine {
     this.setRID(lastInsertDataPageId, newSlotIndex)
     const newRidNumeric = this.getRID()
 
-    // B+트리 업데이트 (트랜잭션 격리 지원)
-    // 즉시 반영하지 않고, 커밋 시점으로 미룹니다.
-    // 이는 다른 트랜잭션이 커밋되지 않은 새 RID를 참조하는 것을 방지합니다.
-    if (tx.__getPendingIndexUpdates().size === 0) {
-      // 커밋 시 일괄 적용 hook 등록 (최초 1회)
-      tx.onCommit(async () => {
-        const updates = tx.__getPendingIndexUpdates()
-        for (const [key, { newRid, oldRid }] of updates) {
-          await this.bptree.delete(oldRid, key)
-          await this.bptree.insert(newRid, key)
-        }
-      })
-    }
-    tx.__addPendingIndexUpdate(pk, newRidNumeric, oldRidNumeric)
+    // B+트리 업데이트
+    const btx = await this.getBPTreeTransaction(tx)
+    await btx.delete(oldRidNumeric, pk)
+    await btx.insert(newRidNumeric, pk)
+    tx.__markBPTreeDirty()
 
     const freshMetadataPage = await this.pfs.getMetadata(tx)
     this.metadataPageManager.setLastInsertPageId(freshMetadataPage, lastInsertDataPageId)
@@ -386,7 +409,7 @@ export class RowTableEngine {
    * @param tx Transaction
    */
   async delete(pk: number, decrementRowCount: boolean, tx: Transaction): Promise<void> {
-    // 메타데이터 쓰기 락 획득
+    // 쓰기 작업 전 메타데이터 락을 획득하여 동시성 충돌을 방지합니다.
     await tx.__acquireWriteLock(0)
 
     const rid = await this.getRidByPK(pk, tx)
@@ -427,6 +450,11 @@ export class RowTableEngine {
     this.rowManager.setDeletedFlag(row, true)
     await this.pfs.setPage(pageId, page, tx)
 
+    // B+트리에서 삭제합니다.
+    const btx = await this.getBPTreeTransaction(tx)
+    await btx.delete(rid, pk)
+    tx.__markBPTreeDirty()
+
     if (decrementRowCount) {
       const metadataPage = await this.pfs.getMetadata(tx)
       const currentRowCount = this.metadataPageManager.getRowCount(metadataPage)
@@ -446,12 +474,14 @@ export class RowTableEngine {
     if (pageId === lastInsertPageId) {
       allDeleted = false
     } else {
-      for (let i = 0; i < insertedRowCount; i++) {
+      let i = 0
+      while (i < insertedRowCount) {
         const slotRow = this.dataPageManager.getRow(page, i)
         if (!this.rowManager.getDeletedFlag(slotRow)) {
           allDeleted = false
           break
         }
+        i++
       }
     }
 

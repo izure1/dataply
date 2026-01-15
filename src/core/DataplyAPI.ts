@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import type { DataplyOptions, MetadataPage, BitmapPage, DataPage, DataplyMetadata } from '../types'
 import { type IHookall, useHookall } from 'hookall'
 import { PageFileSystem } from './PageFileSystem'
-import { MetadataPageManager, DataPageManager, BitmapPageManager } from './Page'
+import { MetadataPageManager, DataPageManager, BitmapPageManager, IndexPageManager } from './Page'
 import { RowTableEngine } from './RowTableEngine'
 import { TextCodec } from '../utils/TextCodec'
 import { catchPromise } from '../utils/catchPromise'
@@ -122,6 +122,8 @@ export class DataplyAPI {
     metadataPageManager.setPageSize(metadataPage, options.pageSize)
 
     metadataPageManager.setRootIndexPageId(metadataPage, -1)
+    const order = Math.floor(((options.pageSize - IndexPageManager.CONSTANT.OFFSET_KEYS_AND_VALUES) + IndexPageManager.CONSTANT.SIZE_KEY) / (IndexPageManager.CONSTANT.SIZE_KEY + IndexPageManager.CONSTANT.SIZE_VALUE))
+    metadataPageManager.setRootIndexOrder(metadataPage, order)
     metadataPageManager.setBitmapPageId(metadataPage, 1)
     metadataPageManager.setLastInsertPageId(metadataPage, 2)
 

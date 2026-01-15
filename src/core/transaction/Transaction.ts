@@ -1,3 +1,4 @@
+import { BPTreeAsyncTransaction } from 'serializable-bptree'
 import { LockManager } from './LockManager'
 import { VirtualFileSystem } from '../VirtualFileSystem'
 import { TransactionContext } from './TxContext'
@@ -15,10 +16,12 @@ export class Transaction {
   private pageLocks: Map<number, string> = new Map()
   /** Undo Logs: PageID -> Original Page Buffer (Snapshot) */
   private undoPages: Map<number, Uint8Array> = new Map()
-  /** List of Dirty Pages modified by the transaction */
+  /** Dirty Pages modified by the transaction */
   private dirtyPages: Set<number> = new Set()
-  /** Pending Index Updates: PK -> { newRid, oldRid } */
-  private pendingIndexUpdates: Map<number, { newRid: number, oldRid: number }> = new Map()
+  /** BPTree Transaction instance */
+  private bptreeTx?: BPTreeAsyncTransaction<number, number>
+  /** Whether the BPTree transaction is dirty */
+  private bptreeDirty: boolean = false
   /** List of callbacks to execute on commit */
   private commitHooks: (() => Promise<void>)[] = []
 
@@ -34,6 +37,37 @@ export class Transaction {
     private readonly lockManager: LockManager
   ) {
     this.id = id
+  }
+
+  /**
+   * Sets the BPTree transaction.
+   * @param tx BPTree transaction
+   */
+  __setBPTreeTransaction(tx: BPTreeAsyncTransaction<number, number>) {
+    this.bptreeTx = tx
+  }
+
+  /**
+   * Returns the BPTree transaction.
+   * @returns BPTree transaction
+   */
+  __getBPTreeTransaction(): BPTreeAsyncTransaction<number, number> | undefined {
+    return this.bptreeTx
+  }
+
+  /**
+   * Marks the BPTree transaction as dirty.
+   */
+  __markBPTreeDirty() {
+    this.bptreeDirty = true
+  }
+
+  /**
+   * Returns whether the BPTree transaction is dirty.
+   * @returns True if dirty
+   */
+  __isBPTreeDirty() {
+    return this.bptreeDirty
   }
 
   /**
@@ -76,35 +110,6 @@ export class Transaction {
   }
 
   /**
-   * Adds a Pending Index Update.
-   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
-   * @param pk PK
-   * @param newRid New RID
-   * @param oldRid Old RID
-   */
-  __addPendingIndexUpdate(pk: number, newRid: number, oldRid: number) {
-    this.pendingIndexUpdates.set(pk, { newRid, oldRid })
-  }
-
-  /**
-   * Returns a Pending Index Update.
-   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
-   * @param pk PK
-   * @returns Pending Index Update
-   */
-  __getPendingIndexUpdate(pk: number) {
-    return this.pendingIndexUpdates.get(pk)
-  }
-
-  /**
-   * Returns all Pending Index Updates.
-   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
-   */
-  __getPendingIndexUpdates() {
-    return this.pendingIndexUpdates
-  }
-
-  /**
    * Acquires a write lock.
    * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
    * @param pageId Page ID
@@ -134,14 +139,15 @@ export class Transaction {
    * Commits the transaction.
    */
   async commit(): Promise<void> {
-    await this.vfs.prepareCommit(this)
-    await this.vfs.finalizeCommit(this)
-
     await this.context.run(this, async () => {
       for (const hook of this.commitHooks) {
         await hook()
       }
     })
+
+    await this.vfs.prepareCommit(this)
+    await this.vfs.finalizeCommit(this)
+
     this.releaseAllLocks()
   }
 

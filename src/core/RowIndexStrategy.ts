@@ -67,11 +67,15 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
     const tx = this.txContext.get()!
     const pageId = +(id)
     const page = await this.pfs.get(pageId, tx)
+
     if (node.leaf) {
       const n = node as BPTreeLeafNode<number, number>
       const keys = new Array(n.keys.length)
-      for (let i = 0, len = keys.length; i < len; i++) {
+      let i = 0
+      const len = keys.length
+      while (i < len) {
         keys[i] = +(n.keys[i][0])
+        i++
       }
       this.indexPageManger.setIndexId(page, +(n.id))
       this.indexPageManger.setParentIndexId(page, +(n.parent as any))
@@ -85,8 +89,11 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
     else {
       const n = node as BPTreeInternalNode<number, number>
       const keys: number[] = new Array(n.keys.length)
-      for (let i = 0, len = keys.length; i < len; i++) {
+      let i = 0
+      const len = keys.length
+      while (i < len) {
         keys[i] = +(n.keys[i])
+        i++
       }
       this.indexPageManger.setIndexId(page, +(n.id))
       this.indexPageManger.setParentIndexId(page, +(n.parent as any))
@@ -126,9 +133,12 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
     if (rootIndexPageId === -1) {
       return null
     }
+    const metaOrder = manager.getRootIndexOrder(metadataPage)
+    const order = metaOrder || this.order
+
     return {
-      root: manager.getRootIndexPageId(metadataPage).toString(),
-      order: manager.getRootIndexOrder(metadataPage),
+      root: rootIndexPageId.toString(),
+      order,
       data: {}
     }
   }

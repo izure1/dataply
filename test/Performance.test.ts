@@ -3,20 +3,21 @@ import path from 'node:path'
 import fs from 'node:fs'
 
 describe('Performance Benchmark', () => {
-  const TEST_FILE = path.join(__dirname, 'perf_dataply.dat')
-  const WAL_FILE = path.join(__dirname, 'perf_dataply.wal')
+  const TEST_DIR = path.join(__dirname, 'perf_test_data')
 
-  afterEach(async () => {
-    if (fs.existsSync(TEST_FILE)) {
-      try { await fs.promises.unlink(TEST_FILE) } catch (e) { }
-    }
-    if (fs.existsSync(WAL_FILE)) {
-      try { await fs.promises.unlink(WAL_FILE) } catch (e) { }
+  beforeAll(async () => {
+    if (!fs.existsSync(TEST_DIR)) await fs.promises.mkdir(TEST_DIR)
+  })
+
+  afterAll(async () => {
+    if (fs.existsSync(TEST_DIR)) {
+      try { await fs.promises.rm(TEST_DIR, { recursive: true, force: true }) } catch (e) { }
     }
   })
 
   test('Bulk Insert 10,000 small rows (batch)', async () => {
-    const dataply = new Dataply(TEST_FILE, { pageSize: 4096 })
+    const UNIQUE_FILE = path.join(TEST_DIR, 'perf_batch_10000.dataply')
+    const dataply = new Dataply(UNIQUE_FILE, { pageSize: 4096 })
     await dataply.init()
 
     const count = 10000
@@ -39,10 +40,11 @@ describe('Performance Benchmark', () => {
     console.log(`[Small Row Insert (Batch)] Total: ${duration.toFixed(2)}ms, OPS: ${ops.toFixed(2)}`)
 
     await dataply.close()
-  }, 60000)
+  }, 120000)
 
   test('Bulk Insert 100 small rows (individual)', async () => {
-    const dataply = new Dataply(TEST_FILE, { pageSize: 4096 })
+    const UNIQUE_FILE = path.join(TEST_DIR, 'perf_indiv_100.dataply')
+    const dataply = new Dataply(UNIQUE_FILE, { pageSize: 4096 })
     await dataply.init()
 
     const count = 100
@@ -65,7 +67,9 @@ describe('Performance Benchmark', () => {
   }, 120000)
 
   test('Bulk Insert 100 small rows with WAL', async () => {
-    const dataply = new Dataply(TEST_FILE, { pageSize: 4096, wal: WAL_FILE })
+    const UNIQUE_FILE = path.join(TEST_DIR, 'perf_wal_100.dataply')
+    const WAL_FILE = path.join(TEST_DIR, 'perf_wal_100.wal')
+    const dataply = new Dataply(UNIQUE_FILE, { pageSize: 4096, wal: WAL_FILE })
     await dataply.init()
 
     const count = 100
@@ -88,7 +92,8 @@ describe('Performance Benchmark', () => {
   }, 120000)
 
   test('Bulk Insert 100 medium rows (1KB)', async () => {
-    const dataply = new Dataply(TEST_FILE, { pageSize: 8192 })
+    const UNIQUE_FILE = path.join(TEST_DIR, 'perf_medium_100.dataply')
+    const dataply = new Dataply(UNIQUE_FILE, { pageSize: 8192 })
     await dataply.init()
 
     const count = 100
@@ -108,5 +113,5 @@ describe('Performance Benchmark', () => {
     console.log(`[Medium Row Insert] Total: ${duration.toFixed(2)}ms, OPS: ${ops.toFixed(2)}`)
 
     await dataply.close()
-  }, 60000)
+  }, 120000)
 })

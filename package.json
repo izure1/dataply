@@ -48,6 +48,6 @@
     "cache-entanglement": "^1.7.1",
     "hookall": "^2.2.0",
     "ryoiki": "^1.2.0",
-    "serializable-bptree": "^7.0.0"
+    "serializable-bptree": "^7.0.1"
   }
 }
