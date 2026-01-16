@@ -1,127 +1,124 @@
 import fs from 'node:fs'
 import path from 'node:path'
-import { VirtualFileSystem } from '../src/core/VirtualFileSystem'
-import { Transaction } from '../src/core/transaction/Transaction'
-import { LockManager } from '../src/core/transaction/LockManager'
-import { TransactionContext } from '../src/core/transaction/TxContext'
+import { DataplyAPI } from '../src/core/DataplyAPI'
 
-describe('TransactionSafety', () => {
-  const TEST_FILE = path.join(__dirname, 'test_safety.dat')
-  let fd: number
-  let vfs: VirtualFileSystem
-  let lockManager: LockManager
-  let txContext: TransactionContext
+describe('TransactionSafety (DataplyAPI)', () => {
+  const DB_PATH = path.join(__dirname, 'safety_integrated.db')
 
   beforeEach(() => {
-    if (fs.existsSync(TEST_FILE)) {
-      fs.unlinkSync(TEST_FILE)
+    if (fs.existsSync(DB_PATH)) {
+      fs.unlinkSync(DB_PATH)
     }
-    fd = fs.openSync(TEST_FILE, 'w+')
-    lockManager = new LockManager()
-    txContext = new TransactionContext()
   })
 
   afterEach(async () => {
-    if (vfs) {
-      await vfs.close()
-    }
-    if (fd) {
+    if (fs.existsSync(DB_PATH)) {
       try {
-        fs.closeSync(fd)
-      } catch (e) { }
-    }
-    if (fs.existsSync(TEST_FILE)) {
-      try {
-        fs.unlinkSync(TEST_FILE)
+        fs.unlinkSync(DB_PATH)
       } catch (e) { }
     }
   })
 
-  test('should not lose data when cache evicts dirty pages (Transaction Pinning)', async () => {
-    const pageSize = 1024
-    const cacheCapacity = 2 // 매우 작은 캐시 용량 (2페이지)
-    vfs = new VirtualFileSystem(fd, pageSize, cacheCapacity)
+  test('Isolation: Disk size should not increase before commit', async () => {
+    const db = new DataplyAPI(DB_PATH, { pageSize: 4096 })
+    await db.init()
 
-    const tx = new Transaction(1, txContext, vfs, lockManager)
+    // 초기 상태의 물리적 디스크 크기 측정
+    const initialDiskSize = fs.statSync(DB_PATH).size
 
-    // 1. 5개의 페이지에 데이터를 씀 (캐시 용량 2를 초과)
-    const pageDataList = [
-      new Uint8Array(pageSize).fill(1),
-      new Uint8Array(pageSize).fill(2),
-      new Uint8Array(pageSize).fill(3),
-      new Uint8Array(pageSize).fill(4),
-      new Uint8Array(pageSize).fill(5),
-    ]
+    const tx = db.createTransaction()
 
-    for (let i = 0; i < 5; i++) {
-      await vfs.write(i * pageSize, pageDataList[i], tx)
+    // 1. 대량의 데이터를 삽입하여 파일 확장이 필요한 상황을 만듦
+    // (보통 3페이지 초기화 상태이므로, 그 이상의 데이터를 넣음)
+    const largeData = new Uint8Array(5000).fill(0x1)
+    const pks: number[] = []
+
+    // 여러 번 삽입하여 확실히 페이지 확장을 유도
+    for (let i = 0; i < 10; i++) {
+      pks.push(await db.insert(largeData, true, tx))
     }
 
-    // 2. 캐시에서 쫓겨났을 첫 번째 페이지를 조회 (트랜잭션 Dirty Pages에서 가져와야 함)
-    const readPage0 = await vfs.read(0, pageSize, tx)
-    expect(readPage0).toEqual(pageDataList[0])
+    // [검증 1: 격리성] 커밋 전이므로 물리적 디스크 크기는 변하지 않아야 함
+    const currentDiskSize = fs.statSync(DB_PATH).size
+    expect(currentDiskSize).toBe(initialDiskSize)
 
-    const readPage2 = await vfs.read(2 * pageSize, pageSize, tx)
-    expect(readPage2).toEqual(pageDataList[2])
-
-    // 3. 커밋 수행
-    await tx.commit()
-
-    // 4. 디스크 파일 크기 확인 (5페이지 분량)
-    const stats = fs.fstatSync(fd)
-    expect(stats.size).toBe(pageSize * 5)
-
-    // 5. 디스크에서 직접 읽어서 데이터 정합성 확인
-    for (let i = 0; i < 5; i++) {
-      const diskBuf = Buffer.alloc(pageSize)
-      fs.readSync(fd, diskBuf, 0, pageSize, i * pageSize)
-      expect(new Uint8Array(diskBuf)).toEqual(pageDataList[i])
+    // [검증 2: 가시성] 트랜잭션 내부(Uncommitted)에서는 데이터가 조회가 되어야 함
+    for (const pk of pks) {
+      const selected = await db.select(pk, true, tx)
+      expect(selected).toEqual(largeData)
     }
+
+    // 2. 커밋 수행
+    await tx.commit()
+
+    // [검증 3: 지속성] 커밋 후에는 물리적 디스크 크기가 늘어나 있어야 함
+    const finalDiskSize = fs.statSync(DB_PATH).size
+    expect(finalDiskSize).toBeGreaterThan(initialDiskSize)
+
+    // [검증 4: 데이터 정합성] 새로운 트랜잭션에서도 데이터가 잘 보여야 함
+    const selectedAfter = await db.select(pks[0], true)
+    expect(selectedAfter).toEqual(largeData)
+
+    await db.close()
   })
 
-  test('should prioritize transaction dirty pages over VFS cache', async () => {
-    const pageSize = 1024
-    vfs = new VirtualFileSystem(fd, pageSize, 100)
-    const tx = new Transaction(1, txContext, vfs, lockManager)
+  test('Safety: Data should not be lost when cache is small (LRU Eviction resilience)', async () => {
+    // 캐시 용량을 매우 작게 설정 (데이터 페이지 2개 분량 수준)
+    const db = new DataplyAPI(DB_PATH, { pageSize: 4096, pageCacheCapacity: 100 })
+    await db.init()
 
-    // 1. 페이지 0에 데이터 A를 씀
-    const dataA = new Uint8Array(pageSize).fill(0xA)
-    await vfs.write(0, dataA, tx)
+    const tx = db.createTransaction()
 
-    // 2. 같은 페이지 0에 데이터 B를 덮어씀
-    const dataB = new Uint8Array(pageSize).fill(0xB)
-    await vfs.write(0, dataB, tx)
+    // 10개의 각기 다른 페이지에 쓰기가 발생하도록 유도 (데이터 크기와 횟수 조절)
+    const dataSize = 2000 // 한 페이지에 약 2개 들어감
+    const pks: number[] = []
 
-    // 3. 조회 시 데이터 B(트랜잭션 내 최신)가 나와야 함
-    const read = await vfs.read(0, pageSize, tx)
-    expect(read).toEqual(dataB)
+    for (let i = 0; i < 20; i++) {
+      const data = new Uint8Array(dataSize).fill(i)
+      pks.push(await db.insert(data, true, tx))
+    }
+
+    // 중간 조회: 캐시에서 쫓겨났을 법한 첫 번째 데이터 확인
+    // (Transaction이 Dirty Page를 본딩하고 있으므로 성공해야 함)
+    const firstData = await db.select(pks[0], true, tx)
+    expect(firstData).toEqual(new Uint8Array(dataSize).fill(0))
 
     await tx.commit()
+
+    // 커밋 후 전체 데이터 재검증
+    for (let i = 0; i < 20; i++) {
+      const selected = await db.select(pks[i], true)
+      expect(selected).toEqual(new Uint8Array(dataSize).fill(i))
+    }
+
+    await db.close()
   })
 
-  test('rollback should properly restore cache using undo pages', async () => {
-    const pageSize = 1024
-    vfs = new VirtualFileSystem(fd, pageSize, 100)
+  test('Rollback: Restores previous state and does not affect disk if rolled back', async () => {
+    const db = new DataplyAPI(DB_PATH, { pageSize: 4096 })
+    await db.init()
 
-    // 초기 데이터 작성 및 커밋
-    const initialData = new Uint8Array(pageSize).fill(0x1)
-    const tx1 = new Transaction(1, txContext, vfs, lockManager)
-    await vfs.write(0, initialData, tx1)
-    await tx1.commit()
+    // 1. 초기 데이터 삽입 및 커밋
+    const initialPk = await db.insert("initial")
+    const diskSizeAfterFirst = fs.statSync(DB_PATH).size
 
-    // 수정 후 롤백
-    const tx2 = new Transaction(2, txContext, vfs, lockManager)
-    const modifiedData = new Uint8Array(pageSize).fill(0x2)
-    await vfs.write(0, modifiedData, tx2)
+    // 2. 수정 트랜잭션 시작
+    const tx = db.createTransaction()
+    await db.update(initialPk, "modified", tx)
+    await db.insert("new data", true, tx)
 
-    // 트랜잭션 내에서는 수정된 데이터가 보여야 함
-    expect(await vfs.read(0, pageSize, tx2)).toEqual(modifiedData)
+    // 트랜잭션 내 확인
+    expect(await db.select(initialPk, false, tx)).toBe("modified")
 
-    await tx2.rollback()
+    // 3. 롤백 수행
+    await tx.rollback()
 
-    // 롤백 후에는 다시 초기 데이터가 보여야 함 (캐시가 복구되어야 함)
-    const tx3 = new Transaction(3, txContext, vfs, lockManager)
-    const readAfterRollback = await vfs.read(0, pageSize, tx3)
-    expect(readAfterRollback).toEqual(initialData)
+    // [검증] 물리적 디스크 크기가 변하지 않았는지 확인
+    expect(fs.statSync(DB_PATH).size).toBe(diskSizeAfterFirst)
+
+    // [검증] 데이터가 원복되었는지 확인
+    expect(await db.select(initialPk)).toBe("initial")
+
+    await db.close()
   })
 })

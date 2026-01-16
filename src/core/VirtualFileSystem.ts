@@ -159,7 +159,10 @@ export class VirtualFileSystem {
           0,
           this.pageSize,
           pageId * this.pageSize
-        ))
+        ).then((v) => {
+          this.cache.set(pageId, page)
+          return v
+        }))
       }
     }
     await Promise.all(promises)
