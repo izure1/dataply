@@ -1,24 +1,19 @@
-# ♻️ Page Reclamation and Reuse Mechanism
-`Page Reclamation & Reuse Architecture`
+# Page Reclamation and Reuse Mechanism
 
 Dataply features a smart reclamation system that detects unused data and immediately transitions that space back to an available state, maximizing limited disk resources.
 
 ---
 
-## 📂 1. When Page Reclamation Occurs
+## 1. When Page Reclamation Occurs
 The database releases physical space and returns it to the system in the following scenarios:
 
-*   **🗑️ Row Deletion**  
-    When a row is deleted and no valid records remain within a data page, the page is marked as 'Empty'.
-*   **✂️ Overflow Optimization (Overflow Truncation)**  
-    - When a record is deleted, its entire connected overflow chain is released.
-    - If data is updated and its size decreases, any unnecessary subsequent overflow pages are immediately truncated and reclaimed.
-*   **🤝 Index Merging (B+Tree Node Merge)**  
-    When nodes are merged (the reverse of a node split), index pages that are no longer needed are returned.
+- **Row Deletion**: When a page becomes empty after a deletion, it is marked for reclamation.
+- **Overflow Truncation**: When data size decreases or is deleted, unused overflow chains are released immediately.
+- **Node Merging**: In B+Trees, pages from merged nodes are returned to the available pool.
 
 ---
 
-## 🏗️ 2. Core Components
+## 2. Core Components
 
 | Component | Role | Description |
 | :--- | :--- | :--- |
@@ -28,7 +23,7 @@ The database releases physical space and returns it to the system in the followi
 
 ---
 
-## 🔄 3. Page Lifecycle
+## 3. Page Lifecycle
 
 ### Phase 1: Page Reclamation (Freeing)
 Registers space into the list to ensure room for new data.
@@ -36,23 +31,23 @@ Registers space into the list to ensure room for new data.
 > [!TIP]
 > **Atomicity Guarantee**: This process is performed within a transaction. Write locks on both the Metadata and the target page ensure data consistency.
 
-1.  **Header Initialization**: Changes the target page type to `EmptyPage`.
-2.  **Stack Insertion (Push)**: Sets the target page's `nextPageId` to the current `freePageId` stored in metadata.
-3.  **Pointer Update**: Updates the `freePageId` in metadata to the ID of the newly reclaimed page.
-4.  **Bitmap Marking**: Changes the corresponding index in the bitmap to `1 (Free)` for efficient searching.
+1.  **Header Reset**: Change the page type to `EmptyPage`.
+2.  **Stack Push**: Point the target page's `nextPageId` to the current `freePageId`.
+3.  **Pointer Sync**: Update the `freePageId` in metadata to the current page's ID.
+4.  **Bitmap Set**: Set the corresponding bit to `1 (Free)` for fast lookup.
 
 ### Phase 2: Page Reuse (Allocation)
 Before expanding the file size, the system prioritizes taking space from the reclaimed list.
 
-1.  **Availability Check**: Verifies if the `freePageId` in metadata is `-1`.
-2.  **List Extraction (Pop)**:
-    - If it is not `-1`, the page at the front of the list is preempted.
-    - Updates the `freePageId` in metadata to the `nextPageId` that the preempted page was pointing to.
-3.  **Type Transition**: Re-writes the page header according to the new purpose (Data, Index, etc.) and changes the bitmap to `0 (Used)`.
+1.  **Availability Check**: Verify if `freePageId` is `-1`.
+2.  **Stack Pop**:
+    - If not `-1`, extract the page at the front of the list.
+    - Update `freePageId` to the `nextPageId` of the extracted page.
+3.  **Type Reset**: Re-initialize the header and set bitmap bit to `0 (Used)`.
 
 ---
 
-## 📊 4. Visualization
+## 4. Visualization
 
 ```mermaid
 graph LR
@@ -74,7 +69,7 @@ graph LR
 
 ---
 
-## 💡 5. Value of the Bitmap-Based Approach
+## 5. Value of the Bitmap-Based Approach
 
 *   **Performance Optimization**: Quickly finds empty space using only the bitmap (which can be cached in memory) without having to open and inspect actual page data on disk.
 *   **Fragmentation Prevention**: Suppresses indiscriminate file expansion and prioritizes filling "holes" within the file to increase data density.

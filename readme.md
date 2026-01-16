@@ -9,14 +9,15 @@
 
 ## Key Features
 
-- **🚀 Identity-Based Access**: Specialized in storing records and managing them via auto-generated Primary Keys.
-- **⚡ High-Performance B+Tree**: Optimizes data lookup and insertion through an asynchronous B+Tree structure.
-- **🛡️ MVCC Support**: Enables non-blocking read operations and guarantees data isolation between transactions.
-- **📝 WAL (Write-Ahead Logging)**: Ensures data integrity and provides recovery capabilities in case of system failures.
-- **💼 Transaction Mechanism**: Supports Commit and Rollback for atomic operations.
-- **📦 Page-Based Storage**: Efficient page caching and disk I/O optimization through Virtual File System (VFS).
-- **📉 Bitmap Space Optimization**: Uses bitmapped management to efficiently track page usage and maximize disk space utilization.
-- **⌨️ TypeScript Support**: Provides comprehensive type definitions for all APIs.
+Dataply provides essential features for high-performance data management:
+
+- **Identity-Based Access**: Manage records through auto-generated Primary Keys for ultra-fast retrieval.
+- **High-Performance B+Tree**: Asynchronous B+Tree structure optimizes both lookups and insertions.
+- **MVCC & Isolation**: Snapshot isolation via Multi-Version Concurrency Control (MVCC) enables non-blocking reads.
+- **Reliability (WAL)**: Write-Ahead Logging (WAL) ensures data integrity and automatic crash recovery.
+- **Atomic Transactions**: Full support for ACID-compliant Commit and Rollback operations.
+- **Efficient Storage**: Fixed-size page management with VFS-based caching and Bitmap space optimization.
+- **Type Safety**: Comprehensive TypeScript definitions for a seamless developer experience.
 
 ## Installation
 
@@ -148,10 +149,10 @@ try {
 ```
 
 ### Auto-Transaction
-If you omit the `tx` argument when calling methods like `insert`, `update`, or `delete`, Dataply internally **creates an individual transaction automatically**.
+If you omit the `tx` argument, Dataply creates an internal transaction for each operation.
 
-- **Guaranteed Atomicity**: Even single operations are processed within an internal transaction, ensuring they are only finalized on success and rolled back on failure.
-- **Performance Note**: For batch processing or multiple related operations, wrapping them in a single explicit transaction is significantly faster than relying on auto-transactions due to reduced I/O overhead.
+- **Security**: Atomicity is guaranteed even for single operations.
+- **Optimization Tip**: For bulk operations, use an **explicit transaction** to significantly reduce I/O overhead and increase performance.
 
 ## API Reference
 
@@ -201,13 +202,13 @@ Cancels all changes made during the transaction and restores the original state.
 ### GlobalTransaction Class
 
 #### `add(tx: Transaction): void`
-Adds an individual transaction from a `Dataply` instance to the global transaction.
+Registers a transaction from a Dataply instance to the global unit.
 
 #### `async commit(): Promise<void>`
-Atomically commits all added transactions using a 2-Phase Commit (2PC) process.
+Executes an atomic commit across all registered transactions via a 2-Phase Commit (2PC) protocol.
 
 #### `async rollback(): Promise<void>`
-Rolls back all added transactions.
+Rolls back all registered transactions simultaneously.
 
 ## Extending Dataply
 
@@ -331,12 +332,14 @@ As **Dataply** is currently in Alpha, there are several limitations to keep in m
 
 ### Q: Why should I use Dataply instead of a simple JSON file?
 
-The core differences between the commonly used JSON file approach and Dataply are as follows:
+While JSON is simple, Dataply is designed for scalable and reliable data management:
 
-1.  **Memory Efficiency**: While JSON requires loading the entire file into memory, Dataply uses a **page-based storage mechanism**, allowing it to handle large-scale data reliably with a constant memory footprint.
-2.  **Superior Search Performance**: Unlike JSON, which requires a full scan (O(N)), Dataply ensures extremely fast lookups (O(log N)) regardless of data size using a **B+Tree index**.
-3.  **Data Integrity**: In contrast to JSON files that risk corruption during system failures, Dataply protects your data using **WAL (Write-Ahead Logging)** and **Transactions**.
-4.  **Concurrency Control**: Using **MVCC (Multi-Version Concurrency Control)** and **page-level locking**, Dataply delivers peak performance even in environments where multiple users are reading and writing simultaneously.
+| Feature | JSON File Approach | Dataply Record Store |
+| :--- | :--- | :--- |
+| **Memory usage** | Loads entire file into RAM | Constant memory via page-based I/O |
+| **Search speed** | Linear scan (O(N)) | B+Tree Index lookups (O(log N)) |
+| **Integrity** | High risk of corruption on crash | Protected by WAL and Transactions |
+| **Concurrency** | Single-user only | Multi-user via MVCC & Locking |
 
 ### Q: What can I build with Dataply?
 

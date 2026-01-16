@@ -4,7 +4,7 @@ Dataply provides a flexible extension system through the `DataplyAPI` class and 
 
 ---
 
-## 🏗️ Core Concept: Hook System
+## Core Concept: Hook System
 
 Dataply's internal Hook system is powered by the [hookall](https://github.com/izure1/hookall) library. It allows you to intercept internal processes and inject custom logic at specific lifecycles.
 
@@ -30,9 +30,9 @@ graph TD
     style End fill:none,stroke:#ccc,stroke-width:2px
 ```
 
-1.  **Before Hooks**: Receive the `initialValue`. If multiple hooks exist, they process the value sequentially.
-2.  **Main Callback**: Receives the processed value from the last Before Hook. This is the "Core Logic."
-3.  **After Hooks**: Receive the return value from the Main Callback for final processing.
+1.  **Before Hooks**: Intercept and pre-process the `initialValue` before the core logic executes.
+2.  **Main Callback**: The engine's core logic, which operates on the potentially modified value from the Before Hooks and returns a result.
+3.  **After Hooks**: Receive the result from the Main Callback as their input, potentially transforming it. The final value from the last After Hook is returned to the original `trigger()` caller.
 
 ---
 
@@ -65,18 +65,13 @@ graph TD
     style Pipeline fill:none,stroke:#666,stroke-width:1px,stroke-dasharray: 5 5
 ```
 
-> [!TIP]
-> **Why this matters**: If you register a hook for `init`, you are stepping into the middle of this pipeline. You receive the `tx` that the Engine just created, perform your own operations (like seeding initial data), and pass the `tx` back so the Engine can finally commit it.
-
-> [!CAUTION]
-> **Value Chain**: If any hook fails to return a value, the subsequent stages will receive `undefined`, which usually leads to errors or transaction failures. Always return the data (or `tx` object).
-
 > [!IMPORTANT]
-> **Sequential Flow**: Hooks are executed sequentially. Each hook must return the `tx` object so the next hook or core logic can continue using the same transaction. If a hook fails to return `tx`, the chain will break.
+> **The Waterfall Pattern in Action**:
+> Hooks are executed **sequentially**. Each hook *must* return the `tx` object (or the relevant data) to the next stage. If a hook fails to return a value, the entire chain breaks, leading to `undefined` errors or transaction failures.
 
 ---
 
-## 🚀 Inheritance and Basic Hooks
+## Inheritance and Basic Hooks
 
 The most common way to extend Dataply is to create a subclass of `DataplyAPI`.
 
@@ -113,7 +108,9 @@ class MyExtendedAPI extends DataplyAPI {
 
 ---
 
-## 🛡️ Important: Transaction (tx) Safety Rules
+## Transaction (tx) Safety Rules
+
+When working within Hooks, following these rules is **mandatory** to prevent system hangs or data corruption.
 
 When working within Hooks, following these rules is **mandatory** to prevent system hangs or data corruption.
 
@@ -121,13 +118,14 @@ When working within Hooks, following these rules is **mandatory** to prevent sys
 Asynchronous hooks (like `init`) receive a `tx` object and must return it. This ensures the transaction chain continues correctly.
 
 ### 2. Reuse the Provided `tx`
-Inside a hook, you must pass the provided `tx` argument to any internal methods (`insert`, `update`, etc.).
+Always pass the `tx` argument to internal methods (`insert`, `update`, etc.) within a hook. 
+
 > [!CAUTION]
-> **Why?** When a hook is triggered, the database might already have an active **Write Lock** on specific pages. If you call a method WITHOUT passing the `tx`, Dataply will try to start a *new* transaction, which will wait indefinitely for the lock held by the hook itself—causing a **Deadlock**.
+> **Risk of Deadlocks**: When a hook is triggered, the engine might already hold a **Write Lock** on certain pages. Calling a method without the existing `tx` will cause Dataply to attempt a *new* transaction, which will wait indefinitely for the lock held by the parent hook—resulting in a permanent hang.
 
 ---
 
-## 💡 Best Practice: Custom Metadata Strategy
+## Best Practice: Custom Metadata Strategy
 
 You can store application-specific metadata (schema versions, settings, etc.) directly in the database by leveraging the uniqueness of the first record.
 
@@ -153,7 +151,7 @@ this.hook.onceAfter('init', async (tx, isNewlyCreated) => {
 
 ---
 
-## 📦 Recommended Architecture: Business Logic Wrapping
+## Recommended Architecture: Business Logic Wrapping
 
 For professional applications, wrap your extended API in a service class to provide a clean, high-level interface.
 
@@ -184,7 +182,7 @@ class MyDatabaseService {
 
 ---
 
-## 🔍 Hook Event Reference
+## Hook Event Reference
 
 | Event | Trigger Point | Arguments | Return Value |
 | :--- | :--- | :--- | :--- |

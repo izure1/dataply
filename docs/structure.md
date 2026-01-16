@@ -14,15 +14,16 @@ The first page (Page 0) of every Dataply database is the **Metadata Page**. It s
 | Offset | Size | Field | Description |
 | :--- | :--- | :--- | :--- |
 | 100 | 7 | `magicString` | Identification string ('DATAPLY') |
-| 108 | 4 | `pageCount` | Total number of pages in the database file |
-| 112 | 4 | `pageSize` | Database page size (e.g., 8,192 bytes) |
-| 116 | 6 | `rowCount` | Total number of records (rows) stored |
-| 122 | 4 | `rootIndexPageId` | ID of the root page for the Primary Key index (B+Tree) |
-| 126 | 4 | `rootIndexOrder` | Order (degree) of the B+Tree root node |
-| 130 | 4 | `lastInsertPageId`| ID of the last data page used for insertion |
-| 134 | 6 | `lastRowPk` | The highest Primary Key value used so far |
-| 140 | 4 | `bitmapPageId` | ID of the first bitmap page for tracking page allocation |
-| 144 | 4 | `freePageId` | ID of the first page in the free page list |
+| 107 | 1 | `reserved` | Padding for alignment |
+| 108 | 4 | `pageCount` | Total page count in the database |
+| 112 | 4 | `pageSize` | Page size (e.g., 8,192 bytes) |
+| 116 | 6 | `rowCount` | Total valid record count |
+| 122 | 4 | `rootIndexPageId` | B+Tree root page physical ID |
+| 126 | 4 | `rootIndexOrder` | Degree of the root node |
+| 130 | 4 | `lastInsertPageId`| ID of the last active data page |
+| 134 | 6 | `lastRowPk` | Highest PK allocated so far |
+| 140 | 4 | `bitmapPageId` | First page of the allocation bitmap |
+| 144 | 4 | `freePageId` | Head of the reclaimed page stack |
 
 ---
 
@@ -36,13 +37,13 @@ Every page starts with a 100-byte header area.
 
 | Offset | Size | Field | Description |
 | :--- | :--- | :--- | :--- |
-| 0 | 1 | `pageType` | Internal type of the page (Metadata, Bitmap, Index, Data, Overflow, etc.) |
-| 1 | 4 | `pageId` | Unique ID of the current page |
-| 5 | 4 | `nextPageId` | ID of the next connected page (-1 if none) |
-| 9 | 4 | `insertedRowCount` | (Data Page only) Number of rows inserted |
-| 13 | 4 | `remainingCapacity` | Remaining free space in the page (bytes) |
-| 17 | 4 | `checksum` | CRC32 checksum for data integrity verification |
-| 21-99 | 79 | Reserved | Reserved space for future extensions |
+| 0 | 1 | `pageType` | `0: Empty`, `1: Metadata`, `2: Data`, `3: Index`... |
+| 1 | 4 | `pageId` | Current physical page ID |
+| 5 | 4 | `nextPageId` | Sequential chain pointer (-1 if end) |
+| 9 | 4 | `insertedRowCount` | Number of records in this page |
+| 13 | 4 | `remainingCapacity` | Remaining free space (useful for splits) |
+| 17 | 4 | `checksum` | CRC32 for hardware/disk corruption detection |
+| 21 | 79 | `reserved` | Growth space for future system metadata |
 
 ### 2-2. Data Page Layout
 
