@@ -43,36 +43,38 @@ describe('Overflow Insert Test', () => {
     // accessing protected createTransaction indirectly or just public wrapper if possible.
     // DataplyAPI has public createTransaction()
     const tx = db.createTransaction()
+    const txContext = (db as any).txContext
 
     try {
-      // Get RID (Need to access private method of engine or use bptree directly if accessible)
-      // engine.getRidByPK is private.
-      const rid = await engine['getRidByPK'](pk, tx)
-      expect(rid).not.toBeNull()
+      await txContext.run(tx, async () => {
+        // Get RID (Need to access private method of engine or use bptree directly if accessible)
+        // engine.getRidByPK is private.
+        const rid = await engine['getRidByPK'](pk, tx)
+        expect(rid).not.toBeNull()
 
-      // Decode RID to PageID and SlotIndex
-      const keyManager = new KeyManager()
-      const ridBuffer = new Uint8Array(6)
-      keyManager.setBufferFromKey(rid as number, ridBuffer)
+        // Decode RID to PageID and SlotIndex
+        const keyManager = new KeyManager()
+        const ridBuffer = new Uint8Array(6)
+        keyManager.setBufferFromKey(rid as number, ridBuffer)
 
-      const pageId = keyManager.getPageId(ridBuffer)
-      const slotIndex = keyManager.getSlotIndex(ridBuffer)
+        const pageId = keyManager.getPageId(ridBuffer)
+        const slotIndex = keyManager.getSlotIndex(ridBuffer)
 
-      // Get Page
-      const page = await pfs.get(pageId, tx)
+        // Get Page
+        const page = await pfs.get(pageId, tx)
 
-      // Get Row
-      const dataPageManager = new DataPageManager()
-      const rowData = dataPageManager.getRow(page as any, slotIndex)
+        // Get Row
+        const dataPageManager = new DataPageManager()
+        const rowData = dataPageManager.getRow(page as any, slotIndex)
 
-      const rowManager = new Row()
+        const rowManager = new Row()
 
-      // Verify Overflow Flag is set
-      expect(rowManager.getOverflowFlag(rowData)).toBe(true)
+        // Verify Overflow Flag is set
+        expect(rowManager.getOverflowFlag(rowData)).toBe(true)
 
-      // Verify Body Size is 4 bytes (Page ID size)
-      expect(rowManager.getBodySize(rowData)).toBe(4)
-
+        // Verify Body Size is 4 bytes (Page ID size)
+        expect(rowManager.getBodySize(rowData)).toBe(4)
+      })
     } finally {
       await tx.commit() // Read-only tx commit
     }

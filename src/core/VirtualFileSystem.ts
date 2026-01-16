@@ -10,8 +10,6 @@ import { PageManagerFactory } from './Page'
 export class VirtualFileSystem {
   /** Cache list (Page ID -> Data Buffer) */
   protected cache: LRUMap<number, Uint8Array>
-  /** Page IDs that have changes and need disk synchronization */
-  protected dirtyPages: Set<number> = new Set()
   /** Track logical file size */
   protected fileSize: number
   /** Bit shift value for page size */
@@ -66,14 +64,11 @@ export class VirtualFileSystem {
       return
     }
 
-    // 복구된 페이지들을 캐시에 반영하고 dirty로 표시
+    // 복구된 페이지들을 캐시에 반영하고 즉시 디스크(본 파일)에 기록 (Checkpoint)
+    const promises: Promise<number>[] = []
     for (const [pageId, data] of restoredPages) {
       // [안전 장치] 손상된 WAL 데이터로 인해 거대한 스파스 파일이 생성되는 것을 방지
-      // PageID가 비정상적으로 큰 경우(예: 1GB 이상의 오프셋) 무시
-      if (pageId > 1000000) {
-        console.warn(`[VFS] Ignoring suspicious PageID ${pageId} during recovery.`)
-        continue
-      }
+      if (pageId > 1000000) continue
 
       // Checksum verification
       try {
@@ -88,7 +83,15 @@ export class VirtualFileSystem {
       }
 
       this.cache.set(pageId, data)
-      this.dirtyPages.add(pageId)
+
+      // 즉시 디스크 동기화 (복구 시점)
+      promises.push(this._writeAsync(
+        this.fileHandle,
+        data,
+        0,
+        this.pageSize,
+        pageId * this.pageSize
+      ))
 
       // 복구된 페이지가 기존 파일 범위를 벗어나면 파일 크기 업데이트
       const endPos = (pageId + 1) * this.pageSize
@@ -97,9 +100,15 @@ export class VirtualFileSystem {
       }
     }
 
-    // 주의: 생성자 내에서 실행되므로 비동기 sync/clear를 호출하지 않음.
-    // WAL 파일은 그대로 유지되며 이후 트랜잭션 커밋이나 종료 시 처리됨.
-    // 이는 멱등성(Idempotent)이 보장되므로 안전함.
+    // 복구 작업 완료 대기
+    // 주의: 생성자가 비동기가 아니므로, 실제로는 초기 트랜잭션 시작 전에 복구가 완료됨을 보장해야 함.
+    // 여기서는 동기적으로 처리하거나 혹은 LogManager를 사용하는 외부에서 관리해야 하지만,
+    // 현재 구조상 promises를 관리하여 완료를 보장하는 방향으로 구현.
+    Promise.all(promises).then(() => {
+      if (this.logManager && restoredPages.size > 0) {
+        this.logManager.clear().catch(console.error)
+      }
+    })
   }
 
   /**
@@ -108,18 +117,9 @@ export class VirtualFileSystem {
    * @param tx Transaction
    */
   async prepareCommit(tx: Transaction): Promise<void> {
-    const dirtyPages = tx.__getDirtyPages()
-    if (dirtyPages.size === 0) {
+    const dirtyPageMap = tx.__getDirtyPages()
+    if (dirtyPageMap.size === 0) {
       return
-    }
-
-    // 1. 변경된 페이지들을 WAL에 기록
-    const dirtyPageMap = new Map<number, Uint8Array>()
-    for (const pageId of dirtyPages) {
-      const page = this.cache.get(pageId)
-      if (page) {
-        dirtyPageMap.set(pageId, page)
-      }
     }
 
     if (this.logManager && dirtyPageMap.size > 0) {
@@ -134,8 +134,8 @@ export class VirtualFileSystem {
    * @param tx Transaction
    */
   async finalizeCommit(tx: Transaction): Promise<void> {
-    const dirtyPages = tx.__getDirtyPages()
-    if (dirtyPages.size === 0) {
+    const dirtyPageMap = tx.__getDirtyPages()
+    if (dirtyPageMap.size === 0) {
       this.cleanupTransaction(tx)
       return
     }
@@ -146,12 +146,12 @@ export class VirtualFileSystem {
     }
 
     // 2. 디스크 동기화 (Checkpoint) - 해당 트랜잭션의 페이지만 반영
-    // 최적화를 위해 정렬
-    const sortedPages = Array.from(dirtyPages).sort((a, b) => a - b)
+    // 최적화를 위해 정렬 (PageID 기준)
+    const sortedPageIds = Array.from(dirtyPageMap.keys()).sort((a, b) => a - b)
     const promises: Promise<number>[] = []
 
-    for (const pageId of sortedPages) {
-      const page = this.cache.get(pageId)
+    for (const pageId of sortedPageIds) {
+      const page = dirtyPageMap.get(pageId)
       if (page) {
         promises.push(this._writeAsync(
           this.fileHandle,
@@ -162,7 +162,6 @@ export class VirtualFileSystem {
         ))
       }
     }
-
     await Promise.all(promises)
 
     // 3. 로그 비우기
@@ -191,14 +190,9 @@ export class VirtualFileSystem {
    * @param tx Transaction
    */
   async rollback(tx: Transaction): Promise<void> {
-    const dirtyPages = tx.__getDirtyPages()
-
-    // Undo 버퍼를 사용하여 이전 상태로 복구
-    for (const pageId of dirtyPages) {
-      const undoData = tx.__getUndoPage(pageId)
-      if (undoData) {
-        this.cache.set(pageId, undoData)
-      }
+    // [보안/정합성] 롤백 시 Dirty Page 맵의 참조를 모두 해제하고 undo 데이터로 복구
+    for (const [pageId, undoData] of tx.__getUndoPages()) {
+      this.cache.set(pageId, undoData)
     }
 
     this.cleanupTransaction(tx)
@@ -206,8 +200,8 @@ export class VirtualFileSystem {
 
   private cleanupTransaction(tx: Transaction) {
     // Dirty Page 소유권 해제
-    const pages = tx.__getDirtyPages()
-    for (const pageId of pages) {
+    const pageIds = tx.__getDirtyPageIds()
+    for (const pageId of pageIds) {
       this.dirtyPageOwners.delete(pageId)
     }
     this.activeTransactions.delete(tx.id)
@@ -272,7 +266,13 @@ export class VirtualFileSystem {
   }
 
   protected async _readPage(pageIndex: number, tx: Transaction): Promise<Uint8Array> {
-    // [MVCC] 다른 트랜잭션이 수정한 페이지(Dirty)인지 확인
+    // 1. 현재 트랜잭션이 수정한 페이지(Dirty)인지 최우선 확인 (캐시 증발 대비)
+    const txDirtyPage = tx.__getDirtyPage(pageIndex)
+    if (txDirtyPage) {
+      return txDirtyPage
+    }
+
+    // 2. [MVCC] 다른 트랜잭션이 수정한 페이지(Dirty)인지 확인
     if (this.activeTransactions.size > 0) {
       const ownerTx = this.dirtyPageOwners.get(pageIndex)
       if (ownerTx) {
@@ -402,7 +402,8 @@ export class VirtualFileSystem {
       // [중요] _readPage가 복사본을 반환하므로 수정한 페이지를 캐시에 다시 반영
       this.cache.set(pageIndex, page)
 
-      tx.__addDirtyPage(pageIndex)
+      // 트랜잭션에 Dirty Page 등록 (참조 유지하여 캐시 증발 방지)
+      tx.__addDirtyPage(pageIndex, page)
     }
 
     // 파일 크기 업데이트 (확장된 경우에만)
@@ -415,37 +416,9 @@ export class VirtualFileSystem {
   }
 
   /**
-   * Synchronizes dirty pages to disk.
-   */
-  async sync(): Promise<void> {
-    const promises: Promise<number>[] = []
-
-    // 디스크 액세스 최적화를 위해 페이지 인덱스 정렬
-    const sortedPages = Array.from(this.dirtyPages).sort((a, b) => a - b)
-
-    for (const pageIndex of sortedPages) {
-      const page = this.cache.get(pageIndex)
-      if (page) {
-        promises.push(this._writeAsync(
-          this.fileHandle,
-          page,
-          0,
-          this.pageSize,
-          pageIndex * this.pageSize
-        ))
-      }
-    }
-
-    await Promise.all(promises)
-    this.dirtyPages.clear()
-  }
-
-  /**
    * Closes the file.
    */
   async close(): Promise<void> {
-    await this.sync()
-    this.dirtyPages.clear()
     this.cache.clear()
     if (this.logManager) {
       this.logManager.close()

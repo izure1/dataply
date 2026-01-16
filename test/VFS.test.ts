@@ -97,8 +97,6 @@ describe('VirtualFileSystem', () => {
 
     expect(bufBefore).toEqual(data)
 
-    await vfs.sync()
-
     const fdAfter = fs.openSync(TEST_FILE, 'r')
     const bufAfter = Buffer.alloc(16)
     fs.readSync(fdAfter, bufAfter, 0, 16, 0)

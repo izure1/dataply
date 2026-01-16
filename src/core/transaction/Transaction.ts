@@ -16,8 +16,8 @@ export class Transaction {
   private pageLocks: Map<number, string> = new Map()
   /** Undo Logs: PageID -> Original Page Buffer (Snapshot) */
   private undoPages: Map<number, Uint8Array> = new Map()
-  /** Dirty Pages modified by the transaction */
-  private dirtyPages: Set<number> = new Set()
+  /** Dirty Pages modified by the transaction: PageID -> Modified Page Buffer */
+  private dirtyPages: Map<number, Uint8Array> = new Map()
   /** BPTree Transaction instance */
   private bptreeTx?: BPTreeAsyncTransaction<number, number>
   /** Whether the BPTree transaction is dirty */
@@ -110,6 +110,15 @@ export class Transaction {
   }
 
   /**
+   * Returns all Undo pages.
+   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
+   * @returns Map of PageID -> Undo Page Buffer
+   */
+  __getUndoPages(): Map<number, Uint8Array> {
+    return this.undoPages
+  }
+
+  /**
    * Acquires a write lock.
    * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
    * @param pageId Page ID
@@ -163,19 +172,37 @@ export class Transaction {
   }
 
   /**
-   * Adds a Dirty Page.
+   * Adds or updates a Dirty Page with its buffer.
    * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
    * @param pageId Page ID
+   * @param buffer Modified page buffer
    */
-  __addDirtyPage(pageId: number) {
-    this.dirtyPages.add(pageId)
+  __addDirtyPage(pageId: number, buffer: Uint8Array) {
+    this.dirtyPages.set(pageId, buffer)
   }
 
   /**
-   * Returns the list of Dirty Pages.
+   * Returns a Dirty Page buffer if it exists in the current transaction.
+   * @param pageId Page ID
+   * @returns Modified page buffer or undefined
+   */
+  __getDirtyPage(pageId: number): Uint8Array | undefined {
+    return this.dirtyPages.get(pageId)
+  }
+
+  /**
+   * Returns the list of Dirty Page IDs.
    * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
    */
-  __getDirtyPages(): Set<number> {
+  __getDirtyPageIds(): IterableIterator<number> {
+    return this.dirtyPages.keys()
+  }
+
+  /**
+   * Returns the map of Dirty Pages.
+   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
+   */
+  __getDirtyPages(): Map<number, Uint8Array> {
     return this.dirtyPages
   }
 
