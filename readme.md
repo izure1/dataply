@@ -65,6 +65,40 @@ async function main() {
 main()
 ```
 
+## Integration Example (Express.js)
+
+Dataply's auto-generated **Primary Key (PK)** is perfect for use as a unique identifier in web applications.
+
+```typescript
+import express from 'express'
+import { Dataply } from 'dataply'
+
+const app = express()
+const db = new Dataply('./web.db')
+
+app.use(express.json())
+
+app.post('/posts', async (req, res) => {
+  // Dataply returns a numeric PK immediately after insertion
+  const pk = await db.insert(JSON.stringify(req.body))
+  res.status(201).json({ id: pk, message: 'Post created!' })
+})
+
+app.get('/posts/:id', async (req, res) => {
+  const data = await db.select(Number(req.params.id))
+  if (!data) return res.status(404).send('Not Found')
+  res.json(JSON.parse(data.toString()))
+})
+
+// Initialize DB before starting server
+db.init().then(() => {
+  app.listen(3000, () => console.log('Server running on http://localhost:3000'))
+})
+```
+
+> [!TIP]
+> For more advanced usage like search and optimization, check the [Technical Structure Guide](docs/structure.md).
+
 ## Transaction Management
 
 ### Explicit Transactions
@@ -220,7 +254,27 @@ graph TD
     TX -.-> LM[Lock Manager]
 ```
 
-### 2. Page-Based Storage and VFS Caching
+### 2. Data Flow (Insert Workflow)
+```mermaid
+sequenceDiagram
+    participant User
+    participant RTE as Row Table Engine
+    participant VFS as VFS Cache
+    participant WAL
+    participant Disk
+
+    User->>RTE: insert(data)
+    RTE->>RTE: Find Free Space (Bitmap)
+    RTE->>VFS: Write Row to Page
+    VFS-->>WAL: Log Change (Sequential Write)
+    Note over VFS,WAL: Atomic Transaction Starts
+    VFS-->>VFS: Mark Page as Dirty
+    User->>User: commit()
+    VFS->>Disk: Flush Dirty Pages (Async/at Close)
+    Disk-->>User: Data Persisted
+```
+
+### 3. Page-Based Storage and VFS Caching
 
 - **Fixed-size Pages**: All data is managed in fixed-size units (default 8KB) called pages.
 - **VFS Cache**: Minimizes disk I/O by caching frequently accessed pages in memory.
@@ -275,8 +329,21 @@ As **Dataply** is currently in Alpha, there are several limitations to keep in m
 
 ## Q&A
 
+### Q: Why should I use Dataply instead of a simple JSON file?
+
+The core differences between the commonly used JSON file approach and Dataply are as follows:
+
+1.  **Memory Efficiency**: While JSON requires loading the entire file into memory, Dataply uses a **page-based storage mechanism**, allowing it to handle large-scale data reliably with a constant memory footprint.
+2.  **Superior Search Performance**: Unlike JSON, which requires a full scan (O(N)), Dataply ensures extremely fast lookups (O(log N)) regardless of data size using a **B+Tree index**.
+3.  **Data Integrity**: In contrast to JSON files that risk corruption during system failures, Dataply protects your data using **WAL (Write-Ahead Logging)** and **Transactions**.
+4.  **Concurrency Control**: Using **MVCC (Multi-Version Concurrency Control)** and **page-level locking**, Dataply delivers peak performance even in environments where multiple users are reading and writing simultaneously.
+
 ### Q: What can I build with Dataply?
-Dataply is a low-level record store that provides the essential building blocks for storage engines. You can use it to build custom document databases, specialized caching layers, or any application requiring high-performance, ACID-compliant data persistence.
+
+Dataply is a low-level record store that provides high-performance ACID persistence. You can use it to build:
+- **Simple Websites**: Create forums or blogs using local files without complex database setup.
+- **Post Identity Management**: The **Primary Key (PK)** automatically generated and returned during `insert` can be directly used as a unique URL ID for posts (e.g., `/post/1024`).
+- **Custom Storage Engines**: Implement domain-specific document databases, caching layers, or log collectors.
 
 ### Q: Can I extend Dataply to implement a full-featured database?
 Absolutely! By leveraging `DataplyAPI`, you can implement custom indexing (like secondary indexes), query parsers, and complex data schemas. Dataply handles the difficult aspects of transaction management, crash recovery (WAL), and concurrency control, letting you focus on your database's unique features.
@@ -295,6 +362,14 @@ It is optional. While disabling WAL can improve write performance by reducing sy
 
 ### Q: How does Dataply ensure data consistency during concurrent access?
 Dataply utilizes a combination of page-level locking and MVCC (Multi-Version Concurrency Control). This allows for Snapshot Isolation, meaning readers can access a consistent state of the data without being blocked by ongoing write operations.
+
+## Contributing
+
+Contributions are welcome! Since Dataply is currently in its **Alpha** stage, your feedback, bug reports, and feature suggestions are invaluable for shaping the future of this project.
+
+- **Report Bugs**: If you find a bug, please open an issue with detailed steps to reproduce.
+- **Suggest Features**: Have an idea for a new feature? We'd love to hear it!
+- **Submit PRs**: Feel free to submit Pull Requests for bug fixes or improvements. Please ensure your code follows the existing style and includes appropriate tests.
 
 ## License
 

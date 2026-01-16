@@ -23,11 +23,11 @@ graph TD
     Main --> After["4. After Hooks:<br/>f(val2) -> finalValue"]
     After --> End(["5. Return finalValue to Caller"])
 
-    style Main fill:#f9f,stroke:#333
-    style Before fill:#dfd,stroke:#333
-    style After fill:#dfd,stroke:#333
-    style Start fill:#eee
-    style End fill:#eee
+    style Main fill:none,stroke:#f9f,stroke-width:2px
+    style Before fill:none,stroke:#dfd,stroke-width:2px
+    style After fill:none,stroke:#dfd,stroke-width:2px
+    style Start fill:none,stroke:#ccc,stroke-width:2px
+    style End fill:none,stroke:#ccc,stroke-width:2px
 ```
 
 1.  **Before Hooks**: Receive the `initialValue`. If multiple hooks exist, they process the value sequentially.
@@ -59,10 +59,10 @@ graph TD
     After --> Commit["8. Commit Transaction"]
     Commit --> End([9. Initialization Complete])
 
-    style Main fill:#f9f,stroke:#333
-    style Before fill:#dfd,stroke:#333
-    style After fill:#dfd,stroke:#333
-    style Pipeline fill:#f5f5ff,stroke:#666,stroke-dasharray: 5 5
+    style Main fill:none,stroke:#f9f,stroke-width:2px
+    style Before fill:none,stroke:#dfd,stroke-width:2px
+    style After fill:none,stroke:#dfd,stroke-width:2px
+    style Pipeline fill:none,stroke:#666,stroke-width:1px,stroke-dasharray: 5 5
 ```
 
 > [!TIP]

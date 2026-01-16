@@ -60,15 +60,13 @@ graph LR
         Free["Free Space"]
         Slots["... | Slot 1 | Slot 0"]
         
-        Header --> Data
-        Data --> Free
         Free --> Slots
     end
-    
-    style Header fill:#f9f,stroke:#333,stroke-width:2px
-    style Data fill:#bbf,stroke:#333,stroke-width:2px
-    style Free fill:#eee,stroke:#333,stroke-dasharray: 5 5
-    style Slots fill:#dfd,stroke:#333,stroke-width:2px
+
+    style Header fill:none,stroke:#f9f,stroke-width:2px
+    style Data fill:none,stroke:#bbf,stroke-width:2px
+    style Free fill:none,stroke:#eee,stroke-width:2px,stroke-dasharray: 5 5
+    style Slots fill:none,stroke:#dfd,stroke-width:2px
 ```
 
 ```text
@@ -116,12 +114,12 @@ graph TD
     Body -- "Points to" --> P1
     P1 -- "nextPageId" --> P2
     P2 -- "nextPageId" --> PN
-    
-    style RF fill:#f66,stroke:#333
-    style Body fill:#69f,stroke:#333
-    style P1 fill:#bbf,stroke:#333
-    style P2 fill:#bbf,stroke:#333
-    style PN fill:#eee,stroke:#333,stroke-dasharray: 5 5
+
+    style RF fill:none,stroke:#f66,stroke-width:2px
+    style Body fill:none,stroke:#69f,stroke-width:2px
+    style P1 fill:none,stroke:#bbf,stroke-width:2px
+    style P2 fill:none,stroke:#bbf,stroke-width:2px
+    style PN fill:none,stroke:#eee,stroke-width:2px,stroke-dasharray: 5 5
 ```
 
 1. The **Overflow Bit (Bit 2)** in the row header's `flag` is set to 1.
