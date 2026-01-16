@@ -201,14 +201,6 @@ export class VirtualFileSystem {
       }
     }
 
-    // 새로 생성된 페이지 처리 (dirtyPages에는 있지만 undoBuffer에는 없는 경우 = 신규 할당?)
-    // 신규 할당된 페이지는 undoBuffer에 '빈 페이지' 혹은 '이전 상태 없음'을 기록해야 함.
-    // VFS 레벨에서 파일 크기를 줄이기는 까다로움. 
-    // Undo로 페이지 내용은 복구되지만, 파일 크기가 늘어난 것은 그대로 유지될 수 있음 (Sparse).
-    // 파일 크기 축소: ftruncate? 
-    // 트랜잭션이 파일 크기를 늘렸는지 여부를 추적해야 함.
-    // 여기서는 단순성을 위해 파일 크기 축소는 생략함 (내용은 복구됨).
-
     this.cleanupTransaction(tx)
   }
 

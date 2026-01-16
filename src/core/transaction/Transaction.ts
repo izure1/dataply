@@ -154,7 +154,10 @@ export class Transaction {
   /**
    * Rolls back the transaction.
    */
-  async rollback(): Promise<void> {
+  async rollback(cleanup: boolean = true): Promise<void> {
+    if (this.bptreeTx) {
+      await this.bptreeTx.rollback(cleanup)
+    }
     await this.vfs.rollback(this)
     this.releaseAllLocks()
   }
