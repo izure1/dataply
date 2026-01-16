@@ -42,19 +42,17 @@ export class VirtualFileSystem {
     // 중요: 초기 파일 크기 로드
     this.fileSize = fs.fstatSync(fileHandle).size
 
-    // WAL 경로가 제공된 경우에만 LogManager 초기화 및 복구 수행
+    // WAL 경로가 제공된 경우에만 LogManager 초기화
     if (walPath) {
       this.logManager = new LogManager(walPath, pageSize)
-      this.recover()
     }
   }
 
   /**
    * Performs recovery (Redo) using WAL logs.
-   * Called in constructor, so it's a synchronous process and data is only reflected in cache.
-   * Actual disk sync and log clearing are performed during future transactions or closure.
+   * Called during initialization (DataplyAPI.init), ensuring data is fully restored before operations start.
    */
-  private recover() {
+  async recover(): Promise<void> {
     if (!this.logManager) return
 
     this.logManager!.open()
@@ -100,15 +98,11 @@ export class VirtualFileSystem {
       }
     }
 
-    // 복구 작업 완료 대기
-    // 주의: 생성자가 비동기가 아니므로, 실제로는 초기 트랜잭션 시작 전에 복구가 완료됨을 보장해야 함.
-    // 여기서는 동기적으로 처리하거나 혹은 LogManager를 사용하는 외부에서 관리해야 하지만,
-    // 현재 구조상 promises를 관리하여 완료를 보장하는 방향으로 구현.
-    Promise.all(promises).then(() => {
-      if (this.logManager && restoredPages.size > 0) {
-        this.logManager.clear().catch(console.error)
-      }
-    })
+    // 복구 작업 완료 대기 및 로그 비우기
+    await Promise.all(promises)
+    if (this.logManager && restoredPages.size > 0) {
+      await this.logManager.clear()
+    }
   }
 
   /**

@@ -209,6 +209,8 @@ export class DataplyAPI {
     }
     await this.runWithDefault(async (tx) => {
       await this.hook.trigger('init', tx, async (tx) => {
+        // VFS/PFS 초기화 (복구 로직 포함)
+        await this.pfs.init()
         await this.rowTableEngine.init()
         this.initialized = true
         return tx

@@ -29,6 +29,14 @@ export class PageFileSystem {
   }
 
   /**
+   * Initializes the page file system.
+   * Performs VFS recovery if necessary.
+   */
+  async init(): Promise<void> {
+    await this.vfs.recover()
+  }
+
+  /**
    * Updates the bitmap status for a specific page.
    * @param pageId The ID of the page to update
    * @param isFree True to mark as free, false to mark as used
