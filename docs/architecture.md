@@ -35,7 +35,7 @@ classDiagram
 
     class PageFileSystem {
         -PageMVCCStrategy pageStrategy
-        -VirtualFileSystem vfs
+        -WALManager walManager
         +getPageStrategy()
         +get(pageId, tx)
         +setPage(pageId, data, tx)
@@ -50,11 +50,10 @@ classDiagram
         +exists(pageId)
     }
 
-    class VirtualFileSystem {
-        -LogManager logManager
-        +recover()
-        +prepareCommitWAL()
-        +finalizeCommitWAL()
+    class WALManager {
+        +recover(writePage)
+        +prepareCommit(dirtyPages)
+        +finalizeCommit(hasActiveTransactions)
     }
 
     class RowTableEngine {
@@ -85,12 +84,12 @@ classDiagram
     RowIndexStrategy --> PageFileSystem : Reads/Writes Pages
     
     PageFileSystem --> PageMVCCStrategy : Exposes
-    PageFileSystem --> VirtualFileSystem : Recovery & WAL
+    PageFileSystem --> WALManager : Recovery & WAL
 
     Transaction --> PageMVCCStrategy : I/O & Caching
     note for PageMVCCStrategy "Disk I/O & LRU Cache"
     note for Transaction "Dirty Buffer & Undo Snapshot"
-    note for VirtualFileSystem "WAL & Recovery"
+    note for WALManager "WAL & Recovery"
     note for RowIndexStrategy "BPTree Integration (ID Reservation)"
     note for PageFileSystem "Logical Page Management"
 ```
@@ -116,9 +115,9 @@ classDiagram
 - **Responsibilities**:
   - **I/O Handling**: Perform actual read/write operations against the OS file system.
   - **LRU Cache**: Optimize performance by caching frequently accessed pages in memory.
-  - Replaces the legacy role of VFS (Caching + I/O) and operates independently of transactions.
+  - Operates independently of transactions, ensuring consistent physical access.
 
-#### 4. VirtualFileSystem (VFS)
+#### 4. WALManager
 - **Role**: Logging and recovery system for data integrity.
 - **Responsibilities**:
   - **WAL (Write-Ahead Logging)**: Sequentially record page changes to a log file before writing to disk.
@@ -209,7 +208,7 @@ To resolve this, the structure was simplified as follows:
 - **BPTree Integration**: In `RowIndexStrategy`, page ID reservation was separated from actual creation to prevent the B+Tree's internal MVCC from misidentifying new keys as "already existing."
 
 ### 2. File System Role Separation
-- **VirtualFileSystem**: Dedicated to WAL (Write-Ahead Log) management and recovery.
+- **WALManager**: Dedicated to WAL (Write-Ahead Log) management and recovery.
 - **PageFileSystem**: Handles logical page management and metadata processing.
 - **PageMVCCStrategy**: Manages physical file access and caching strategies.
 

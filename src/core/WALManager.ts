@@ -1,10 +1,12 @@
 import fs from 'node:fs'
+import { PageManagerFactory } from './Page'
 
 /**
- * Log Manager class.
- * Records changes to a log file (WAL) and manages them to ensure atomicity of the database.
+ * WAL (Write-Ahead Logging) Manager class.
+ * Records changes to a log file and manages them to ensure atomicity of the database.
+ * Handles commit phases and crash recovery.
  */
-export class LogManager {
+export class WALManager {
   private fd: number | null = null
   private readonly walFilePath: string
   private readonly pageSize: number
@@ -18,6 +20,11 @@ export class LogManager {
    * @param pageSize Page size
    */
   constructor(walFilePath: string, pageSize: number) {
+    // 페이지 크기는 비트 연산 최적화를 위해 2의 거듭제곱이어야 함
+    if ((pageSize & (pageSize - 1)) !== 0) {
+      throw new Error('Page size must be a power of 2')
+    }
+
     this.walFilePath = walFilePath
     this.pageSize = pageSize
     this.entrySize = 4 + pageSize
@@ -34,6 +41,81 @@ export class LogManager {
     // 쓰기는 항상 파일 끝에 추가됨 (atomic append).
     this.fd = fs.openSync(this.walFilePath, 'a+')
   }
+
+  // ─────────────────────────────────────────────────────────────
+  // High-level WAL operations (2-Phase Commit)
+  // ─────────────────────────────────────────────────────────────
+
+  /**
+   * Performs recovery (Redo) using WAL logs.
+   * Called during initialization, ensuring data is fully restored before operations start.
+   * @param writePage Callback to write recovered pages to disk
+   */
+  async recover(writePage: (pageId: number, data: Uint8Array) => Promise<void>): Promise<void> {
+    this.open()
+    const restoredPages = this.readAllSync()
+
+    if (restoredPages.size === 0) {
+      return
+    }
+
+    // 복구된 페이지들을 즉시 디스크(본 파일)에 기록 (Checkpoint)
+    const promises: Promise<void>[] = []
+    for (const [pageId, data] of restoredPages) {
+      // [안전 장치] 손상된 WAL 데이터로 인해 거대한 스파스 파일이 생성되는 것을 방지
+      if (pageId > 1000000) continue
+
+      // Checksum verification
+      try {
+        const manager = new PageManagerFactory().getManager(data)
+        if (!manager.verifyChecksum(data)) {
+          console.warn(`[WALManager] Checksum verification failed for PageID ${pageId} during recovery. Ignoring changes.`)
+          continue
+        }
+      } catch (e) {
+        console.warn(`[WALManager] Failed to verify checksum for PageID ${pageId} during recovery: ${e}. Ignoring changes.`)
+        continue
+      }
+
+      // 디스크에 기록
+      promises.push(writePage(pageId, data))
+    }
+
+    // 복구 작업 완료 대기 및 로그 비우기
+    await Promise.all(promises)
+    if (restoredPages.size > 0) {
+      await this.clear()
+    }
+  }
+
+  /**
+   * WAL에 페이지 데이터를 기록합니다 (Phase 1: Prepare).
+   * @param dirtyPages 변경된 페이지들 (pageId -> data)
+   */
+  async prepareCommit(dirtyPages: Map<number, Uint8Array>): Promise<void> {
+    if (dirtyPages.size === 0) {
+      return
+    }
+    await this.append(dirtyPages)
+  }
+
+  /**
+   * WAL에 커밋 마커를 기록하고 로그를 정리합니다 (Phase 2: Finalize).
+   * @param hasActiveTransactions 아직 활성 트랜잭션이 있는지 여부
+   */
+  async finalizeCommit(hasActiveTransactions: boolean): Promise<void> {
+    // Commit Marker 기록
+    await this.writeCommitMarker()
+
+    // 활성 트랜잭션이 없으면 로그 비우기
+    if (!hasActiveTransactions) {
+      await this.clear()
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────
+  // Low-level WAL operations
+  // ─────────────────────────────────────────────────────────────
 
   /**
    * Appends changed pages to the log file.
@@ -66,8 +148,7 @@ export class LogManager {
       })
     }
 
-    // 3. 디스크 동기화 (배치 작업 당 1회) -> 2PC를 위해 즉시 Sync하지 않고 호출자가 제어할 수도 있으나,
-    // 현재 구조상 'prepare' 단계에서 확실히 내려쓰는게 안전함.
+    // 3. 디스크 동기화 (배치 작업 당 1회)
     await new Promise<void>((resolve, reject) => {
       fs.fsync(this.fd!, (err) => {
         if (err) return reject(err)
@@ -110,7 +191,7 @@ export class LogManager {
 
   /**
    * Reads the log file to recover the page map.
-   * Runs synchronously as it is called by the VFS constructor.
+   * Runs synchronously as it is called during initialization.
    * Only returns pages from committed transactions (ended with a commit marker).
    * @returns Recovered page map
    */
@@ -187,3 +268,4 @@ export class LogManager {
     }
   }
 }
+

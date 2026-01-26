@@ -116,16 +116,16 @@ describe('Recovery Integration Test', () => {
     await dataply1.close()
 
     // WAL에 직접 데이터를 추가하여 "커밋 후 sync 전 crash" 시나리오 시뮬레이션
-    const { LogManager } = require('../src/core/LogManager')
-    const logManager = new LogManager(walPath, pageSize)
-    logManager.open()
+    const { WALManager } = require('../src/core/WALManager')
+    const walManager = new WALManager(walPath, pageSize)
+    walManager.open()
 
     // 추가 데이터를 WAL에만 기록 (디스크 sync 없이)
     const crashData = new Uint8Array(pageSize).fill(77)
     const walPages = new Map<number, Uint8Array>()
     walPages.set(5, crashData) // Page 5에 데이터 기록
-    await logManager.append(walPages)
-    logManager.close()
+    await walManager.append(walPages)
+    walManager.close()
 
     // 4. 재시작 후 복구 확인
     const dataply2 = new Dataply(dbPath, { pageSize, wal: walPath })
@@ -339,7 +339,7 @@ describe('Recovery Integration Test', () => {
     // private 속성에 접근하여 파일 핸들 강제 종료
     const rawDataply = (dataply1 as any).api
     const fd = rawDataply.fileHandle
-    const walFd = rawDataply.pfs.vfs.logManager?.fd
+    const walFd = (rawDataply.pfs.walManager as any)?.fd
 
     if (fd) fs.closeSync(fd)
     if (walFd) fs.closeSync(walFd)
@@ -383,7 +383,7 @@ describe('Recovery Integration Test', () => {
     // 여기서는 파일 핸들을 바로 닫아버림으로써 "쓰기 도중 차단" 또는 "쓰기 전 차단"을 유도
     const rawDataply = (dataply1 as any).api
     const fd = rawDataply.fileHandle
-    const walFd = rawDataply.pfs.vfs.logManager?.fd
+    const walFd = (rawDataply.pfs.walManager as any)?.fd
 
     try {
       if (fd) fs.closeSync(fd)

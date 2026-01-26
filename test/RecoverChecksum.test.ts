@@ -54,9 +54,9 @@ describe('Recovery Checksum with Dataply API', () => {
 
     await dataply.close() // Clean start DB.
 
-    const { LogManager } = require('../src/core/LogManager')
-    const logManager = new LogManager(WAL_FILE, PAGE_SIZE)
-    await logManager.open()
+    const { WALManager } = require('../src/core/WALManager')
+    const walManager = new WALManager(WAL_FILE, PAGE_SIZE)
+    await walManager.open()
 
     // Create a page buffer
     const pageId = 1 // First data page
@@ -73,10 +73,10 @@ describe('Recovery Checksum with Dataply API', () => {
     // Append to WAL
     const pages = new Map()
     pages.set(pageId, pageData)
-    await logManager.append(pages) // Valid entry
-    await logManager.writeCommitMarker()
+    await walManager.append(pages) // Valid entry
+    await walManager.writeCommitMarker()
 
-    await logManager.close()
+    await walManager.close()
 
     // Corrupt the WAL file
     const walBuf = fs.readFileSync(WAL_FILE)
@@ -109,11 +109,11 @@ describe('Recovery Checksum with Dataply API', () => {
     await s.init()
     await s.close()
 
-    const { LogManager } = require('../src/core/LogManager')
+    const { WALManager } = require('../src/core/WALManager')
     const { DataPageManager } = require('../src/core/Page')
 
-    const logManager = new LogManager(WAL_FILE, PAGE_SIZE)
-    await logManager.open()
+    const walManager = new WALManager(WAL_FILE, PAGE_SIZE)
+    await walManager.open()
 
     const pageId = 1
     const pageData = new Uint8Array(PAGE_SIZE)
@@ -125,9 +125,9 @@ describe('Recovery Checksum with Dataply API', () => {
 
     const pages = new Map()
     pages.set(pageId, pageData)
-    await logManager.append(pages)
-    await logManager.writeCommitMarker()
-    await logManager.close()
+    await walManager.append(pages)
+    await walManager.writeCommitMarker()
+    await walManager.close()
 
     // 2. Open Dataply
     const dataply = new Dataply(DB_FILE, { pageSize: PAGE_SIZE, wal: WAL_FILE })

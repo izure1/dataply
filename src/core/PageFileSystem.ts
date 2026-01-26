@@ -1,7 +1,7 @@
 import type { BitmapPage, IndexPage, MetadataPage } from '../types'
 import type { Transaction } from './transaction/Transaction'
 import { IndexPageManager, MetadataPageManager, PageManager, PageManagerFactory, BitmapPageManager } from './Page'
-import { VirtualFileSystem } from './VirtualFileSystem'
+import { WALManager } from './WALManager'
 import { PageMVCCStrategy } from './PageMVCCStrategy'
 
 /**
@@ -10,7 +10,7 @@ import { PageMVCCStrategy } from './PageMVCCStrategy'
  */
 export class PageFileSystem {
   protected readonly pageFactory = new PageManagerFactory()
-  protected readonly vfs: VirtualFileSystem
+  protected readonly walManager: WALManager | null
   protected readonly pageManagerFactory: PageManagerFactory
   protected readonly pageStrategy: PageMVCCStrategy
 
@@ -26,17 +26,21 @@ export class PageFileSystem {
     readonly pageCacheCapacity: number,
     readonly walPath?: string | undefined | null
   ) {
-    this.vfs = new VirtualFileSystem(fileHandle, pageSize, pageCacheCapacity, walPath)
+    this.walManager = walPath ? new WALManager(walPath, pageSize) : null
     this.pageManagerFactory = new PageManagerFactory()
     this.pageStrategy = new PageMVCCStrategy(fileHandle, pageSize, pageCacheCapacity)
   }
 
   /**
    * Initializes the page file system.
-   * Performs VFS recovery if necessary.
+   * Performs WAL recovery if necessary.
    */
   async init(): Promise<void> {
-    await this.vfs.recover()
+    if (this.walManager) {
+      await this.walManager.recover(async (pageId, data) => {
+        await this.pageStrategy.write(pageId, data)
+      })
+    }
   }
 
   /**
@@ -100,10 +104,10 @@ export class PageFileSystem {
   }
 
   /**
-   * VFS 인스턴스를 반환합니다.
+   * WAL Manager 인스턴스를 반환합니다.
    */
-  get vfsInstance(): VirtualFileSystem {
-    return this.vfs
+  get wal(): WALManager | null {
+    return this.walManager
   }
 
   /**
@@ -401,14 +405,18 @@ export class PageFileSystem {
    * @param dirtyPages 변경된 페이지들
    */
   async commitToWAL(dirtyPages: Map<number, Uint8Array>): Promise<void> {
-    await this.vfs.prepareCommitWAL(dirtyPages)
-    await this.vfs.finalizeCommitWAL(false)
+    if (this.walManager) {
+      await this.walManager.prepareCommit(dirtyPages)
+      await this.walManager.finalizeCommit(false)
+    }
   }
 
   /**
    * Closes the page file system.
    */
   async close(): Promise<void> {
-    await this.vfs.close()
+    if (this.walManager) {
+      this.walManager.close()
+    }
   }
 }
