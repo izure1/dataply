@@ -1,7 +1,7 @@
 import { BPTreeAsyncTransaction } from 'serializable-bptree'
 import { LockManager } from './LockManager'
-import { VirtualFileSystem } from '../VirtualFileSystem'
 import { TransactionContext } from './TxContext'
+import { PageMVCCStrategy } from '../PageMVCCStrategy'
 
 /**
  * Transaction class.
@@ -14,29 +14,32 @@ export class Transaction {
   private heldLocks: Set<string> = new Set()
   /** Held page locks (PageID -> LockID) */
   private pageLocks: Map<number, string> = new Map()
-  /** Undo Logs: PageID -> Original Page Buffer (Snapshot) */
-  private undoPages: Map<number, Uint8Array> = new Map()
   /** Dirty Pages modified by the transaction: PageID -> Modified Page Buffer */
   private dirtyPages: Map<number, Uint8Array> = new Map()
+  /** Undo pages: PageID -> Original Page Buffer (Snapshot) */
+  private undoPages: Map<number, Uint8Array> = new Map()
   /** BPTree Transaction instance */
   private bptreeTx?: BPTreeAsyncTransaction<number, number>
   /** Whether the BPTree transaction is dirty */
   private bptreeDirty: boolean = false
   /** List of callbacks to execute on commit */
   private commitHooks: (() => Promise<void>)[] = []
+  /** Page MVCC Strategy for disk access */
+  private readonly pageStrategy: PageMVCCStrategy
 
   /**
    * @param id Transaction ID
-   * @param vfs VFS instance
+   * @param pageStrategy Page MVCC Strategy for disk I/O
    * @param lockManager LockManager instance
    */
   constructor(
     id: number,
     readonly context: TransactionContext,
-    private readonly vfs: VirtualFileSystem,
+    pageStrategy: PageMVCCStrategy,
     private readonly lockManager: LockManager
   ) {
     this.id = id
+    this.pageStrategy = pageStrategy
   }
 
   /**
@@ -79,48 +82,39 @@ export class Transaction {
   }
 
   /**
-   * Stores an Undo page.
-   * Does not overwrite if the page is already stored (maintains the original snapshot).
-   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
+   * Reads a page. Uses dirty buffer if available, otherwise disk.
    * @param pageId Page ID
-   * @param buffer Page buffer
+   * @returns Page data
    */
-  __setUndoPage(pageId: number, buffer: Uint8Array) {
-    this.undoPages.set(pageId, buffer)
+  async readPage(pageId: number): Promise<Uint8Array> {
+    // Check dirty buffer first
+    const dirty = this.dirtyPages.get(pageId)
+    if (dirty) {
+      return dirty
+    }
+    // Read from disk via strategy
+    return await this.pageStrategy.read(pageId)
   }
 
   /**
-   * Returns an Undo page.
-   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
+   * Writes a page to the transaction buffer.
    * @param pageId Page ID
-   * @returns Undo page
+   * @param data Page data
    */
-  __getUndoPage(pageId: number): Uint8Array | undefined {
-    return this.undoPages.get(pageId)
-  }
-
-  /**
-   * Returns true if the transaction has an Undo page for the given page ID.
-   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
-   * @param pageId Page ID
-   * @returns True if the transaction has an Undo page for the given page ID
-   */
-  __hasUndoPage(pageId: number): boolean {
-    return this.undoPages.has(pageId)
-  }
-
-  /**
-   * Returns all Undo pages.
-   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
-   * @returns Map of PageID -> Undo Page Buffer
-   */
-  __getUndoPages(): Map<number, Uint8Array> {
-    return this.undoPages
+  async writePage(pageId: number, data: Uint8Array): Promise<void> {
+    // Save undo snapshot if not already saved
+    if (!this.undoPages.has(pageId)) {
+      const existingData = await this.pageStrategy.read(pageId)
+      const snapshot = new Uint8Array(existingData.length)
+      snapshot.set(existingData)
+      this.undoPages.set(pageId, snapshot)
+    }
+    // Store in dirty buffer
+    this.dirtyPages.set(pageId, data)
   }
 
   /**
    * Acquires a write lock.
-   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
    * @param pageId Page ID
    */
   async __acquireWriteLock(pageId: number): Promise<void> {
@@ -137,14 +131,6 @@ export class Transaction {
   }
 
   /**
-   * Prepares the transaction for commit (Phase 1 of 2PC).
-   * Writes dirty pages to WAL but does not update the database file yet.
-   */
-  async prepare(): Promise<void> {
-    await this.vfs.prepareCommit(this)
-  }
-
-  /**
    * Commits the transaction.
    */
   async commit(): Promise<void> {
@@ -154,53 +140,32 @@ export class Transaction {
       }
     })
 
-    await this.vfs.prepareCommit(this)
-    await this.vfs.finalizeCommit(this)
+    // Write dirty pages to disk
+    for (const [pageId, data] of this.dirtyPages) {
+      await this.pageStrategy.write(pageId, data)
+    }
 
+    this.dirtyPages.clear()
+    this.undoPages.clear()
     this.releaseAllLocks()
   }
 
   /**
    * Rolls back the transaction.
    */
-  async rollback(cleanup: boolean = true): Promise<void> {
+  async rollback(): Promise<void> {
     if (this.bptreeTx) {
-      await this.bptreeTx.rollback(cleanup)
+      this.bptreeTx.rollback()
     }
-    await this.vfs.rollback(this)
+
+    // Restore undo pages to cache (not disk - just clear dirty)
+    this.dirtyPages.clear()
+    this.undoPages.clear()
     this.releaseAllLocks()
   }
 
   /**
-   * Adds or updates a Dirty Page with its buffer.
-   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
-   * @param pageId Page ID
-   * @param buffer Modified page buffer
-   */
-  __addDirtyPage(pageId: number, buffer: Uint8Array) {
-    this.dirtyPages.set(pageId, buffer)
-  }
-
-  /**
-   * Returns a Dirty Page buffer if it exists in the current transaction.
-   * @param pageId Page ID
-   * @returns Modified page buffer or undefined
-   */
-  __getDirtyPage(pageId: number): Uint8Array | undefined {
-    return this.dirtyPages.get(pageId)
-  }
-
-  /**
-   * Returns the list of Dirty Page IDs.
-   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
-   */
-  __getDirtyPageIds(): IterableIterator<number> {
-    return this.dirtyPages.keys()
-  }
-
-  /**
-   * Returns the map of Dirty Pages.
-   * Does not call this method directly. It is called by the `VirtualFileSystem` instance.
+   * Returns the dirty pages map.
    */
   __getDirtyPages(): Map<number, Uint8Array> {
     return this.dirtyPages

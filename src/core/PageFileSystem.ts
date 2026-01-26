@@ -2,15 +2,17 @@ import type { BitmapPage, IndexPage, MetadataPage } from '../types'
 import type { Transaction } from './transaction/Transaction'
 import { IndexPageManager, MetadataPageManager, PageManager, PageManagerFactory, BitmapPageManager } from './Page'
 import { VirtualFileSystem } from './VirtualFileSystem'
+import { PageMVCCStrategy } from './PageMVCCStrategy'
 
 /**
  * Page File System class.
- * Manages pages using VFS and page factory.
+ * mvcc-api 기반으로 페이지 관리를 수행합니다.
  */
 export class PageFileSystem {
   protected readonly pageFactory = new PageManagerFactory()
   protected readonly vfs: VirtualFileSystem
   protected readonly pageManagerFactory: PageManagerFactory
+  protected readonly pageStrategy: PageMVCCStrategy
 
   /**
    * @param fileHandle 파일 핸들 (fs.open으로 얻은 핸들)
@@ -26,6 +28,7 @@ export class PageFileSystem {
   ) {
     this.vfs = new VirtualFileSystem(fileHandle, pageSize, pageCacheCapacity, walPath)
     this.pageManagerFactory = new PageManagerFactory()
+    this.pageStrategy = new PageMVCCStrategy(fileHandle, pageSize, pageCacheCapacity)
   }
 
   /**
@@ -34,6 +37,13 @@ export class PageFileSystem {
    */
   async init(): Promise<void> {
     await this.vfs.recover()
+  }
+
+  /**
+   * Returns the page strategy for transaction use.
+   */
+  getPageStrategy(): PageMVCCStrategy {
+    return this.pageStrategy
   }
 
   /**
@@ -65,12 +75,7 @@ export class PageFileSystem {
       const nextPageId = manager.getNextPageId(currentBitmapPage)
 
       if (nextPageId === -1) {
-        // 다음 비트맵 페이지가 없으면 새로 생성
-        // 주의: appendNewPage는 내부적으로 메타데이터 락(페이지 수 증가)을 잡음
-        // 여기서는 recursion을 방지하기 위해 isFree=true(확장)일 때만 발생한다고 가정하거나,
-        // Reuse 로직이 이미 존재하는 페이지에 대해서만 updateBitmap(Usage)를 호출한다고 가정함.
         if (!isFree) {
-          // Used로 설정하는데 비트맵 페이지가 없다? 이는 존재하지 않는 페이지를 재사용하려 한다는 뜻이므로 에러
           throw new Error('Bitmap page not found for reused page')
         }
         const newBitmapPageId = await this.appendNewPage(PageManager.CONSTANT.PAGE_TYPE_BITMAP, tx)
@@ -81,7 +86,6 @@ export class PageFileSystem {
 
         currentBitmapPageId = newBitmapPageId
       } else {
-        // 다음 페이지로 이동
         currentBitmapPageId = nextPageId
       }
     }
@@ -91,17 +95,22 @@ export class PageFileSystem {
     const targetBitmapPage = await this.get(currentBitmapPageId, tx)
     const bitmapManager = this.pageFactory.getManager(targetBitmapPage) as BitmapPageManager
 
-    // 해당 pageId(상대적 인덱스)를 설정
     bitmapManager.setBit(targetBitmapPage as BitmapPage, targetBitIndex, isFree)
     await this.setPage(currentBitmapPageId, targetBitmapPage, tx)
   }
 
   /**
    * VFS 인스턴스를 반환합니다.
-   * Transaction 생성 시 사용됩니다.
    */
   get vfsInstance(): VirtualFileSystem {
     return this.vfs
+  }
+
+  /**
+   * 페이지 Strategy를 반환합니다.
+   */
+  get strategy(): PageMVCCStrategy {
+    return this.pageStrategy
   }
 
   /**
@@ -110,7 +119,12 @@ export class PageFileSystem {
    * @returns 페이지 버퍼
    */
   async get(pageIndex: number, tx: Transaction): Promise<Uint8Array> {
-    return await this.vfs.read(pageIndex * this.pageSize, this.pageSize, tx)
+    const page = await tx.readPage(pageIndex)
+    if (page === null) {
+      // 페이지가 없으면 빈 페이지 반환
+      return new Uint8Array(this.pageSize)
+    }
+    return page
   }
 
   /**
@@ -212,7 +226,7 @@ export class PageFileSystem {
     manager.updateChecksum(page)
 
     await tx.__acquireWriteLock(pageIndex)
-    await this.vfs.write(pageIndex * this.pageSize, page, tx)
+    await tx.writePage(pageIndex, page)
   }
 
   /**
@@ -224,30 +238,24 @@ export class PageFileSystem {
   async appendNewPage(pageType: number = PageManager.CONSTANT.PAGE_TYPE_EMPTY, tx: Transaction): Promise<number> {
     await tx.__acquireWriteLock(0)
     const metadata = await this.getMetadata(tx)
-    const metadataManager = this.pageFactory.getManager(metadata) as MetadataPageManager // Explicit cast
+    const metadataManager = this.pageFactory.getManager(metadata) as MetadataPageManager
 
     // 1. 재사용 가능한 페이지 확인
     const freePageId = metadataManager.getFreePageId(metadata)
 
     if (freePageId !== -1) {
-      // 재사용 로직
       const reusedPageId = freePageId
 
-      // 재사용할 페이지 로드 (헤더 정보 확인을 위해 get 사용)
       const reusedPage = await this.get(reusedPageId, tx)
       const reusedPageManager = this.pageFactory.getManager(reusedPage)
 
-      // 다음 프리 페이지 ID 가져오기
       const nextFreePageId = reusedPageManager.getNextPageId(reusedPage)
 
-      // 메타데이터 업데이트 (프리 페이지 포인터 이동)
       metadataManager.setFreePageId(metadata, nextFreePageId)
       await this.setPage(0, metadata, tx)
 
-      // 비트맵 업데이트 (Used로 표시 -> false)
       await this.updateBitmap(reusedPageId, false, tx)
 
-      // 페이지 초기화
       const manager = this.pageFactory.getManagerFromType(pageType)
       const newPage = manager.create(this.pageSize, reusedPageId)
       await this.setPage(reusedPageId, newPage, tx)
@@ -255,7 +263,7 @@ export class PageFileSystem {
       return reusedPageId
     }
 
-    // 2. 새 페이지 추가 로직 (기존 appendNewPage)
+    // 2. 새 페이지 추가 로직
     const pageCount = metadataManager.getPageCount(metadata)
     const newPageIndex = pageCount
     const newTotalCount = pageCount + 1
@@ -310,7 +318,6 @@ export class PageFileSystem {
       const writeSize = Math.min(data.length - dataOffset, bodySize - currentOffset)
       const chunk = data.subarray(dataOffset, dataOffset + writeSize)
 
-      // 데이터 쓰기
       page.set(chunk, bodyStart + currentOffset)
 
       // 남은 용량 업데이트
@@ -387,6 +394,15 @@ export class PageFileSystem {
     // 4. 메타데이터 업데이트 (Head를 현재 페이지로 변경)
     metadataManager.setFreePageId(metadata, pageId)
     await this.setPage(0, metadata, tx)
+  }
+
+  /**
+   * WAL에 커밋합니다.
+   * @param dirtyPages 변경된 페이지들
+   */
+  async commitToWAL(dirtyPages: Map<number, Uint8Array>): Promise<void> {
+    await this.vfs.prepareCommitWAL(dirtyPages)
+    await this.vfs.finalizeCommitWAL(false)
   }
 
   /**

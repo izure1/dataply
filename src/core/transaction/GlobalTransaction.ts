@@ -2,7 +2,9 @@ import { Transaction } from './Transaction'
 
 /**
  * Global Transaction Manager.
- * Coordinates transactions across multiple instances (shards) using 2-Phase Commit (2PC).
+ * Coordinates transactions across multiple instances (shards).
+ * 
+ * Note: Without WAL prepare phase, atomicity across shards is best-effort.
  */
 export class GlobalTransaction {
   private transactions: Transaction[] = []
@@ -18,34 +20,23 @@ export class GlobalTransaction {
   }
 
   /**
-   * Commits all transactions atomically.
-   * Phase 1: Prepare (Write WAL)
-   * Phase 2: Commit (Write Commit Marker & Checkpoint)
+   * Commits all transactions.
+   * Note: This is now a single-phase commit. For true atomicity across shards,
+   * each instance's WAL provides durability, but cross-shard atomicity is best-effort.
    */
   async commit(): Promise<void> {
     if (this.isCommitted || this.isRolledBack) {
       throw new Error('Transaction is already finished')
     }
 
-    // Phase 1: Prepare
-    try {
-      await Promise.all(this.transactions.map(tx => tx.prepare()))
-    } catch (e) {
-      // If any prepare fails, rollback everything
-      await this.rollback()
-      throw new Error(`Global commit failed during prepare phase: ${e}`)
-    }
-
-    // Phase 2: Commit
     try {
       await Promise.all(this.transactions.map(tx => tx.commit()))
       this.isCommitted = true
     } catch (e) {
-      // This is a critical failure (Partial Commit)
-      // In a strict distributed system, we would need a coordinator log to recover.
-      // Here, we just report the error. Ideally, the instances that failed commit 
-      // can still recover from WAL since they are prepared.
-      throw new Error(`Global commit failed during finalize phase: ${e}`)
+      // On any commit failure, try to rollback uncommitted transactions
+      // Note: Some transactions may have already committed - partial commit is possible
+      await this.rollback()
+      throw new Error(`Global commit failed: ${e}`)
     }
   }
 
@@ -57,7 +48,7 @@ export class GlobalTransaction {
       return
     }
 
-    await Promise.all(this.transactions.map(tx => tx.rollback()))
+    await Promise.all(this.transactions.map(tx => tx.rollback().catch(() => { })))
     this.isRolledBack = true
   }
 }

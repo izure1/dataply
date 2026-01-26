@@ -228,7 +228,7 @@ export class DataplyAPI {
     return new Transaction(
       ++this.txIdCounter,
       this.txContext,
-      this.pfs.vfsInstance,
+      this.pfs.getPageStrategy(),
       this.lockManager
     )
   }

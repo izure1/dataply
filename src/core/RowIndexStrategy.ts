@@ -24,7 +24,32 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
 
   async id(isLeaf: boolean): Promise<string> {
     const tx = this.txContext.get()!
-    const pageId = await this.pfs.appendNewPage(PageManager.CONSTANT.PAGE_TYPE_INDEX, tx)
+
+    // Only reserve the page ID - don't create the page yet
+    // The page will be created when BPTree calls write()
+    await tx.__acquireWriteLock(0)
+    const metadata = await this.pfs.getMetadata(tx)
+    const metadataManager = this.factory.getManager(metadata)
+
+    // Check free list first
+    const freePageId = metadataManager.getFreePageId(metadata)
+    let pageId: number
+
+    if (freePageId !== -1) {
+      // Reuse a free page - just update the free list pointer
+      const freePage = await this.pfs.get(freePageId, tx)
+      const freePageManager = this.factory.getManager(freePage)
+      const nextFreePageId = freePageManager.getNextPageId(freePage)
+      metadataManager.setFreePageId(metadata, nextFreePageId)
+      pageId = freePageId
+    } else {
+      // Allocate a new page ID (just increment counter, don't create page)
+      const pageCount = metadataManager.getPageCount(metadata)
+      pageId = pageCount
+      metadataManager.setPageCount(metadata, pageCount + 1)
+    }
+
+    await this.pfs.setMetadata(metadata, tx)
     return pageId.toString()
   }
 
@@ -32,6 +57,11 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
     const tx = this.txContext.get()!
     const pageId = +(id)
     const page = await this.pfs.get(pageId, tx)
+
+    // Check if this is a valid index page - if not, throw to signal non-existence
+    if (!IndexPageManager.IsIndexPage(page)) {
+      throw new Error(`Node ${id} does not exist - not a valid index page`)
+    }
 
     const indexId = this.indexPageManger.getIndexId(page)
     const parentIndexId = this.indexPageManger.getParentIndexId(page)
@@ -66,7 +96,13 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
   async write(id: string, node: BPTreeNode<number, number>): Promise<void> {
     const tx = this.txContext.get()!
     const pageId = +(id)
-    const page = await this.pfs.get(pageId, tx)
+
+    // Get existing page or create new index page structure
+    let page = await this.pfs.get(pageId, tx)
+    if (!IndexPageManager.IsIndexPage(page)) {
+      // Create a new index page structure for this pageId
+      page = this.indexPageManger.create(this.pfs.pageSize, pageId)
+    }
 
     if (node.leaf) {
       const n = node as BPTreeLeafNode<number, number>

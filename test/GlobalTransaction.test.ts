@@ -85,26 +85,7 @@ describe('GlobalTransaction', () => {
     expect(result2).toBe(null)
   })
 
-  test('should rollback all if one fails during prepare (Simulation)', async () => {
-    const tx1 = db1.createTransaction()
-    const tx2 = db2.createTransaction()
 
-    // Simulate failure in tx2 prepare
-    tx2.prepare = async () => { throw new Error('Simulated Prepare Failure') }
-
-    const globalTx = new GlobalTransaction()
-    globalTx.add(tx1)
-    globalTx.add(tx2)
-
-    await db1.insert('data1', tx1)
-    await db2.insert('data2', tx2)
-
-    await expect(globalTx.commit()).rejects.toThrow('Global commit failed')
-
-    // Verify rollback on db1
-    const result1 = await db1.select(1, false)
-    expect(result1).toBe(null)
-  })
 
   test('should succeed even if one instance does not have WAL configured (Atomicity compromised for that instance)', async () => {
     let db3: Dataply | undefined

@@ -67,8 +67,9 @@ export class RowTableEngine {
         if (result.success) {
           // B+Tree 인스턴스의 루트 정보를 최신화하여 다음 트랜잭션이 올바른 Snapshot을 잡도록 합니다.
           await this.bptree.init()
-          for (const id of result.obsoleteIds) {
-            await this.strategy.delete(id)
+          // 삭제된 노드들의 ID를 추출하여 Strategy에서 삭제
+          for (const entry of result.deleted) {
+            await this.strategy.delete(entry.key)
           }
         } else {
           throw new Error(`BPTree transaction commit failed. Current Root: ${this.bptree.getRootId()}`)
