@@ -14,8 +14,15 @@ async function cleanup() {
   }
 }
 
-async function benchmark() {
-  console.log('--- Dataply Performance Benchmark ---')
+interface BenchmarkResult {
+  name: string
+  count: number
+  totalTime: number
+  ops: number
+}
+
+async function runSingleBenchmark(): Promise<BenchmarkResult[]> {
+  const results: BenchmarkResult[] = []
 
   // 1. Bulk Insert (Batch)
   {
@@ -35,7 +42,7 @@ async function benchmark() {
 
     const duration = end - start
     const ops = (count / duration) * 1000
-    console.log(`[Bulk Insert (Batch)] Count: ${count}, Total: ${duration.toFixed(2)}ms, OPS: ${ops.toFixed(2)}`)
+    results.push({ name: 'Bulk Insert (Batch)', count, totalTime: duration, ops })
 
     await dataply.close()
   }
@@ -57,7 +64,7 @@ async function benchmark() {
 
     const duration = end - start
     const ops = (count / duration) * 1000
-    console.log(`[Bulk Insert (Individual)] Count: ${count}, Total: ${duration.toFixed(2)}ms, OPS: ${ops.toFixed(2)}`)
+    results.push({ name: 'Bulk Insert (Individual)', count, totalTime: duration, ops })
 
     await dataply.close()
   }
@@ -79,7 +86,7 @@ async function benchmark() {
 
     const duration = end - start
     const ops = (count / duration) * 1000
-    console.log(`[Bulk Insert with WAL] Count: ${count}, Total: ${duration.toFixed(2)}ms, OPS: ${ops.toFixed(2)}`)
+    results.push({ name: 'Bulk Insert with WAL', count, totalTime: duration, ops })
 
     await dataply.close()
   }
@@ -101,9 +108,48 @@ async function benchmark() {
 
     const duration = end - start
     const ops = (count / duration) * 1000
-    console.log(`[Medium Row Insert (1KB)] Count: ${count}, Total: ${duration.toFixed(2)}ms, OPS: ${ops.toFixed(2)}`)
+    results.push({ name: 'Medium Row Insert (1KB)', count, totalTime: duration, ops })
 
     await dataply.close()
+  }
+
+  return results
+}
+
+async function benchmark() {
+  console.log('--- Dataply Performance Benchmark (5 Runs Average) ---')
+
+  const RUNS = 5
+  const allResults: BenchmarkResult[][] = []
+
+  for (let i = 0; i < RUNS; i++) {
+    console.log(`Running iteration ${i + 1}/${RUNS}...`)
+    const result = await runSingleBenchmark()
+    allResults.push(result)
+    // Cooldown
+    await new Promise(resolve => setTimeout(resolve, 500))
+  }
+
+  console.log('\n--- Final Average Results ---')
+
+  const categories = allResults[0].map(r => r.name)
+
+  for (const category of categories) {
+    let totalOps = 0
+    let totalTime = 0
+    let count = 0
+
+    for (const run of allResults) {
+      const res = run.find(r => r.name === category)!
+      totalOps += res.ops
+      totalTime += res.totalTime
+      count = res.count
+    }
+
+    const avgOps = totalOps / RUNS
+    const avgTime = totalTime / RUNS
+
+    console.log(`[${category}] Count: ${count}, Avg Time: ${avgTime.toFixed(2)}ms, Avg OPS: ${avgOps.toFixed(2)}`)
   }
 
   await cleanup()

@@ -283,13 +283,13 @@ Dataply is optimized for high-speed data processing. Below are the results of ba
 
 | Test Case | Count | Total Time | OPS (Operations Per Second) |
 | :--- | :--- | :--- | :--- |
-| **Bulk Insert (Batch)** | 10,000 | ~800ms | **~12,503 OPS** |
-| **Bulk Insert (Individual)** | 100 | ~115ms | **~873 OPS** |
-| **Bulk Insert with WAL** | 100 | ~1,715ms | **~58 OPS** |
-| **Medium Row Insert (1KB)** | 100 | ~114ms | **~875 OPS** |
+| **Bulk Insert (Batch)** | 10,000 | ~1,477ms | **~7,244 OPS** |
+| **Bulk Insert (Individual)** | 100 | ~126ms | **~865 OPS** |
+| **Bulk Insert with WAL** | 100 | ~117ms | **~934 OPS** |
+| **Medium Row Insert (1KB)** | 100 | ~134ms | **~818 OPS** |
 
 ### Benchmark Analysis
-- **Batching Efficiency**: Grouping operations into a single transaction is approximately **14.3x faster** than individual inserts by minimizing internal transaction management overhead.
+- **Batching Efficiency**: Grouping operations into a single transaction is approximately **8.4x faster** than individual inserts by minimizing internal transaction management overhead.
 - **WAL Trade-off**: Enabling Write-Ahead Logging ensures data durability but results in a significant performance decrease (approximately **15x slower** for individual inserts) due to synchronous I/O operations.
 - **Node.js Optimization**: Dataply is designed to provide competitive performance (over **12,000 OPS** in batch mode) for a pure TypeScript Record Store without native dependencies.
 
