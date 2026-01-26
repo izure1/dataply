@@ -16,7 +16,7 @@ Dataply provides essential features for high-performance data management:
 - **MVCC & Isolation**: Snapshot isolation via Multi-Version Concurrency Control (MVCC) enables non-blocking reads.
 - **Reliability (WAL)**: Write-Ahead Logging (WAL) ensures data integrity and automatic crash recovery.
 - **Atomic Transactions**: Full support for ACID-compliant Commit and Rollback operations.
-- **Efficient Storage**: Fixed-size page management with VFS-based caching and Bitmap space optimization.
+- **Efficient Storage**: Fixed-size page management with LRU-based page caching and Bitmap space optimization.
 - **Type Safety**: Comprehensive TypeScript definitions for a seamless developer experience.
 
 ## Installation
@@ -141,7 +141,8 @@ try {
   await db1.insert('Data for DB1', tx1)
   await db2.insert('Data for DB2', tx2)
   
-  // Phase 1: Prepare (WAL write) -> Phase 2: Commit (Marker write)
+  // Commit transactions across all instances
+  // Note: This is a best-effort atomic commit.
   await globalTx.commit() 
 } catch (error) {
   await globalTx.rollback()
@@ -205,7 +206,7 @@ Cancels all changes made during the transaction and restores the original state.
 Registers a transaction from a Dataply instance to the global unit.
 
 #### `async commit(): Promise<void>`
-Executes an atomic commit across all registered transactions via a 2-Phase Commit (2PC) protocol.
+Executes a coordinated commit across all registered transactions. Note that without a prepare phase, this is a best-effort atomic commit.
 
 #### `async rollback(): Promise<void>`
 Rolls back all registered transactions simultaneously.
@@ -242,43 +243,17 @@ console.log(stats)
 
 Dataply implements the core principles of high-performance storage systems in a lightweight and efficient manner.
 
-### 1. Layered Architecture
-```mermaid
-graph TD
-    API[Dataply API] --> RTE[Row Table Engine]
-    RTE --> PFS[Page File System]
-    PFS --> VFS[Virtual File System / Cache]
-    VFS --> WAL[Write Ahead Log]
-    VFS --> DISK[(Database File)]
-    
-    TX[Transaction Manager] -.-> VFS
-    TX -.-> LM[Lock Manager]
-```
+For a detailed visual guide on Dataply's internal architecture, class diagrams, and transaction flow, please refer to the [Architecture Guide](docs/architecture.md).
 
-### 2. Data Flow (Insert Workflow)
-```mermaid
-sequenceDiagram
-    participant User
-    participant RTE as Row Table Engine
-    participant VFS as VFS Cache
-    participant WAL
-    participant Disk
+### 1. Architectural Principles
+- **Layered Architecture**: Clear separation of concerns between API, Engine, Page System, and I/O Strategy.
+- **MVCC & Snapshot Isolation**: Separation of read/write paths using `Undo Snapshots`.
+- **WAL-based Durability**: Sequential log writing for reliability and crash recovery.
 
-    User->>RTE: insert(data)
-    RTE->>RTE: Find Free Space (Bitmap)
-    RTE->>VFS: Write Row to Page
-    VFS-->>WAL: Log Change (Sequential Write)
-    Note over VFS,WAL: Atomic Transaction Starts
-    VFS-->>VFS: Mark Page as Dirty
-    User->>User: commit()
-    VFS->>Disk: Flush Dirty Pages (Async/at Close)
-    Disk-->>User: Data Persisted
-```
-
-### 3. Page-Based Storage and VFS Caching
+### 2. Page-Based Storage and Caching
 
 - **Fixed-size Pages**: All data is managed in fixed-size units (default 8KB) called pages.
-- **VFS Cache**: Minimizes disk I/O by caching frequently accessed pages in memory.
+- **Page Cache**: Minimizes disk I/O by caching frequently accessed pages in memory (LRU Strategy).
 - **Dirty Page Tracking**: Tracks modified pages (Dirty) to synchronize them with disk efficiently only at the time of commit.
 - **Bitmap Management**: Efficiently tracks the allocation and deallocation of pages using a bitmap structure, facilitating fast space reclamation and reuse. For more details on this mechanism, see [Page Reclamation and Reuse Guide](docs/page_reclamation.md).
 - **Detailed Structure**: For technical details on the physical layout, see [structure.md](docs/structure.md).
@@ -326,7 +301,7 @@ Dataply is optimized for high-speed data processing. Below are the results of ba
 As **Dataply** is currently in Alpha, there are several limitations to keep in mind:
 - **PK-Only Access**: Data can only be retrieved or modified using the Primary Key. No secondary indexes or complex query logic are available yet.
 - **No SQL Support**: This is a low-level **Record Store**. It does not support SQL or any higher-level query language.
-- **Memory Usage**: The VFS cache size is controlled by `pageCacheCapacity`, but excessive use of large records should be handled with care.
+- **Memory Usage**: The Page cache size is controlled by `pageCacheCapacity`, but excessive use of large records should be handled with care.
 
 ## Q&A
 

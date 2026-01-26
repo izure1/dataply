@@ -1,6 +1,7 @@
 export * from 'serializable-bptree'
 export * from 'ryoiki'
 export * from 'cache-entanglement'
+export * from 'mvcc-api'
 
 export type { DataplyOptions } from './types'
 export * from './core/Page'
