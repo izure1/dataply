@@ -283,15 +283,15 @@ Dataply is optimized for high-speed data processing. Below are the results of ba
 
 | Test Case | Count | Total Time | OPS (Operations Per Second) |
 | :--- | :--- | :--- | :--- |
-| **Bulk Insert (Batch)** | 10,000 | ~1,052ms | **~9,810 OPS** |
-| **Bulk Insert (Individual)** | 100 | ~138ms | **~822 OPS** |
-| **Bulk Insert with WAL** | 100 | ~149ms | **~771 OPS** |
-| **Medium Row Insert (1KB)** | 100 | ~144ms | **~769 OPS** |
+| **Bulk Insert (Batch)** | 10,000 | ~438ms | **~24,361 OPS** |
+| **Bulk Insert (Individual)** | 100 | ~122ms | **~851 OPS** |
+| **Bulk Insert with WAL** | 100 | ~118ms | **~891 OPS** |
+| **Medium Row Insert (1KB)** | 100 | ~137ms | **~776 OPS** |
 
 ### Benchmark Analysis
-- **Batching Efficiency**: Grouping operations into a single transaction is approximately **11.9x faster** than individual inserts by minimizing internal transaction management overhead.
-- **WAL Trade-off**: Enabling Write-Ahead Logging ensures data durability but results in a performance decrease (approximately **6.2% slower** for individual inserts) due to synchronous I/O operations.
-- **Node.js Optimization**: Dataply is designed to provide competitive performance (nearly **10,000 OPS** in batch mode) for a pure TypeScript Record Store without native dependencies.
+- **Batching Efficiency**: Grouping operations into a single transaction is approximately **28.6x faster** than individual inserts by minimizing internal transaction management overhead.
+- **WAL Trade-off**: Enabling Write-Ahead Logging ensures data durability. In this run, WAL performance was comparable to (and slightly faster than) individual inserts, demonstrating efficient logging overhead.
+- **Node.js Optimization**: Dataply is designed to provide competitive performance (over **24,000 OPS** in batch mode) for a pure TypeScript Record Store without native dependencies.
 
 > [!NOTE]
 > Tests were conducted on a standard local environment (Node.js v25+). Performance may vary depending on hardware specifications (especially SSD/HDD) and system load.
