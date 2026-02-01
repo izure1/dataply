@@ -282,12 +282,13 @@ export class DataplyAPI {
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
-    return this.runWithDefault((tx) => {
+    return this.runWithDefault(async (tx) => {
       incrementRowCount = incrementRowCount ?? true
       if (typeof data === 'string') {
         data = this.textCodec.encode(data)
       }
-      return this.rowTableEngine.insert(data, incrementRowCount, false, tx)
+      const pks = await this.rowTableEngine.insert([data], incrementRowCount, false, tx)
+      return pks[0]
     }, tx)
   }
 
@@ -302,12 +303,13 @@ export class DataplyAPI {
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
-    return this.runWithDefault((tx) => {
+    return this.runWithDefault(async (tx) => {
       incrementRowCount = incrementRowCount ?? true
       if (typeof data === 'string') {
         data = this.textCodec.encode(data)
       }
-      return this.rowTableEngine.insert(data, incrementRowCount, true, tx)
+      const pks = await this.rowTableEngine.insert([data], incrementRowCount, true, tx)
+      return pks[0]
     }, tx)
   }
 
@@ -325,13 +327,10 @@ export class DataplyAPI {
     }
     return this.runWithDefault(async (tx) => {
       incrementRowCount = incrementRowCount ?? true
-      const pks: number[] = []
-      for (const data of dataList) {
-        const encoded = typeof data === 'string' ? this.textCodec.encode(data) : data
-        const pk = await this.rowTableEngine.insert(encoded, incrementRowCount, false, tx)
-        pks.push(pk)
-      }
-      return pks
+      const encodedList = dataList.map(data =>
+        typeof data === 'string' ? this.textCodec.encode(data) : data
+      )
+      return this.rowTableEngine.insert(encodedList, incrementRowCount, false, tx)
     }, tx)
   }
 

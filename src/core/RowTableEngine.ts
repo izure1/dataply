@@ -150,19 +150,32 @@ export class RowTableEngine {
   }
 
   /**
-   * Inserts data.
-   * @param data Data
+   * Inserts data (batch insert).
+   * @param dataList Array of data to insert
    * @param incrementRowCount Whether to increment the row count to metadata
+   * @param overflowForcly Force overflow page creation for all data
    * @param tx Transaction
-   * @returns PK of the inserted data
+   * @returns Array of PKs of the inserted data
    */
-  async insert(data: Uint8Array, incrementRowCount: boolean, overflowForcly: boolean, tx: Transaction): Promise<number> {
-    // 메타데이터(Page 0) 쓰기 락 획득 (Writers serialize)
-    // Select(Readers)는 락을 체크하지 않으므로(Snapshot) 조회가 차단되지 않습니다.
+  async insert(
+    dataList: Uint8Array[],
+    incrementRowCount: boolean,
+    overflowForcly: boolean,
+    tx: Transaction
+  ): Promise<number[]> {
+    if (dataList.length === 0) {
+      return []
+    }
+
+    // 메타데이터(Page 0) 쓰기 락 획득 (한 번만)
     await tx.__acquireWriteLock(0)
 
+    // BPTree 트랜잭션을 미리 획득 (한 번만)
+    const btx = await this.getBPTreeTransaction(tx)
+
+    const pks: number[] = []
     const metadataPage = await this.pfs.getMetadata(tx)
-    const pk = this.metadataPageManager.getLastRowPk(metadataPage) + 1
+    let lastPk = this.metadataPageManager.getLastRowPk(metadataPage)
     let lastInsertDataPageId = this.metadataPageManager.getLastInsertPageId(metadataPage)
     let lastInsertDataPage = await this.pfs.get(lastInsertDataPageId, tx)
 
@@ -170,86 +183,89 @@ export class RowTableEngine {
       throw new Error(`Last insert page is not data page`)
     }
 
-    const willRowSize = this.getRequiredRowSize(data)
+    for (const data of dataList) {
+      const pk = ++lastPk
+      const willRowSize = this.getRequiredRowSize(data)
 
-    // overflow page를 생성해야하는 거대한 데이터라면 overflow page를 생성하고, 해당 페이지에 행을 삽입합니다.
-    if ((willRowSize > this.maxBodySize) || overflowForcly) {
-      // overflow page를 생성합니다.
-      const overflowPageId = await this.pfs.appendNewPage(this.overflowPageManager.pageType, tx)
+      // overflow page를 생성해야하는 거대한 데이터라면 overflow page를 생성하고, 해당 페이지에 행을 삽입합니다.
+      if ((willRowSize > this.maxBodySize) || overflowForcly) {
+        // overflow page를 생성합니다.
+        const overflowPageId = await this.pfs.appendNewPage(this.overflowPageManager.pageType, tx)
 
-      // overflow page로 이동하는 포인터 행을 생성합니다.
-      const row = new Uint8Array(Row.CONSTANT.SIZE_HEADER + 4)
-      this.rowManager.setPK(row, pk)
-      this.rowManager.setOverflowFlag(row, true)
-      this.rowManager.setBodySize(row, 4)
-      this.rowManager.setBody(row, numberToBytes(overflowPageId, this.pageIdBuffer))
+        // overflow page로 이동하는 포인터 행을 생성합니다.
+        const row = new Uint8Array(Row.CONSTANT.SIZE_HEADER + 4)
+        this.rowManager.setPK(row, pk)
+        this.rowManager.setOverflowFlag(row, true)
+        this.rowManager.setBodySize(row, 4)
+        this.rowManager.setBody(row, numberToBytes(overflowPageId, this.pageIdBuffer))
 
-      // data page에 포인터 행을 추가합니다.
-      const nextSlotIndex = this.dataPageManager.getNextSlotIndex(lastInsertDataPage, row)
-      // 페이지에 삽입 가능하다면 페이지에 삽입합니다.
-      if (nextSlotIndex !== -1) {
-        this.setRID(lastInsertDataPageId, nextSlotIndex)
-        this.dataPageManager.insert(lastInsertDataPage, row)
-        await this.pfs.setPage(lastInsertDataPageId, lastInsertDataPage, tx)
+        // data page에 포인터 행을 추가합니다.
+        const nextSlotIndex = this.dataPageManager.getNextSlotIndex(lastInsertDataPage as DataPage, row)
+        // 페이지에 삽입 가능하다면 페이지에 삽입합니다.
+        if (nextSlotIndex !== -1) {
+          this.setRID(lastInsertDataPageId, nextSlotIndex)
+          this.dataPageManager.insert(lastInsertDataPage as DataPage, row)
+          await this.pfs.setPage(lastInsertDataPageId, lastInsertDataPage, tx)
+        }
+        // 페이지에 삽입 불가능하다면 새로운 data page를 생성 후 삽입합니다.
+        else {
+          const newPageId = await this.pfs.appendNewPage(this.dataPageManager.pageType, tx)
+          const newPage = await this.pfs.get(newPageId, tx) as DataPage
+          this.dataPageManager.insert(newPage, row)
+          this.setRID(newPageId, 0)
+          lastInsertDataPageId = newPageId
+          lastInsertDataPage = newPage
+          await this.pfs.setPage(newPageId, newPage, tx)
+        }
+
+        // overflow page에 실제 데이터를 삽입합니다
+        await this.pfs.writePageContent(overflowPageId, data, 0, tx)
       }
-      // 페이지에 삽입 불가능하다면 새로운 data page를 생성 후 삽입합니다.
+      // 거대 데이터가 아니라면 마지막 데이터 페이지에 삽입합니다.
       else {
-        const newPageId = await this.pfs.appendNewPage(this.dataPageManager.pageType, tx)
-        const newPage = await this.pfs.get(newPageId, tx) as DataPage
-        this.dataPageManager.insert(newPage, row)
-        this.setRID(newPageId, 0)
-        lastInsertDataPageId = newPageId
-        lastInsertDataPage = newPage
-        await this.pfs.setPage(newPageId, newPage, tx)
+        const row = new Uint8Array(Row.CONSTANT.SIZE_HEADER + data.length)
+        const slotIndex = this.dataPageManager.getNextSlotIndex(lastInsertDataPage as DataPage, row)
+
+        this.rowManager.setBodySize(row, data.length)
+        this.rowManager.setBody(row, data)
+
+        // 마지막 데이터 페이지의 크기가 부족하다면 새로운 데이터 페이지를 생성합니다.
+        if (slotIndex === -1) {
+          const newPageId = await this.pfs.appendNewPage(this.dataPageManager.pageType, tx)
+          const newPage = await this.pfs.get(newPageId, tx) as DataPage
+          this.dataPageManager.insert(newPage, row)
+          this.setRID(newPageId, 0)
+          lastInsertDataPageId = newPageId
+          lastInsertDataPage = newPage
+          await this.pfs.setPage(newPageId, newPage, tx)
+        }
+        // 마지막 데이터 페이지의 크기가 충분하다면 마지막 데이터 페이지에 삽입합니다.
+        else {
+          this.dataPageManager.insert(lastInsertDataPage as DataPage, row)
+          this.setRID(lastInsertDataPageId, slotIndex)
+          await this.pfs.setPage(lastInsertDataPageId, lastInsertDataPage, tx)
+        }
       }
 
-      // overflow page에 실제 데이터를 삽입합니다
-      await this.pfs.writePageContent(overflowPageId, data, 0, tx)
-    }
-    // 거대 데이터가 아니라면 마지막 데이터 페이지에 삽입합니다.
-    else {
-      const row = new Uint8Array(Row.CONSTANT.SIZE_HEADER + data.length)
-      const slotIndex = this.dataPageManager.getNextSlotIndex(lastInsertDataPage, row)
-
-      this.rowManager.setBodySize(row, data.length)
-      this.rowManager.setBody(row, data)
-
-      // 마지막 데이터 페이지의 크기가 부족하다면 새로운 데이터 페이지를 생성합니다.
-      if (slotIndex === -1) {
-        const newPageId = await this.pfs.appendNewPage(this.dataPageManager.pageType, tx)
-        const newPage = await this.pfs.get(newPageId, tx) as DataPage
-        this.dataPageManager.insert(newPage, row)
-        this.setRID(newPageId, 0)
-        lastInsertDataPageId = newPageId
-        lastInsertDataPage = newPage
-        await this.pfs.setPage(newPageId, newPage, tx)
-      }
-      // 마지막 데이터 페이지의 크기가 충분하다면 마지막 데이터 페이지에 삽입합니다.
-      else {
-        this.dataPageManager.insert(lastInsertDataPage, row)
-        this.setRID(lastInsertDataPageId, slotIndex)
-        await this.pfs.setPage(lastInsertDataPageId, lastInsertDataPage, tx)
-      }
+      // B+트리에 삽입합니다.
+      await btx.insert(this.getRID(), pk)
+      pks.push(pk)
     }
 
-    // 메타데이터를 업데이트합니다.
+    // 메타데이터를 한 번만 업데이트합니다.
+    tx.__markBPTreeDirty()
     const freshMetadataPage = await this.pfs.getMetadata(tx)
     this.metadataPageManager.setLastInsertPageId(freshMetadataPage, lastInsertDataPageId)
-    this.metadataPageManager.setLastRowPk(freshMetadataPage, pk)
+    this.metadataPageManager.setLastRowPk(freshMetadataPage, lastPk)
 
     if (incrementRowCount) {
       const currentRowCount = this.metadataPageManager.getRowCount(freshMetadataPage)
-      this.metadataPageManager.setRowCount(freshMetadataPage, currentRowCount + 1)
+      this.metadataPageManager.setRowCount(freshMetadataPage, currentRowCount + pks.length)
     }
 
     await this.pfs.setMetadata(freshMetadataPage, tx)
 
-    // B+트리에 삽입합니다.
-    const btx = await this.getBPTreeTransaction(tx)
-    await btx.insert(this.getRID(), pk)
-    tx.__markBPTreeDirty()
-
-    return pk
+    return pks
   }
 
   /**
