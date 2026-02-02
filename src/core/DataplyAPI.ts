@@ -261,6 +261,42 @@ export class DataplyAPI {
   }
 
   /**
+   * Runs a generator callback function within a transaction context.
+   * Similar to runWithDefault but allows yielding values from an AsyncGenerator.
+   * If no transaction is provided, a new transaction is created.
+   * The transaction is committed if the generator completes successfully,
+   * or rolled back if an error occurs.
+   * @param callback The generator callback function to run within the transaction context.
+   * @param tx The transaction to use. If not provided, a new transaction is created.
+   * @returns An AsyncGenerator that yields values from the callback.
+   */
+  protected async *streamWithDefault<T>(
+    callback: (tx: Transaction) => AsyncGenerator<T>,
+    tx?: Transaction
+  ): AsyncGenerator<T> {
+    const isInternalTx = !tx
+    if (!tx) {
+      tx = this.createTransaction()
+    }
+    let hasError = false
+    try {
+      const generator = this.txContext.stream(tx, () => callback(tx!))
+      for await (const value of generator) {
+        yield value
+      }
+    } catch (error) {
+      hasError = true
+      if (isInternalTx) {
+        await tx.rollback()
+      }
+      throw error
+    }
+    if (!hasError && isInternalTx) {
+      await tx.commit()
+    }
+  }
+
+  /**
    * Retrieves metadata from the dataply.
    * @returns Metadata of the dataply.
    */
