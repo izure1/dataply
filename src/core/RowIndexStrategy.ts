@@ -145,20 +145,8 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
 
   async delete(id: string): Promise<void> {
     const tx = this.txContext.get()!
-    const manager = this.factory.getManagerFromType(PageManager.CONSTANT.PAGE_TYPE_INDEX)
-    let pageId = +(id)
-    while (true) {
-      const page = await this.pfs.get(pageId, tx)
-      const nextPageId = manager.getNextPageId(page)
-
-      // 인덱스 페이지 반환 및 초기화 (기존 로직 대체)
-      await this.pfs.setFreePage(pageId, tx)
-
-      if (nextPageId === -1) {
-        break
-      }
-      pageId = nextPageId
-    }
+    const pageId = +(id)
+    await this.pfs.freeChain(pageId, tx)
   }
 
   async readHead(): Promise<SerializeStrategyHead | null> {

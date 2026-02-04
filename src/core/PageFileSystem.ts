@@ -350,19 +350,31 @@ export class PageFileSystem {
         // 데이터 쓰기가 완료되었는데 다음 페이지가 남아있다면 잘라내기(Truncate)
         let nextPageId = manager.getNextPageId(page)
         if (nextPageId !== -1) {
-          let pendingFreePageId = nextPageId
-          while (pendingFreePageId !== -1) {
-            const pendingPage = await this.get(pendingFreePageId, tx)
-            const pendingManager = this.pageFactory.getManager(pendingPage)
-            const next = pendingManager.getNextPageId(pendingPage)
-
-            await this.setFreePage(pendingFreePageId, tx)
-            pendingFreePageId = next
-          }
+          await this.freeChain(nextPageId, tx)
           manager.setNextPageId(page, -1)
           await this.setPage(currentPageId, page, tx)
         }
       }
+    }
+  }
+
+  /**
+   * Free chain of pages.
+   * @param startPageId Start page ID
+   * @param tx Transaction
+   */
+  async freeChain(startPageId: number, tx: Transaction): Promise<void> {
+    let currentPageId = startPageId
+    const visited = new Set<number>()
+    while (currentPageId !== -1 && currentPageId !== 0) {
+      if (visited.has(currentPageId)) {
+        break // 순환 참조 방지
+      }
+      visited.add(currentPageId)
+      const page = await this.get(currentPageId, tx)
+      const nextPageId = this.pageFactory.getManager(page).getNextPageId(page)
+      await this.setFreePage(currentPageId, tx)
+      currentPageId = nextPageId
     }
   }
 
@@ -373,6 +385,8 @@ export class PageFileSystem {
    * @param tx Transaction
    */
   async setFreePage(pageId: number, tx: Transaction): Promise<void> {
+    if (pageId <= 0) return // 메타데이터 페이지 보호
+
     // 1. 메타데이터 조회 및 락 획득
     await tx.__acquireWriteLock(0)
     await tx.__acquireWriteLock(pageId)

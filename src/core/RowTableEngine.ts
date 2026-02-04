@@ -451,17 +451,8 @@ export class RowTableEngine {
 
     // 1. 오버플로우 페이지 해제
     if (this.rowManager.getOverflowFlag(row)) {
-      let overflowPageId = bytesToNumber(this.rowManager.getBody(row))
-      while (overflowPageId !== -1) {
-        const overflowPage = await this.pfs.get(overflowPageId, tx)
-        const manager = this.factory.getManager(overflowPage) as OverflowPageManager
-        const nextPageId = manager.getNextPageId(overflowPage)
-
-        // 오버플로우 페이지 반환 및 초기화
-        await this.pfs.setFreePage(overflowPageId, tx)
-
-        overflowPageId = nextPageId
-      }
+      const overflowPageId = bytesToNumber(this.rowManager.getBody(row))
+      await this.pfs.freeChain(overflowPageId, tx)
     }
 
     this.rowManager.setDeletedFlag(row, true)
@@ -504,7 +495,7 @@ export class RowTableEngine {
 
     if (allDeleted) {
       // 모든 행이 삭제되었다면 페이지 반환 및 초기화
-      await this.pfs.setFreePage(pageId, tx)
+      await this.pfs.freeChain(pageId, tx)
     }
   }
 
