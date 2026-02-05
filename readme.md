@@ -1,5 +1,6 @@
 ![node.js workflow](https://github.com/izure1/dataply/actions/workflows/node.js.yml/badge.svg)
 ![Performance Benchmark](https://github.com/izure1/dataply/actions/workflows/benchmark.yml/badge.svg)
+![Performance Benchmark](https://github.com/izure1/dataply/actions/workflows/benchmark.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 # Dataply
@@ -281,22 +282,14 @@ Dataply uses a **Slotted Page** architecture to manage records efficiently:
 
 ## Performance
 
-Dataply is optimized for high-speed data processing. Below are the results of basic benchmark tests conducted on a local environment.
+Dataply is optimized for high-speed data processing. Automated benchmarks are executed on every push to the `main` branch to ensure consistent performance.
 
-| Test Case | Count | Total Time | OPS (Operations Per Second) |
-| :--- | :--- | :--- | :--- |
-| **Bulk Insert (Batch)** | 10,000 | ~438ms | **~24,361 OPS** |
-| **Bulk Insert (Individual)** | 100 | ~122ms | **~851 OPS** |
-| **Bulk Insert with WAL** | 100 | ~118ms | **~891 OPS** |
-| **Medium Row Insert (1KB)** | 100 | ~137ms | **~776 OPS** |
+### Performance Trend
 
-### Benchmark Analysis
-- **Batching Efficiency**: Grouping operations into a single transaction is approximately **28.6x faster** than individual inserts by minimizing internal transaction management overhead.
-- **WAL Trade-off**: Enabling Write-Ahead Logging ensures data durability. In this run, WAL performance was comparable to (and slightly faster than) individual inserts, demonstrating efficient logging overhead.
-- **Node.js Optimization**: Dataply is designed to provide competitive performance (over **24,000 OPS** in batch mode) for a pure TypeScript Record Store without native dependencies.
+You can view the real-time performance trend and detailed metrics on our [Performance Dashboard](https://izure1.github.io/dataply/dev/bench/).
 
-> [!NOTE]
-> Tests were conducted on a standard local environment (Node.js v25+). Performance may vary depending on hardware specifications (especially SSD/HDD) and system load.
+> [!TIP]
+> **Continuous Monitoring**: We use `github-action-benchmark` to monitor performance changes. For every PR, a summary of the performance impact is automatically commented to help maintain high efficiency.
 
 ## Limitations
 

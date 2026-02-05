@@ -133,6 +133,7 @@ async function benchmark() {
   console.log('\n--- Final Average Results ---')
 
   const categories = allResults[0].map(r => r.name)
+  const finalResults: { name: string, avgTime: number, avgOps: number, count: number }[] = []
 
   for (const category of categories) {
     let totalOps = 0
@@ -149,7 +150,20 @@ async function benchmark() {
     const avgOps = totalOps / RUNS
     const avgTime = totalTime / RUNS
 
+    finalResults.push({ name: category, avgTime, avgOps, count })
+
     console.log(`[${category}] Count: ${count}, Avg Time: ${avgTime.toFixed(2)}ms, Avg OPS: ${avgOps.toFixed(2)}`)
+  }
+
+  if (process.argv.includes('--json')) {
+    const data = finalResults.map((r) => ({
+      name: r.name,
+      unit: 'ms',
+      value: parseFloat(r.avgTime.toFixed(2))
+    }))
+    const outputPath = path.join(__dirname, 'benchmark-results.json')
+    fs.writeFileSync(outputPath, JSON.stringify(data, null, 2))
+    console.log(`\nBenchmark results saved to ${outputPath}`)
   }
 
   await cleanup()

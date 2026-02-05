@@ -1,5 +1,8 @@
 /dist
 /node_modules
+*.dat
+*.wal
+benchmark/benchmark-results.json
 /test/*
 /test/**/
 !/test/**/*.ts
