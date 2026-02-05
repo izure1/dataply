@@ -1,6 +1,5 @@
 ![node.js workflow](https://github.com/izure1/dataply/actions/workflows/node.js.yml/badge.svg)
 ![Performance Benchmark](https://github.com/izure1/dataply/actions/workflows/benchmark.yml/badge.svg)
-![Performance Benchmark](https://github.com/izure1/dataply/actions/workflows/benchmark.yml/badge.svg)
 ![License](https://img.shields.io/badge/license-MIT-blue.svg)
 
 # Dataply
