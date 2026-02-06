@@ -138,13 +138,15 @@ export class Transaction {
    * Commits the transaction.
    */
   async commit(): Promise<void> {
-    return this.pfs.lockCheckpoint(async () => {
-      await this.context.run(this, async () => {
-        for (const hook of this.commitHooks) {
-          await hook()
-        }
-      })
+    await this.context.run(this, async () => {
+      for (const hook of this.commitHooks) {
+        await hook()
+      }
+    })
 
+    // 0. Acquire global lock to prevent concurrent checkpoint/commit issues
+    let shouldTriggerCheckpoint = false
+    await this.pfs.runGlobalLock(async () => {
       // 1. WAL Prepare (Phase 1)
       if (this.pfs.wal && this.dirtyPages.size > 0) {
         await this.pfs.wal.prepareCommit(this.dirtyPages)
@@ -157,18 +159,23 @@ export class Transaction {
         await this.pageStrategy.write(pageId, data)
       }
 
-      // 4. WAL Auto-Checkpoint (Flush and Clear if threshold reached)
+      // 4. WAL Auto-Checkpoint (Determine if needed)
       if (this.pfs.wal) {
         this.pfs.wal.incrementWrittenPages(this.dirtyPages.size)
         if (this.pfs.wal.shouldCheckpoint(this.pfs.options.walCheckpointThreshold)) {
-          await this.pfs.checkpoint()
+          shouldTriggerCheckpoint = true
         }
       }
-
-      this.dirtyPages.clear()
-      this.undoPages.clear()
-      this.releaseAllLocks()
     })
+
+    // 5. Trigger checkpoint outside the commit lock to avoid deadlock (ryoiki is non-reentrant)
+    if (shouldTriggerCheckpoint) {
+      await this.pfs.checkpoint()
+    }
+
+    this.dirtyPages.clear()
+    this.undoPages.clear()
+    this.releaseAllLocks()
   }
 
   /**

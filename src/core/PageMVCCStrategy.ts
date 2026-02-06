@@ -107,17 +107,22 @@ export class PageMVCCStrategy extends AsyncMVCCStrategy<number, Uint8Array> {
       return
     }
 
+    // 1. 현재 시점의 더티 페이지들을 스냅샷으로 캡처
+    const snapshot = new Map(this.dirtyPages)
+
     // 페이지 번호 순으로 정렬하여 순차 I/O 유도
-    const sortedPageIds = Array.from(this.dirtyPages.keys()).sort((a, b) => a - b)
+    const sortedPageIds = Array.from(snapshot.keys()).sort((a, b) => a - b)
 
     for (const pageId of sortedPageIds) {
-      const data = this.dirtyPages.get(pageId)!
+      const data = snapshot.get(pageId)!
       const position = pageId * this.pageSize
       await this._writeToDisk(data, position)
-    }
 
-    // 기록 완료 후 더티 목록 비우기
-    this.dirtyPages.clear()
+      // 2. 기록에 성공한 것만 dirtyPages에서 제거 (그 사이 새로 들어온 데이터는 보존됨)
+      // 주의: 만약 flush 도중 새로운 데이터가 써졌다면 데이터의 '내용'이 다를 수 있음.
+      // 하지만 Dataply의 경우 글로벌 락으로 보호되므로 flush 도중 write가 발생하지 않음을 전제함.
+      this.dirtyPages.delete(pageId)
+    }
   }
 
   /**

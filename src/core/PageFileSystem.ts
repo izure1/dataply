@@ -1,5 +1,4 @@
 import type { BitmapPage, IndexPage, MetadataPage, DataplyOptions } from '../types'
-import { Ryoiki } from 'ryoiki'
 import type { Transaction } from './transaction/Transaction'
 import { IndexPageManager, MetadataPageManager, PageManager, PageManagerFactory, BitmapPageManager } from './Page'
 import { WALManager } from './WALManager'
@@ -14,7 +13,8 @@ export class PageFileSystem {
   protected readonly walManager: WALManager | null
   protected readonly pageManagerFactory: PageManagerFactory
   protected readonly pageStrategy: PageMVCCStrategy
-  protected readonly lock: Ryoiki
+  /** 글로벌 동기화(체크포인트/커밋)를 위한 Mutex */
+  private lockPromise: Promise<void> = Promise.resolve()
 
   /**
    * @param pageCacheCapacity 페이지 캐시 크기
@@ -30,7 +30,25 @@ export class PageFileSystem {
     this.walManager = walPath ? new WALManager(walPath, pageSize) : null
     this.pageManagerFactory = new PageManagerFactory()
     this.pageStrategy = new PageMVCCStrategy(fileHandle, pageSize, pageCacheCapacity)
-    this.lock = new Ryoiki()
+  }
+
+  /**
+   * 글로벌 동기화 범위 내에서 작업을 실행합니다.
+   * @param task 수행할 비동기 작업
+   */
+  async runGlobalLock<T>(task: () => Promise<T>): Promise<T> {
+    const previous = this.lockPromise
+    let resolveLock: () => void
+    this.lockPromise = new Promise((resolve) => {
+      resolveLock = resolve
+    })
+
+    await previous
+    try {
+      return await task()
+    } finally {
+      resolveLock!()
+    }
   }
 
   /**
@@ -45,16 +63,6 @@ export class PageFileSystem {
       // 복구된 데이터를 실제로 디스크에 반영하고 WAL을 비움 (Checkpoint)
       await this.checkpoint()
     }
-  }
-
-  async lockCheckpoint(fn: () => Promise<void>): Promise<void> {
-    let lockId: string
-    return this.lock.writeLock(async (_lockId) => {
-      lockId = _lockId
-      await fn()
-    }).finally(() => {
-      this.lock.writeUnlock(lockId)
-    })
   }
 
   /**
@@ -446,7 +454,7 @@ export class PageFileSystem {
    * 3. WAL 로그 파일 비우기 (Clear/Truncate)
    */
   async checkpoint(): Promise<void> {
-    return this.lockCheckpoint(async () => {
+    await this.runGlobalLock(async () => {
       // 1. Flush dirty pages from cache to disk
       await this.pageStrategy.flush()
 
