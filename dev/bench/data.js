@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770407991010,
+  "lastUpdate": 1770411160503,
   "repoUrl": "https://github.com/izure1/dataply",
   "entries": {
     "Dataply Storage Benchmark": [
@@ -219,6 +219,50 @@ window.BENCHMARK_DATA = {
           {
             "name": "Medium Row Insert (1KB)",
             "value": 93.88,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "committer": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "distinct": true,
+          "id": "c1ce57a95390808cd442042b718174ab861548f8",
+          "message": "feat: walCheckpointThreshold 옵션이 이제는 커밋 횟수가 아니라, 총 변경된 페이지 개수를 의미합니다. 따라서 wal 파일의 최대 크기를 좀 더 예측 가능하게 관리할 수 있습니다",
+          "timestamp": "2026-02-07T05:50:48+09:00",
+          "tree_id": "64161ab10ecfbf7e90e65e271771af4fa7410152",
+          "url": "https://github.com/izure1/dataply/commit/c1ce57a95390808cd442042b718174ab861548f8"
+        },
+        "date": 1770411160219,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Bulk Insert (Batch)",
+            "value": 296.22,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert (Individual)",
+            "value": 78.93,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert with WAL",
+            "value": 206.26,
+            "unit": "ms"
+          },
+          {
+            "name": "Medium Row Insert (1KB)",
+            "value": 93.72,
             "unit": "ms"
           }
         ]
