@@ -82,11 +82,8 @@ export class WALManager {
       promises.push(writePage(pageId, data))
     }
 
-    // 복구 작업 완료 대기 및 로그 비우기
+    // 복구 작업 완료 대기
     await Promise.all(promises)
-    if (restoredPages.size > 0) {
-      await this.clear()
-    }
   }
 
   /**

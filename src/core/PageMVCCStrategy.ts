@@ -12,6 +12,8 @@ import { LRUMap } from 'cache-entanglement'
 export class PageMVCCStrategy extends AsyncMVCCStrategy<number, Uint8Array> {
   /** LRU 캐시 (페이지 ID -> 페이지 데이터) */
   private readonly cache: LRUMap<number, Uint8Array>
+  /** 디스크에 기록되지 않은 변경된 페이지들 (페이지 ID -> 페이지 데이터) */
+  private readonly dirtyPages: Map<number, Uint8Array> = new Map()
   /** 파일 크기 (논리적) */
   private fileSize: number
 
@@ -32,7 +34,15 @@ export class PageMVCCStrategy extends AsyncMVCCStrategy<number, Uint8Array> {
    * @returns 페이지 데이터
    */
   async read(pageId: number): Promise<Uint8Array> {
-    // 캐시 확인
+    // 1. 더티 페이지(아직 디스크에 안 써진 최신본) 확인
+    const dirty = this.dirtyPages.get(pageId)
+    if (dirty) {
+      const copy = new Uint8Array(this.pageSize)
+      copy.set(dirty)
+      return copy
+    }
+
+    // 2. 캐시 확인
     const cached = this.cache.get(pageId)
     if (cached) {
       // 캐시된 데이터의 복사본 반환 (불변성 보장)
@@ -41,7 +51,7 @@ export class PageMVCCStrategy extends AsyncMVCCStrategy<number, Uint8Array> {
       return copy
     }
 
-    // 디스크에서 읽기
+    // 3. 디스크에서 읽기
     const buffer = new Uint8Array(this.pageSize)
     const pageStartPos = pageId * this.pageSize
 
@@ -73,18 +83,53 @@ export class PageMVCCStrategy extends AsyncMVCCStrategy<number, Uint8Array> {
       throw new Error(`[Safety Limit] File write exceeds 512MB limit at position ${pageStartPos}`)
     }
 
-    await this._writeToDisk(data, pageStartPos)
+    // 데이터 복사본 생성 (원본 수정을 방지하기 위함)
+    const dataCopy = new Uint8Array(this.pageSize)
+    dataCopy.set(data)
 
-    // 캐시 업데이트 (복사본)
-    const cacheCopy = new Uint8Array(this.pageSize)
-    cacheCopy.set(data)
-    this.cache.set(pageId, cacheCopy)
+    // 더티 페이지 및 캐시 업데이트 (디스크 쓰기는 지연됨)
+    this.dirtyPages.set(pageId, dataCopy)
+    this.cache.set(pageId, dataCopy)
 
-    // 파일 크기 업데이트
+    // 파일 크기 업데이트 (논리적 크기)
     const endPosition = pageStartPos + this.pageSize
     if (endPosition > this.fileSize) {
       this.fileSize = endPosition
     }
+  }
+
+  /**
+   * 더티 페이지들을 메인 디스크 파일에 일괄 기록합니다.
+   * WAL 체크포인트 시점에 호출되어야 합니다.
+   */
+  async flush(): Promise<void> {
+    if (this.dirtyPages.size === 0) {
+      return
+    }
+
+    // 페이지 번호 순으로 정렬하여 순차 I/O 유도
+    const sortedPageIds = Array.from(this.dirtyPages.keys()).sort((a, b) => a - b)
+
+    for (const pageId of sortedPageIds) {
+      const data = this.dirtyPages.get(pageId)!
+      const position = pageId * this.pageSize
+      await this._writeToDisk(data, position)
+    }
+
+    // 기록 완료 후 더티 목록 비우기
+    this.dirtyPages.clear()
+  }
+
+  /**
+   * 메인 DB 파일의 물리적 동기화를 수행합니다 (fsync).
+   */
+  async sync(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      fs.fsync(this.fileHandle, (err) => {
+        if (err) return reject(err)
+        resolve()
+      })
+    })
   }
 
   /**
@@ -93,6 +138,7 @@ export class PageMVCCStrategy extends AsyncMVCCStrategy<number, Uint8Array> {
    * @param pageId 페이지 ID
    */
   async delete(pageId: number): Promise<void> {
+    this.dirtyPages.delete(pageId)
     this.cache.delete(pageId)
   }
 
@@ -102,6 +148,9 @@ export class PageMVCCStrategy extends AsyncMVCCStrategy<number, Uint8Array> {
    * @returns 존재하면 true
    */
   async exists(pageId: number): Promise<boolean> {
+    if (this.dirtyPages.has(pageId)) {
+      return true
+    }
     const pageStartPos = pageId * this.pageSize
     return pageStartPos < this.fileSize
   }

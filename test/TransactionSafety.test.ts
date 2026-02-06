@@ -51,15 +51,23 @@ describe('TransactionSafety (DataplyAPI)', () => {
     // 2. 커밋 수행
     await tx.commit()
 
-    // [검증 3: 지속성] 커밋 후에는 물리적 디스크 크기가 늘어나 있어야 함
+    // [검증 3: 지연 쓰기] 커밋 후에도 물리적 디스크 크기는 아직 변하지 않아야 함 (메모리 & WAL에만 반영됨)
+    const afterCommitDiskSize = fs.statSync(DB_PATH).size
+    expect(afterCommitDiskSize).toBe(initialDiskSize)
+
+    // 3. DB 종료 (자동 체크포인트 유도)
+    await db.close()
+
+    // [검증 4: 지속성] 종료 후(체크포인트 완료)에는 물리적 디스크 크기가 늘어나 있어야 함
     const finalDiskSize = fs.statSync(DB_PATH).size
     expect(finalDiskSize).toBeGreaterThan(initialDiskSize)
 
-    // [검증 4: 데이터 정합성] 새로운 트랜잭션에서도 데이터가 잘 보여야 함
-    const selectedAfter = await db.select(pks[0], true)
+    // [검증 5: 데이터 정합성] 다시 열었을 때 데이터가 잘 보여야 함
+    const db2 = new DataplyAPI(DB_PATH, { pageSize: 4096 })
+    await db2.init()
+    const selectedAfter = await db2.select(pks[0], true)
     expect(selectedAfter).toEqual(largeData)
-
-    await db.close()
+    await db2.close()
   })
 
   test('Safety: Data should not be lost when cache is small (LRU Eviction resilience)', async () => {

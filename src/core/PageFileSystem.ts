@@ -1,4 +1,5 @@
 import type { BitmapPage, IndexPage, MetadataPage, DataplyOptions } from '../types'
+import { Ryoiki } from 'ryoiki'
 import type { Transaction } from './transaction/Transaction'
 import { IndexPageManager, MetadataPageManager, PageManager, PageManagerFactory, BitmapPageManager } from './Page'
 import { WALManager } from './WALManager'
@@ -13,6 +14,7 @@ export class PageFileSystem {
   protected readonly walManager: WALManager | null
   protected readonly pageManagerFactory: PageManagerFactory
   protected readonly pageStrategy: PageMVCCStrategy
+  protected readonly lock: Ryoiki
 
   /**
    * @param pageCacheCapacity 페이지 캐시 크기
@@ -28,6 +30,7 @@ export class PageFileSystem {
     this.walManager = walPath ? new WALManager(walPath, pageSize) : null
     this.pageManagerFactory = new PageManagerFactory()
     this.pageStrategy = new PageMVCCStrategy(fileHandle, pageSize, pageCacheCapacity)
+    this.lock = new Ryoiki()
   }
 
   /**
@@ -39,7 +42,19 @@ export class PageFileSystem {
       await this.walManager.recover(async (pageId, data) => {
         await this.pageStrategy.write(pageId, data)
       })
+      // 복구된 데이터를 실제로 디스크에 반영하고 WAL을 비움 (Checkpoint)
+      await this.checkpoint()
     }
+  }
+
+  async lockCheckpoint(fn: () => Promise<void>): Promise<void> {
+    let lockId: string
+    return this.lock.writeLock(async (_lockId) => {
+      lockId = _lockId
+      await fn()
+    }).finally(() => {
+      this.lock.writeUnlock(lockId)
+    })
   }
 
   /**
@@ -420,17 +435,39 @@ export class PageFileSystem {
   async commitToWAL(dirtyPages: Map<number, Uint8Array>): Promise<void> {
     if (this.walManager) {
       await this.walManager.prepareCommit(dirtyPages)
-      await this.walManager.finalizeCommit(false)
+      await this.walManager.finalizeCommit(true) // 활성 트랜잭션이 있을 수 있으므로 true 전달 (체크포인트에서 비움)
     }
+  }
+
+  /**
+   * 체크포인트를 수행합니다.
+   * 1. 메모리의 더티 페이지를 DB 파일에 기록 (Flush)
+   * 2. DB 파일 물리적 동기화 (Sync/fsync)
+   * 3. WAL 로그 파일 비우기 (Clear/Truncate)
+   */
+  async checkpoint(): Promise<void> {
+    return this.lockCheckpoint(async () => {
+      // 1. Flush dirty pages from cache to disk
+      await this.pageStrategy.flush()
+
+      // 2. Physical sync (fsync)
+      await this.pageStrategy.sync()
+
+      // 3. Clear WAL
+      if (this.walManager) {
+        await this.walManager.clear()
+      }
+    })
   }
 
   /**
    * Closes the page file system.
    */
   async close(): Promise<void> {
+    // 정상 종료 시에는 모든 변경사항을 디스크에 반영하고 WAL을 정리합니다.
+    await this.checkpoint()
+
     if (this.walManager) {
-      // 정상 종료 시에는 WAL을 정리(Truncate)하여 파일 비대화를 방지합니다. (체크포인트)
-      await this.walManager.clear()
       this.walManager.close()
     }
   }

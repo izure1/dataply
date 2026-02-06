@@ -138,35 +138,37 @@ export class Transaction {
    * Commits the transaction.
    */
   async commit(): Promise<void> {
-    await this.context.run(this, async () => {
-      for (const hook of this.commitHooks) {
-        await hook()
+    return this.pfs.lockCheckpoint(async () => {
+      await this.context.run(this, async () => {
+        for (const hook of this.commitHooks) {
+          await hook()
+        }
+      })
+
+      // 1. WAL Prepare (Phase 1)
+      if (this.pfs.wal && this.dirtyPages.size > 0) {
+        await this.pfs.wal.prepareCommit(this.dirtyPages)
+        // 2. WAL Finalize (Marker)
+        await this.pfs.wal.writeCommitMarker()
       }
+
+      // 3. Write dirty pages (this now buffers in the strategy)
+      for (const [pageId, data] of this.dirtyPages) {
+        await this.pageStrategy.write(pageId, data)
+      }
+
+      // 4. WAL Auto-Checkpoint (Flush and Clear if threshold reached)
+      if (this.pfs.wal) {
+        this.pfs.wal.incrementWrittenPages(this.dirtyPages.size)
+        if (this.pfs.wal.shouldCheckpoint(this.pfs.options.walCheckpointThreshold)) {
+          await this.pfs.checkpoint()
+        }
+      }
+
+      this.dirtyPages.clear()
+      this.undoPages.clear()
+      this.releaseAllLocks()
     })
-
-    // 1. WAL Prepare (Phase 1)
-    if (this.pfs.wal && this.dirtyPages.size > 0) {
-      await this.pfs.wal.prepareCommit(this.dirtyPages)
-      // 2. WAL Finalize (Marker)
-      await this.pfs.wal.writeCommitMarker()
-    }
-
-    // 3. Write dirty pages to disk (Checkpoint)
-    for (const [pageId, data] of this.dirtyPages) {
-      await this.pageStrategy.write(pageId, data)
-    }
-
-    // 4. WAL Auto-Checkpoint (Clear if threshold reached)
-    if (this.pfs.wal) {
-      this.pfs.wal.incrementWrittenPages(this.dirtyPages.size)
-      if (this.pfs.wal.shouldCheckpoint(this.pfs.options.walCheckpointThreshold)) {
-        await this.pfs.wal.clear()
-      }
-    }
-
-    this.dirtyPages.clear()
-    this.undoPages.clear()
-    this.releaseAllLocks()
   }
 
   /**
