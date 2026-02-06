@@ -57,7 +57,7 @@ export class DataplyAPI {
       this.fileHandle,
       this.options.pageSize,
       this.options.pageCacheCapacity,
-      this.options.wal
+      this.options
     )
     this.textCodec = new TextCodec()
     this.txContext = new TransactionContext()
@@ -93,6 +93,7 @@ export class DataplyAPI {
       pageSize: 8192,
       pageCacheCapacity: 10000,
       wal: null,
+      walCheckpointThreshold: 1000,
     }, options)
   }
 

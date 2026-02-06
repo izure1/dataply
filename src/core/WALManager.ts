@@ -13,6 +13,7 @@ export class WALManager {
   private readonly entrySize: number
   private buffer: Uint8Array
   private view: DataView
+  private commitCount: number = 0
 
   /**
    * Constructor
@@ -238,6 +239,22 @@ export class WALManager {
   }
 
   /**
+   * Increments the commit count.
+   */
+  incrementCommitCount(): void {
+    this.commitCount++
+  }
+
+  /**
+   * Returns whether a checkpoint should be performed.
+   * @param threshold Threshold
+   * @returns Whether a checkpoint should be performed
+   */
+  shouldCheckpoint(threshold: number): boolean {
+    return this.commitCount >= threshold
+  }
+
+  /**
    * Initializes (clears) the log file.
    * Should be called after a checkpoint.
    */
@@ -253,6 +270,7 @@ export class WALManager {
       // 파일 크기를 0으로 만듦
       fs.truncate(this.walFilePath, 0, (err) => {
         if (err) return reject(err)
+        this.commitCount = 0
         resolve()
       })
     })

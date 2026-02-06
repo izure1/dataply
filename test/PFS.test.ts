@@ -20,7 +20,7 @@ describe('PageFileSystem', () => {
   beforeEach(() => {
     // 파일 생성 및 초기화
     fd = fs.openSync(TEST_FILE, 'w+')
-    pfs = new PageFileSystem(fd, PAGE_SIZE, PAGE_CACHE_CAPACITY)
+    pfs = new PageFileSystem(fd, PAGE_SIZE, PAGE_CACHE_CAPACITY, { pageSize: PAGE_SIZE, pageCacheCapacity: PAGE_CACHE_CAPACITY, wal: null, walCheckpointThreshold: 1000 })
     lockManager = new LockManager()
     txContext = new TransactionContext()
     tx = new Transaction(1, txContext, pfs.getPageStrategy(), lockManager, pfs)

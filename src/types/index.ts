@@ -1,6 +1,7 @@
 export interface DataplyOptions {
   /**
    * The size of a page in bytes.
+   * Default is 8192.
    */
   pageSize?: number
   /**
@@ -9,8 +10,14 @@ export interface DataplyOptions {
   wal?: string | undefined | null
   /**
    * The maximum number of pages to cache in memory.
+   * Default is 10000.
    */
   pageCacheCapacity?: number
+  /**
+   * The number of commits before automatically clearing the WAL.
+   * Default is 1000.
+   */
+  walCheckpointThreshold?: number
 }
 
 export interface DataplyMetadata {

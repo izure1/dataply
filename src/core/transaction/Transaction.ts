@@ -1,8 +1,8 @@
+import type { PageFileSystem } from '../PageFileSystem'
 import { BPTreeAsyncTransaction } from 'serializable-bptree'
 import { LockManager } from './LockManager'
 import { TransactionContext } from './TxContext'
 import { PageMVCCStrategy } from '../PageMVCCStrategy'
-import type { PageFileSystem } from '../PageFileSystem'
 
 /**
  * Transaction class.
@@ -156,9 +156,12 @@ export class Transaction {
       await this.pageStrategy.write(pageId, data)
     }
 
-    // 4. Clear WAL after checkpoint
-    if (this.pfs.wal && this.dirtyPages.size > 0) {
-      await this.pfs.wal.clear()
+    // 4. WAL Auto-Checkpoint (Clear if threshold reached)
+    if (this.pfs.wal) {
+      this.pfs.wal.incrementCommitCount()
+      if (this.pfs.wal.shouldCheckpoint(this.pfs.options.walCheckpointThreshold)) {
+        await this.pfs.wal.clear()
+      }
     }
 
     this.dirtyPages.clear()

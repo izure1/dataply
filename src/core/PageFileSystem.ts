@@ -1,4 +1,4 @@
-import type { BitmapPage, IndexPage, MetadataPage } from '../types'
+import type { BitmapPage, IndexPage, MetadataPage, DataplyOptions } from '../types'
 import type { Transaction } from './transaction/Transaction'
 import { IndexPageManager, MetadataPageManager, PageManager, PageManagerFactory, BitmapPageManager } from './Page'
 import { WALManager } from './WALManager'
@@ -15,17 +15,16 @@ export class PageFileSystem {
   protected readonly pageStrategy: PageMVCCStrategy
 
   /**
-   * @param fileHandle 파일 핸들 (fs.open으로 얻은 핸들)
-   * @param pageSize 페이지 크기
    * @param pageCacheCapacity 페이지 캐시 크기
-   * @param walPath WAL 파일 경로 (기본값: null)
+   * @param options 데이터플라이 옵션
    */
   constructor(
     readonly fileHandle: number,
     readonly pageSize: number,
     readonly pageCacheCapacity: number,
-    readonly walPath?: string | undefined | null
+    readonly options: Required<DataplyOptions>
   ) {
+    const walPath = options.wal
     this.walManager = walPath ? new WALManager(walPath, pageSize) : null
     this.pageManagerFactory = new PageManagerFactory()
     this.pageStrategy = new PageMVCCStrategy(fileHandle, pageSize, pageCacheCapacity)
@@ -430,6 +429,8 @@ export class PageFileSystem {
    */
   async close(): Promise<void> {
     if (this.walManager) {
+      // 정상 종료 시에는 WAL을 정리(Truncate)하여 파일 비대화를 방지합니다. (체크포인트)
+      await this.walManager.clear()
       this.walManager.close()
     }
   }
