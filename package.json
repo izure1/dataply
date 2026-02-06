@@ -1,6 +1,6 @@
 {
   "name": "dataply",
-  "version": "0.0.19",
+  "version": "0.0.20-alpha.0",
   "description": "A lightweight storage engine for Node.js with support for MVCC, WAL.",
   "license": "MIT",
   "author": "izure <admin@izure.org>",
@@ -47,8 +47,8 @@
   "dependencies": {
     "cache-entanglement": "^1.7.1",
     "hookall": "^2.2.0",
-    "mvcc-api": "^1.2.9",
+    "mvcc-api": "^1.2.11",
     "ryoiki": "^1.2.0",
-    "serializable-bptree": "^8.1.0"
+    "serializable-bptree": "^8.1.1"
   }
 }

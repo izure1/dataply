@@ -284,15 +284,18 @@ export class DataplyAPI {
       for await (const value of generator) {
         yield value
       }
-    } catch (error) {
+    }
+    catch (error) {
       hasError = true
       if (isInternalTx) {
         await tx.rollback()
       }
       throw error
     }
-    if (!hasError && isInternalTx) {
-      await tx.commit()
+    finally {
+      if (!hasError && isInternalTx) {
+        await tx.commit()
+      }
     }
   }
 
