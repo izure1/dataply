@@ -158,7 +158,7 @@ export class Transaction {
 
     // 4. WAL Auto-Checkpoint (Clear if threshold reached)
     if (this.pfs.wal) {
-      this.pfs.wal.incrementCommitCount()
+      this.pfs.wal.incrementWrittenPages(this.dirtyPages.size)
       if (this.pfs.wal.shouldCheckpoint(this.pfs.options.walCheckpointThreshold)) {
         await this.pfs.wal.clear()
       }

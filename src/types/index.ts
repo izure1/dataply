@@ -14,7 +14,7 @@ export interface DataplyOptions {
    */
   pageCacheCapacity?: number
   /**
-   * The number of commits before automatically clearing the WAL.
+   * The total number of pages written to the WAL before automatically clearing it.
    * Default is 1000.
    */
   walCheckpointThreshold?: number
