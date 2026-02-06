@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770297860820,
+  "lastUpdate": 1770393252573,
   "repoUrl": "https://github.com/izure1/dataply",
   "entries": {
     "Dataply Storage Benchmark": [
@@ -87,6 +87,50 @@ window.BENCHMARK_DATA = {
           {
             "name": "Medium Row Insert (1KB)",
             "value": 93.91,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "committer": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "distinct": true,
+          "id": "1107d885d1204ce865c7af1a8a788a43c73534ef",
+          "message": "chore: 메모리 누수 문제로 인한 종속성 라이브러리 및 코드 업데이트",
+          "timestamp": "2026-02-07T00:53:40+09:00",
+          "tree_id": "dd691c961a5d2d1429064eb148f770b4aea11c7d",
+          "url": "https://github.com/izure1/dataply/commit/1107d885d1204ce865c7af1a8a788a43c73534ef"
+        },
+        "date": 1770393252267,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Bulk Insert (Batch)",
+            "value": 297.54,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert (Individual)",
+            "value": 79.99,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert with WAL",
+            "value": 80.03,
+            "unit": "ms"
+          },
+          {
+            "name": "Medium Row Insert (1KB)",
+            "value": 91.78,
             "unit": "ms"
           }
         ]
