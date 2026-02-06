@@ -23,7 +23,7 @@ describe('PageFileSystem', () => {
     pfs = new PageFileSystem(fd, PAGE_SIZE, PAGE_CACHE_CAPACITY)
     lockManager = new LockManager()
     txContext = new TransactionContext()
-    tx = new Transaction(1, txContext, pfs.getPageStrategy(), lockManager)
+    tx = new Transaction(1, txContext, pfs.getPageStrategy(), lockManager, pfs)
   })
 
   afterEach(async () => {

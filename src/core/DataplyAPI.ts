@@ -229,7 +229,8 @@ export class DataplyAPI {
       ++this.txIdCounter,
       this.txContext,
       this.pfs.getPageStrategy(),
-      this.lockManager
+      this.lockManager,
+      this.pfs
     )
   }
 

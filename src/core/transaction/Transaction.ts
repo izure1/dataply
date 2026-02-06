@@ -2,6 +2,7 @@ import { BPTreeAsyncTransaction } from 'serializable-bptree'
 import { LockManager } from './LockManager'
 import { TransactionContext } from './TxContext'
 import { PageMVCCStrategy } from '../PageMVCCStrategy'
+import type { PageFileSystem } from '../PageFileSystem'
 
 /**
  * Transaction class.
@@ -29,14 +30,17 @@ export class Transaction {
 
   /**
    * @param id Transaction ID
+   * @param context Transaction context
    * @param pageStrategy Page MVCC Strategy for disk I/O
    * @param lockManager LockManager instance
+   * @param pfs Page File System
    */
   constructor(
     id: number,
     readonly context: TransactionContext,
     pageStrategy: PageMVCCStrategy,
-    private readonly lockManager: LockManager
+    private readonly lockManager: LockManager,
+    private readonly pfs: PageFileSystem
   ) {
     this.id = id
     this.pageStrategy = pageStrategy
@@ -140,9 +144,21 @@ export class Transaction {
       }
     })
 
-    // Write dirty pages to disk
+    // 1. WAL Prepare (Phase 1)
+    if (this.pfs.wal && this.dirtyPages.size > 0) {
+      await this.pfs.wal.prepareCommit(this.dirtyPages)
+      // 2. WAL Finalize (Marker)
+      await this.pfs.wal.writeCommitMarker()
+    }
+
+    // 3. Write dirty pages to disk (Checkpoint)
     for (const [pageId, data] of this.dirtyPages) {
       await this.pageStrategy.write(pageId, data)
+    }
+
+    // 4. Clear WAL after checkpoint
+    if (this.pfs.wal && this.dirtyPages.size > 0) {
+      await this.pfs.wal.clear()
     }
 
     this.dirtyPages.clear()
