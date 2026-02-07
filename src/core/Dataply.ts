@@ -102,6 +102,20 @@ export class Dataply {
   }
 
   /**
+   * Selects multiple data by their PKs.
+   * @param pks Array of PKs to select
+   * @param asRaw Whether to return the selected data as raw
+   * @param tx Transaction
+   * @returns Array of selected data in the same order as input PKs
+   */
+  async selectMany(pks: number[], asRaw: true, tx?: Transaction): Promise<(Uint8Array | null)[]>
+  async selectMany(pks: number[], asRaw: false, tx?: Transaction): Promise<(string | null)[]>
+  async selectMany(pks: number[], asRaw?: boolean, tx?: Transaction): Promise<(string | null)[]>
+  async selectMany(pks: number[], asRaw: boolean = false, tx?: Transaction): Promise<(Uint8Array | string | null)[]> {
+    return this.api.selectMany(pks, asRaw as any, tx)
+  }
+
+  /**
    * Closes the dataply file.
    */
   async close(): Promise<void> {

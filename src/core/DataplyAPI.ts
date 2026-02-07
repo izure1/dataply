@@ -432,6 +432,30 @@ export class DataplyAPI {
   }
 
   /**
+   * Selects multiple data by their PKs.
+   * @param pks Array of PKs to select
+   * @param asRaw Whether to return the selected data as raw
+   * @param tx Transaction
+   * @returns Array of selected data in the same order as input PKs
+   */
+  async selectMany(pks: number[], asRaw: true, tx?: Transaction): Promise<(Uint8Array | null)[]>
+  async selectMany(pks: number[], asRaw: false, tx?: Transaction): Promise<(string | null)[]>
+  async selectMany(pks: number[], asRaw?: boolean, tx?: Transaction): Promise<(string | null)[]>
+  async selectMany(pks: number[], asRaw: boolean = false, tx?: Transaction): Promise<(Uint8Array | string | null)[]> {
+    if (!this.initialized) {
+      throw new Error('Dataply instance is not initialized')
+    }
+    return this.runWithDefault(async (tx) => {
+      const results = await this.rowTableEngine.selectMany(pks, tx)
+      return results.map(data => {
+        if (data === null) return null
+        if (asRaw) return data
+        return this.textCodec.decode(data)
+      })
+    }, tx)
+  }
+
+  /**
    * Closes the dataply file.
    */
   async close(): Promise<void> {

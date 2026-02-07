@@ -513,6 +513,35 @@ export class RowTableEngine {
     return this.fetchRowByRid(pk, rid, tx)
   }
 
+  /**
+   * Selects multiple rows by their PKs in a single B+ Tree traversal.
+   * @param pks Array of PKs to look up
+   * @param tx Transaction
+   * @returns Array of raw data of the rows in the same order as input PKs
+   */
+  async selectMany(pks: number[], tx: Transaction): Promise<(Uint8Array | null)[]> {
+    if (pks.length === 0) {
+      return []
+    }
+
+    const minPk = Math.min(...pks)
+    const maxPk = Math.max(...pks)
+    const pkSet = new Set(pks)
+    const resultMap = new Map<number, Uint8Array | null>()
+
+    const btx = await this.getBPTreeTransaction(tx)
+    const stream = btx.whereStream({ gte: minPk, lte: maxPk })
+
+    for await (const [rid, pk] of stream) {
+      if (pkSet.has(pk)) {
+        const rowData = await this.fetchRowByRid(pk, rid, tx)
+        resultMap.set(pk, rowData)
+      }
+    }
+
+    return pks.map(pk => resultMap.get(pk) ?? null)
+  }
+
   private async fetchRowByRid(pk: number, rid: number, tx: Transaction): Promise<Uint8Array | null> {
     this.keyManager.setBufferFromKey(rid, this.ridBuffer)
 

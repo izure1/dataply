@@ -113,6 +113,37 @@ async function runSingleBenchmark(): Promise<BenchmarkResult[]> {
     await dataply.close()
   }
 
+  // 5. selectMany Performance (500 PKs)
+  {
+    await cleanup()
+    const dataply = new Dataply(TEST_FILE, { pageSize: 8192 })
+    await dataply.init()
+
+    const count = 10000
+    const selectCount = 500
+    const data = new Uint8Array(100).fill(65)
+
+    // Preparation: Insert data
+    const allPks: number[] = []
+    for (let i = 0; i < count / 1000; i++) {
+      const pks = await dataply.insertBatch(Array(1000).fill(data))
+      allPks.push(...pks)
+    }
+
+    const targetIndices = Array.from({ length: selectCount }, () => Math.floor(Math.random() * count))
+    const targetPks = targetIndices.map(i => allPks[i])
+
+    const start = performance.now()
+    await dataply.selectMany(targetPks, true)
+    const end = performance.now()
+
+    const duration = end - start
+    const ops = (selectCount / duration) * 1000
+    results.push({ name: 'selectMany (500 PKs)', count: selectCount, totalTime: duration, ops })
+
+    await dataply.close()
+  }
+
   return results
 }
 

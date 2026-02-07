@@ -45,10 +45,7 @@ export class PageMVCCStrategy extends AsyncMVCCStrategy<number, Uint8Array> {
     // 2. 캐시 확인
     const cached = this.cache.get(pageId)
     if (cached) {
-      // 캐시된 데이터의 복사본 반환 (불변성 보장)
-      const copy = new Uint8Array(this.pageSize)
-      copy.set(cached)
-      return copy
+      return cached
     }
 
     // 3. 디스크에서 읽기
