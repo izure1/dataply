@@ -1,6 +1,6 @@
 {
   "name": "dataply",
-  "version": "0.0.20-alpha.5",
+  "version": "0.0.20-alpha.6",
   "description": "A lightweight storage engine for Node.js with support for MVCC, WAL.",
   "license": "MIT",
   "author": "izure <admin@izure.org>",

@@ -1,3 +1,4 @@
+import os from 'node:os'
 import type { DataPage, DataplyMetadata, DataplyOptions } from '../types'
 import { NumericComparator, BPTreeAsync, BPTreeAsyncTransaction } from 'serializable-bptree'
 import { RowIdentifierStrategy } from './RowIndexStrategy'
@@ -40,10 +41,14 @@ export class RowTableEngine {
     this.maxBodySize = this.pfs.pageSize - DataPageManager.CONSTANT.SIZE_PAGE_HEADER
     this.order = this.getOptimalOrder(pfs.pageSize, IndexPageManager.CONSTANT.SIZE_KEY, IndexPageManager.CONSTANT.SIZE_VALUE)
     this.strategy = new RowIdentifierStrategy(this.order, pfs, txContext)
+    const budget = os.freemem() * 0.05
+    const nodeMemory = (this.order * 24) + 256
+    const capacity = Math.max(1000, Math.min(1000000, Math.floor(budget / nodeMemory)))
+
     this.bptree = new BPTreeAsync(
       this.strategy,
       new NumericComparator(), {
-      capacity: this.options.pageCacheCapacity
+      capacity
     })
   }
 
