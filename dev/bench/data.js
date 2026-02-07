@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770426584404,
+  "lastUpdate": 1770431172238,
   "repoUrl": "https://github.com/izure1/dataply",
   "entries": {
     "Dataply Storage Benchmark": [
@@ -449,6 +449,55 @@ window.BENCHMARK_DATA = {
           {
             "name": "selectMany (500 PKs)",
             "value": 119.42,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "committer": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "distinct": true,
+          "id": "1587a33a497131a8a3f18296dedc327bf7e007fd",
+          "message": "feat: primary key b+tree 인덱스의 최대치가 여유 메모리의 5% -> 10%로 상향 조정되었습니다.",
+          "timestamp": "2026-02-07T11:25:03+09:00",
+          "tree_id": "921626ccbabbb3c948fb98979cebc62f4eb01e03",
+          "url": "https://github.com/izure1/dataply/commit/1587a33a497131a8a3f18296dedc327bf7e007fd"
+        },
+        "date": 1770431171515,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Bulk Insert (Batch)",
+            "value": 344.03,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert (Individual)",
+            "value": 73.99,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert with WAL",
+            "value": 208.06,
+            "unit": "ms"
+          },
+          {
+            "name": "Medium Row Insert (1KB)",
+            "value": 88.11,
+            "unit": "ms"
+          },
+          {
+            "name": "selectMany (500 PKs)",
+            "value": 120.72,
             "unit": "ms"
           }
         ]
