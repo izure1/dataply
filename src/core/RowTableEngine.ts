@@ -520,6 +520,7 @@ export class RowTableEngine {
 
   /**
    * Selects multiple rows by their PKs in a single B+ Tree traversal.
+   * Results are returned in no guaranteed order, and PKs not found are excluded from the result.
    * @param pks Array of PKs to look up
    * @param tx Transaction
    * @returns Array of raw data of the rows in the same order as input PKs
@@ -532,19 +533,71 @@ export class RowTableEngine {
     const minPk = Math.min(...pks)
     const maxPk = Math.max(...pks)
     const pkSet = new Set(pks)
-    const resultMap = new Map<number, Uint8Array | null>()
+    const pkRidPairs: { pk: number, rid: number }[] = []
 
     const btx = await this.getBPTreeTransaction(tx)
     const stream = btx.whereStream({ gte: minPk, lte: maxPk })
 
     for await (const [rid, pk] of stream) {
       if (pkSet.has(pk)) {
-        const rowData = await this.fetchRowByRid(pk, rid, tx)
-        resultMap.set(pk, rowData)
+        pkRidPairs.push({ pk, rid })
       }
     }
 
+    const resultMap = await this.fetchRowsByRids(pkRidPairs, tx)
     return pks.map(pk => resultMap.get(pk) ?? null)
+  }
+
+  /**
+   * Fetches multiple rows by their RID and PK combinations, grouping by page ID to minimize I/O.
+   * @param pkRidPairs Array of {pk, rid} pairs
+   * @param tx Transaction
+   * @returns Map of PK to row data
+   */
+  private async fetchRowsByRids(pkRidPairs: { pk: number, rid: number }[], tx: Transaction): Promise<Map<number, Uint8Array | null>> {
+    const resultMap = new Map<number, Uint8Array | null>()
+    if (pkRidPairs.length === 0) return resultMap
+
+    // Group items by pageId using bitwise operations for speed
+    const pageGroupMap = new Map<number, { pk: number, slotIndex: number }[]>()
+    for (const pair of pkRidPairs) {
+      const rid = pair.rid
+      const slotIndex = rid % 65536
+      const pageId = Math.floor(rid / 65536)
+
+      if (!pageGroupMap.has(pageId)) {
+        pageGroupMap.set(pageId, [])
+      }
+      pageGroupMap.get(pageId)!.push({ pk: pair.pk, slotIndex })
+    }
+
+    // Sort page IDs for sequential I/O and process in parallel
+    const sortedPageEntries = Array.from(pageGroupMap.entries()).sort((a, b) => a[0] - b[0])
+    await Promise.all(sortedPageEntries.map(async ([pageId, items]) => {
+      const page = await this.pfs.get(pageId, tx)
+      if (!this.factory.isDataPage(page)) {
+        throw new Error(`Page ${pageId} is not a data page`)
+      }
+
+      const manager = this.factory.getManager(page)
+      for (const item of items) {
+        const row = manager.getRow(page, item.slotIndex)
+
+        if (this.rowManager.getDeletedFlag(row)) {
+          resultMap.set(item.pk, null)
+        }
+        else if (this.rowManager.getOverflowFlag(row)) {
+          const overflowPageId = bytesToNumber(this.rowManager.getBody(row))
+          const body = await this.pfs.getBody(overflowPageId, true, tx)
+          resultMap.set(item.pk, body)
+        }
+        else {
+          resultMap.set(item.pk, this.rowManager.getBody(row))
+        }
+      }
+    }))
+
+    return resultMap
   }
 
   private async fetchRowByRid(pk: number, rid: number, tx: Transaction): Promise<Uint8Array | null> {
