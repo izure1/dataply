@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770424927862,
+  "lastUpdate": 1770426584404,
   "repoUrl": "https://github.com/izure1/dataply",
   "entries": {
     "Dataply Storage Benchmark": [
@@ -400,6 +400,55 @@ window.BENCHMARK_DATA = {
           {
             "name": "selectMany (500 PKs)",
             "value": 117.07,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "committer": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "distinct": true,
+          "id": "45bdcf0775158252d34b27e33ffdc5e2de0d9b2b",
+          "message": "feat: 성능 최적화를 위해 내부 rid를 찾는 b+tree는 이제 pageCacheCapacity 옵션의 영향을 받지 않으며, 대신 가용 메모리의 5~10% 정도를 사용하도록 자동 계산됩니다.",
+          "timestamp": "2026-02-07T10:09:12+09:00",
+          "tree_id": "05a19a9c0522dec380ce0c3fb7068edb5cb9cb84",
+          "url": "https://github.com/izure1/dataply/commit/45bdcf0775158252d34b27e33ffdc5e2de0d9b2b"
+        },
+        "date": 1770426583461,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Bulk Insert (Batch)",
+            "value": 354.65,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert (Individual)",
+            "value": 71.38,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert with WAL",
+            "value": 261.51,
+            "unit": "ms"
+          },
+          {
+            "name": "Medium Row Insert (1KB)",
+            "value": 92.42,
+            "unit": "ms"
+          },
+          {
+            "name": "selectMany (500 PKs)",
+            "value": 119.42,
             "unit": "ms"
           }
         ]
