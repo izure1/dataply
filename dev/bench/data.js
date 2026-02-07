@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1770415585038,
+  "lastUpdate": 1770424927862,
   "repoUrl": "https://github.com/izure1/dataply",
   "entries": {
     "Dataply Storage Benchmark": [
@@ -351,6 +351,55 @@ window.BENCHMARK_DATA = {
           {
             "name": "Medium Row Insert (1KB)",
             "value": 77.54,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "committer": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "distinct": true,
+          "id": "8c64b956661ea480f2a0f7a36893925e4af16b10",
+          "message": "feat: selectMany 메서드 추가. 이로 인해 대량의 데이터를 조회할 때, 한 번의 b+tree 순회로 전부 처리할 수 있습니다. O(1)의 성능을 보장합니다.",
+          "timestamp": "2026-02-07T09:41:08+09:00",
+          "tree_id": "cdc57f64e3d1148cc32985702fc3f8bb7e921a16",
+          "url": "https://github.com/izure1/dataply/commit/8c64b956661ea480f2a0f7a36893925e4af16b10"
+        },
+        "date": 1770424927555,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Bulk Insert (Batch)",
+            "value": 365.74,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert (Individual)",
+            "value": 71.4,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert with WAL",
+            "value": 172.11,
+            "unit": "ms"
+          },
+          {
+            "name": "Medium Row Insert (1KB)",
+            "value": 87.69,
+            "unit": "ms"
+          },
+          {
+            "name": "selectMany (500 PKs)",
+            "value": 117.07,
             "unit": "ms"
           }
         ]
