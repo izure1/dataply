@@ -438,10 +438,10 @@ export class DataplyAPI {
    * @param tx Transaction
    * @returns Array of selected data in the same order as input PKs
    */
-  async selectMany(pks: number[], asRaw: true, tx?: Transaction): Promise<(Uint8Array | null)[]>
-  async selectMany(pks: number[], asRaw: false, tx?: Transaction): Promise<(string | null)[]>
-  async selectMany(pks: number[], asRaw?: boolean, tx?: Transaction): Promise<(string | null)[]>
-  async selectMany(pks: number[], asRaw: boolean = false, tx?: Transaction): Promise<(Uint8Array | string | null)[]> {
+  async selectMany(pks: number[] | Float64Array, asRaw: true, tx?: Transaction): Promise<(Uint8Array | null)[]>
+  async selectMany(pks: number[] | Float64Array, asRaw: false, tx?: Transaction): Promise<(string | null)[]>
+  async selectMany(pks: number[] | Float64Array, asRaw?: boolean, tx?: Transaction): Promise<(string | null)[]>
+  async selectMany(pks: number[] | Float64Array, asRaw: boolean = false, tx?: Transaction): Promise<(Uint8Array | string | null)[]> {
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }

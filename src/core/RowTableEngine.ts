@@ -41,15 +41,17 @@ export class RowTableEngine {
     this.maxBodySize = this.pfs.pageSize - DataPageManager.CONSTANT.SIZE_PAGE_HEADER
     this.order = this.getOptimalOrder(pfs.pageSize, IndexPageManager.CONSTANT.SIZE_KEY, IndexPageManager.CONSTANT.SIZE_VALUE)
     this.strategy = new RowIdentifierStrategy(this.order, pfs, txContext)
-    const budget = os.freemem() * 0.1
+    const budget = os.totalmem() * 0.1
     const nodeMemory = (this.order * 24) + 256
     const capacity = Math.max(1000, Math.min(1000000, Math.floor(budget / nodeMemory)))
 
     this.bptree = new BPTreeAsync(
       this.strategy,
-      new NumericComparator(), {
-      capacity
-    })
+      new NumericComparator(),
+      {
+        capacity
+      }
+    )
   }
 
   /**
@@ -525,42 +527,54 @@ export class RowTableEngine {
    * @param tx Transaction
    * @returns Array of raw data of the rows in the same order as input PKs
    */
-  async selectMany(pks: number[], tx: Transaction): Promise<(Uint8Array | null)[]> {
+  async selectMany(pks: number[] | Float64Array, tx: Transaction): Promise<(Uint8Array | null)[]> {
     if (pks.length === 0) {
       return []
     }
 
+    const pkIndexMap = new Map<number, number>()
+    for (let i = 0, len = pks.length; i < len; i++) {
+      const pk = pks[i]
+      pkIndexMap.set(pk, i)
+    }
     const minPk = Math.min(...pks)
     const maxPk = Math.max(...pks)
-    const pkSet = new Set(pks)
-    const pkRidPairs: { pk: number, rid: number }[] = []
+    const pkRidPairs: ({ pk: number, rid: number, index: number } | null)[] = new Array(pks.length).fill(null)
 
     const btx = await this.getBPTreeTransaction(tx)
     const stream = btx.whereStream({ gte: minPk, lte: maxPk })
 
     for await (const [rid, pk] of stream) {
-      if (pkSet.has(pk)) {
-        pkRidPairs.push({ pk, rid })
+      const index = pkIndexMap.get(pk)
+      if (index !== undefined) {
+        pkRidPairs[index] = { pk, rid, index }
       }
     }
 
-    const resultMap = await this.fetchRowsByRids(pkRidPairs, tx)
-    return pks.map(pk => resultMap.get(pk) ?? null)
+    return this.fetchRowsByRids(pkRidPairs, tx)
   }
 
   /**
    * Fetches multiple rows by their RID and PK combinations, grouping by page ID to minimize I/O.
    * @param pkRidPairs Array of {pk, rid} pairs
    * @param tx Transaction
-   * @returns Map of PK to row data
+   * @returns Array of row data in the same order as input PKs
    */
-  private async fetchRowsByRids(pkRidPairs: { pk: number, rid: number }[], tx: Transaction): Promise<Map<number, Uint8Array | null>> {
-    const resultMap = new Map<number, Uint8Array | null>()
-    if (pkRidPairs.length === 0) return resultMap
+  private async fetchRowsByRids(
+    pkRidPairs: ({
+      pk: number,
+      rid: number,
+      index: number
+    } | null)[],
+    tx: Transaction
+  ): Promise<(Uint8Array | null)[]> {
+    const result: (Uint8Array | null)[] = new Array(pkRidPairs.length).fill(null)
+    if (pkRidPairs.length === 0) return result
 
     // Group items by pageId using bitwise operations for speed
-    const pageGroupMap = new Map<number, { pk: number, slotIndex: number }[]>()
+    const pageGroupMap = new Map<number, { pk: number, slotIndex: number, index: number }[]>()
     for (const pair of pkRidPairs) {
+      if (pair === null) continue
       const rid = pair.rid
       const slotIndex = rid % 65536
       const pageId = Math.floor(rid / 65536)
@@ -568,12 +582,10 @@ export class RowTableEngine {
       if (!pageGroupMap.has(pageId)) {
         pageGroupMap.set(pageId, [])
       }
-      pageGroupMap.get(pageId)!.push({ pk: pair.pk, slotIndex })
+      pageGroupMap.get(pageId)!.push({ pk: pair.pk, slotIndex, index: pair.index })
     }
 
-    // Sort page IDs for sequential I/O and process in parallel
-    const sortedPageEntries = Array.from(pageGroupMap.entries()).sort((a, b) => a[0] - b[0])
-    await Promise.all(sortedPageEntries.map(async ([pageId, items]) => {
+    await Promise.all(Array.from(pageGroupMap).map(async ([pageId, items]) => {
       const page = await this.pfs.get(pageId, tx)
       if (!this.factory.isDataPage(page)) {
         throw new Error(`Page ${pageId} is not a data page`)
@@ -584,20 +596,20 @@ export class RowTableEngine {
         const row = manager.getRow(page, item.slotIndex)
 
         if (this.rowManager.getDeletedFlag(row)) {
-          resultMap.set(item.pk, null)
+          result[item.index] = null
         }
         else if (this.rowManager.getOverflowFlag(row)) {
           const overflowPageId = bytesToNumber(this.rowManager.getBody(row))
           const body = await this.pfs.getBody(overflowPageId, true, tx)
-          resultMap.set(item.pk, body)
+          result[item.index] = body
         }
         else {
-          resultMap.set(item.pk, this.rowManager.getBody(row))
+          result[item.index] = this.rowManager.getBody(row)
         }
       }
     }))
 
-    return resultMap
+    return result
   }
 
   private async fetchRowByRid(pk: number, rid: number, tx: Transaction): Promise<Uint8Array | null> {
