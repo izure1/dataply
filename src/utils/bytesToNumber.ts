@@ -1,48 +1,30 @@
+// Pre-allocated shared buffer and DataView to avoid per-call allocation
+const tempBuffer = new ArrayBuffer(8)
+const tempView = new DataView(tempBuffer)
+const tempArray = new Uint8Array(tempBuffer)
+
 export function bytesToNumber(bytes: Uint8Array, offset: number = 0, length: number = bytes.length): number {
-  if (length === 4) {
-    return (
-      (bytes[offset] |
-        (bytes[offset + 1] << 8) |
-        (bytes[offset + 2] << 16) |
-        (bytes[offset + 3] << 24)) >>>
-      0
-    )
+  // Fast copy to shared buffer (avoids DataView creation per call)
+  tempArray.set(bytes.subarray(offset, offset + length))
+
+  switch (length) {
+    case 1:
+      return tempView.getUint8(0)
+    case 2:
+      return tempView.getUint16(0, true)
+    case 3:
+      return tempView.getUint16(0, true) + (tempView.getUint8(2) << 16)
+    case 4:
+      return tempView.getUint32(0, true)
+    case 5:
+      return tempView.getUint32(0, true) + tempView.getUint8(4) * 4294967296
+    case 6:
+      return tempView.getUint32(0, true) + tempView.getUint16(4, true) * 4294967296
+    case 7:
+      return tempView.getUint32(0, true) + (tempView.getUint16(4, true) + (tempView.getUint8(6) << 16)) * 4294967296
+    case 8:
+      return tempView.getUint32(0, true) + tempView.getUint32(4, true) * 4294967296
+    default:
+      return 0
   }
-
-  if (length === 8) {
-    const low =
-      (bytes[offset] |
-        (bytes[offset + 1] << 8) |
-        (bytes[offset + 2] << 16) |
-        (bytes[offset + 3] << 24)) >>>
-      0
-
-    const high =
-      (bytes[offset + 4] |
-        (bytes[offset + 5] << 8) |
-        (bytes[offset + 6] << 16) |
-        (bytes[offset + 7] << 24)) >>>
-      0
-
-    return low + high * 4294967296
-  }
-
-  let low = 0
-  const lenLow = length < 4 ? length : 4
-  for (let i = 0; i < lenLow; i++) {
-    low |= bytes[offset + i] << (i * 8)
-  }
-  low >>>= 0
-
-  if (length > 4) {
-    let high = 0
-    const lenHigh = length < 8 ? length : 8
-    for (let i = 4; i < lenHigh; i++) {
-      high |= bytes[offset + i] << ((i - 4) * 8)
-    }
-    high >>>= 0
-    return low + high * 4294967296
-  }
-
-  return low
 }

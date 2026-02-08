@@ -156,6 +156,8 @@ async function benchmark() {
   for (let i = 0; i < RUNS; i++) {
     console.log(`Running iteration ${i + 1}/${RUNS}...`)
     const result = await runSingleBenchmark()
+    const mem = process.memoryUsage()
+    console.log(`Memory: RSS=${(mem.rss / 1024 / 1024).toFixed(2)}MB, Heap=${(mem.heapUsed / 1024 / 1024).toFixed(2)}MB`)
     allResults.push(result)
     // Cooldown
     await new Promise(resolve => setTimeout(resolve, 500))

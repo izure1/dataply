@@ -534,9 +534,9 @@ export class RowTableEngine {
 
     const pkIndexMap = new Map<number, number>()
     for (let i = 0, len = pks.length; i < len; i++) {
-      const pk = pks[i]
-      pkIndexMap.set(pk, i)
+      pkIndexMap.set(pks[i], i)
     }
+
     const minPk = Math.min(...pks)
     const maxPk = Math.max(...pks)
     const pkRidPairs: ({ pk: number, rid: number, index: number } | null)[] = new Array(pks.length).fill(null)
