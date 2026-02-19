@@ -1,5 +1,4 @@
 import fs from 'node:fs'
-import { AsyncMVCCStrategy } from 'mvcc-api'
 import { LRUMap } from 'cache-entanglement'
 
 /**
@@ -9,7 +8,7 @@ import { LRUMap } from 'cache-entanglement'
  * 키: 페이지 ID (number)
  * 값: 페이지 데이터 (Uint8Array)
  */
-export class PageMVCCStrategy extends AsyncMVCCStrategy<number, Uint8Array> {
+export class PageMVCCStrategy {
   /** LRU 캐시 (페이지 ID -> 페이지 데이터) */
   private readonly cache: LRUMap<number, Uint8Array>
   /** 디스크에 기록되지 않은 변경된 페이지들 (페이지 ID -> 페이지 데이터) */
@@ -22,7 +21,6 @@ export class PageMVCCStrategy extends AsyncMVCCStrategy<number, Uint8Array> {
     private readonly pageSize: number,
     cacheCapacity: number
   ) {
-    super()
     this.cache = new LRUMap(cacheCapacity)
     this.fileSize = fs.fstatSync(fileHandle).size
   }
