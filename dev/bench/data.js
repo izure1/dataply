@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1771520254186,
+  "lastUpdate": 1772067395712,
   "repoUrl": "https://github.com/izure1/dataply",
   "entries": {
     "Dataply Storage Benchmark": [
@@ -988,6 +988,55 @@ window.BENCHMARK_DATA = {
           {
             "name": "selectMany (500 PKs)",
             "value": 115.6,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "committer": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "distinct": true,
+          "id": "a37351821b234dab1b8a30b9fe2b733078a833e0",
+          "message": "feat: serializable-bptree 종속성 라이브러리 업데이트로 insertBatch 성능 최적화",
+          "timestamp": "2026-02-26T09:55:51+09:00",
+          "tree_id": "763ffd8b502ef85927d0c57a842e9e5bde3d2b61",
+          "url": "https://github.com/izure1/dataply/commit/a37351821b234dab1b8a30b9fe2b733078a833e0"
+        },
+        "date": 1772067395341,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Bulk Insert (Batch)",
+            "value": 962.36,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert (Individual)",
+            "value": 44.52,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert with WAL",
+            "value": 144.61,
+            "unit": "ms"
+          },
+          {
+            "name": "Medium Row Insert (1KB)",
+            "value": 54.57,
+            "unit": "ms"
+          },
+          {
+            "name": "selectMany (500 PKs)",
+            "value": 117.83,
             "unit": "ms"
           }
         ]
