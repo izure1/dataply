@@ -188,6 +188,7 @@ export class RowTableEngine {
       throw new Error(`Last insert page is not data page`)
     }
 
+    const batchInsertData: [number, number][] = []
     for (const data of dataList) {
       const pk = ++lastPk
       const willRowSize = this.getRequiredRowSize(data)
@@ -253,9 +254,11 @@ export class RowTableEngine {
       }
 
       // B+트리에 삽입합니다.
-      await btx.insert(this.getRID(), pk)
+      batchInsertData.push([this.getRID(), pk])
       pks.push(pk)
     }
+
+    await btx.batchInsert(batchInsertData)
 
     // 메타데이터를 한 번만 업데이트합니다.
     tx.__markBPTreeDirty()
