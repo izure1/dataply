@@ -6,7 +6,7 @@ import { PageFileSystem } from './PageFileSystem'
 import { Row } from './Row'
 import { KeyManager } from './KeyManager'
 import { DataPageManager, MetadataPageManager, OverflowPageManager, PageManagerFactory, IndexPageManager } from './Page'
-import { numberToBytes, bytesToNumber } from '../utils'
+import { numberToBytes, bytesToNumber, getMaxValue, getMinValue } from '../utils'
 import { Transaction } from './transaction/Transaction'
 import { TransactionContext } from './transaction/TxContext'
 
@@ -538,8 +538,8 @@ export class RowTableEngine {
       pkIndexMap.set(pks[i], i)
     }
 
-    const minPk = Math.min(...pks)
-    const maxPk = Math.max(...pks)
+    const minPk = getMinValue(pks)
+    const maxPk = getMaxValue(pks)
     const pkRidPairs: ({ pk: number, rid: number, index: number } | null)[] = new Array(pks.length).fill(null)
 
     const btx = await this.getBPTreeTransaction(tx)
