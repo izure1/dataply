@@ -585,7 +585,10 @@ export class RowTableEngine {
       pageGroupMap.get(pageId)!.push({ pk: pair.pk, slotIndex, index: pair.index })
     }
 
-    await Promise.all(Array.from(pageGroupMap).map(async ([pageId, items]) => {
+    // 순차 읽기를 위한 정렬
+    const sortedPageIds = Array.from(pageGroupMap.keys()).sort((a, b) => a - b)
+    await Promise.all(sortedPageIds.map(async (pageId) => {
+      const items = pageGroupMap.get(pageId)!
       const page = await this.pfs.get(pageId, tx)
       if (!this.factory.isDataPage(page)) {
         throw new Error(`Page ${pageId} is not a data page`)

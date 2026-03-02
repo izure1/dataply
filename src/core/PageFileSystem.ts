@@ -258,7 +258,7 @@ export class PageFileSystem {
   /**
    * Appends and inserts a new page.
    * If a free page is available in the free list, it reuses it.
-   * Otherwise, it appends a new page to the end of the file.
+   * Otherwise, it preallocates `pagePreallocationCount` pages to support sequential reads.
    * @returns Created or reused page ID
    */
   async appendNewPage(pageType: number = PageManager.CONSTANT.PAGE_TYPE_EMPTY, tx: Transaction): Promise<number> {
@@ -289,15 +289,35 @@ export class PageFileSystem {
       return reusedPageId
     }
 
-    // 2. 새 페이지 추가 로직
+    // 2. 사전할당: pagePreallocationCount 만큼 한번에 페이지 추가
+    const preallocationCount = this.options.pagePreallocationCount
     const pageCount = metadataManager.getPageCount(metadata)
     const newPageIndex = pageCount
-    const newTotalCount = pageCount + 1
+    const newTotalCount = pageCount + preallocationCount
 
+    // 2-1. 요청된 페이지 생성
     const manager = this.pageFactory.getManagerFromType(pageType)
     const newPage = manager.create(this.pageSize, newPageIndex)
-
     await this.setPage(newPageIndex, newPage, tx)
+
+    // 2-2. 나머지 (preallocationCount - 1)개를 빈 페이지로 생성하고 Free list에 오름차순 체인 연결
+    const emptyManager = this.pageFactory.getManagerFromType(PageManager.CONSTANT.PAGE_TYPE_EMPTY)
+    const firstFreeIndex = newPageIndex + 1
+    const lastFreeIndex = newPageIndex + preallocationCount - 1
+
+    for (let i = firstFreeIndex; i <= lastFreeIndex; i++) {
+      const emptyPage = emptyManager.create(this.pageSize, i)
+      // 오름차순 체인: 현재 페이지의 next를 다음 페이지로 설정 (마지막은 -1)
+      const nextId = i < lastFreeIndex ? i + 1 : -1
+      emptyManager.setNextPageId(emptyPage, nextId)
+      await this.setPage(i, emptyPage, tx)
+      await this.updateBitmap(i, true, tx)
+    }
+
+    // 2-3. 사전할당된 빈 페이지들의 head를 메타데이터 Free list에 설정
+    if (preallocationCount > 1) {
+      metadataManager.setFreePageId(metadata, firstFreeIndex)
+    }
 
     metadataManager.setPageCount(metadata, newTotalCount)
     await this.setPage(0, metadata, tx)
@@ -402,7 +422,8 @@ export class PageFileSystem {
 
   /**
    * Frees the page and marks it as available in the bitmap.
-   * It also adds the page to the linked list of free pages in metadata.
+   * Inserts the page into the free list in ascending order by page ID
+   * to support HDD sequential reads.
    * @param pageId Page ID
    * @param tx Transaction
    */
@@ -416,23 +437,44 @@ export class PageFileSystem {
     const metadata = await this.getMetadata(tx)
     const metadataManager = this.pageFactory.getManager(metadata) as MetadataPageManager
 
-    // 현재 freePageId 가져오기 (Linked List의 Head)
-    const currentHeadFreePageId = metadataManager.getFreePageId(metadata)
-
-    // 2. 페이지 초기화 (EmptyPage) 및 링크 연결
+    // 2. 페이지 초기화 (EmptyPage)
     const emptyPageManager = this.pageFactory.getManagerFromType(PageManager.CONSTANT.PAGE_TYPE_EMPTY)
     const emptyPage = emptyPageManager.create(this.pageSize, pageId)
 
-    // 다음 페이지를 이전 Head로 설정 (Stack Push)
-    emptyPageManager.setNextPageId(emptyPage, currentHeadFreePageId)
+    // 3. 오름차순 정렬 삽입: free list를 순회하여 올바른 위치를 찾음
+    const headFreePageId = metadataManager.getFreePageId(metadata)
 
-    await this.setPage(pageId, emptyPage, tx)
+    if (headFreePageId === -1 || pageId < headFreePageId) {
+      // Case A: Free list가 비어있거나, pageId가 현재 head보다 작으면 새 head로 설정
+      emptyPageManager.setNextPageId(emptyPage, headFreePageId)
+      await this.setPage(pageId, emptyPage, tx)
+      metadataManager.setFreePageId(metadata, pageId)
+    } else {
+      // Case B: 리스트를 순회하여 삽입 위치 탐색
+      let prevPageId = headFreePageId
+      let prevPage = await this.get(prevPageId, tx)
+      let prevManager = this.pageFactory.getManager(prevPage)
+      let nextPageId = prevManager.getNextPageId(prevPage)
 
-    // 3. 비트맵 업데이트 (Free로 표시 -> true)
+      while (nextPageId !== -1 && nextPageId < pageId) {
+        prevPageId = nextPageId
+        prevPage = await this.get(prevPageId, tx)
+        prevManager = this.pageFactory.getManager(prevPage)
+        nextPageId = prevManager.getNextPageId(prevPage)
+      }
+
+      // prevPageId -> pageId -> nextPageId 순서로 연결
+      emptyPageManager.setNextPageId(emptyPage, nextPageId)
+      await this.setPage(pageId, emptyPage, tx)
+
+      prevManager.setNextPageId(prevPage, pageId)
+      await this.setPage(prevPageId, prevPage, tx)
+    }
+
+    // 4. 비트맵 업데이트 (Free로 표시 -> true)
     await this.updateBitmap(pageId, true, tx)
 
-    // 4. 메타데이터 업데이트 (Head를 현재 페이지로 변경)
-    metadataManager.setFreePageId(metadata, pageId)
+    // 5. 메타데이터 저장
     await this.setPage(0, metadata, tx)
   }
 

@@ -14,6 +14,11 @@ export interface DataplyOptions {
    */
   pageCacheCapacity?: number
   /**
+   * The number of pages to preallocate when creating a new page.
+   * Default is 1000.
+   */
+  pagePreallocationCount?: number
+  /**
    * The total number of pages written to the WAL before automatically clearing it.
    * Default is 1000.
    */

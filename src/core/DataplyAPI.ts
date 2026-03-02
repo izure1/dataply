@@ -92,6 +92,7 @@ export class DataplyAPI {
     return Object.assign({
       pageSize: 8192,
       pageCacheCapacity: 10000,
+      pagePreallocationCount: 1000,
       wal: null,
       walCheckpointThreshold: 1000,
     }, options)
