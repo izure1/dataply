@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1772402153723,
+  "lastUpdate": 1772446622556,
   "repoUrl": "https://github.com/izure1/dataply",
   "entries": {
     "Dataply Storage Benchmark": [
@@ -1233,6 +1233,55 @@ window.BENCHMARK_DATA = {
           {
             "name": "selectMany (500 PKs)",
             "value": 110.31,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "committer": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "distinct": true,
+          "id": "e9e70ccbc524198763dd58868aae969be87da874",
+          "message": "feat: hdd 환경에서 순차 읽기를 지원하기 위한 pagePreallocationCount 옵션을 추가합니다. 이는 페이지를 생성할 때, 한번에 많은 페이지를 할당하여 순차읽기를 도와줍니다.",
+          "timestamp": "2026-03-02T19:16:32+09:00",
+          "tree_id": "c774c02c0745d3e87efc4c001faf1b896a2355cc",
+          "url": "https://github.com/izure1/dataply/commit/e9e70ccbc524198763dd58868aae969be87da874"
+        },
+        "date": 1772446622108,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Bulk Insert (Batch)",
+            "value": 415.07,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert (Individual)",
+            "value": 45.44,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert with WAL",
+            "value": 150.97,
+            "unit": "ms"
+          },
+          {
+            "name": "Medium Row Insert (1KB)",
+            "value": 180.09,
+            "unit": "ms"
+          },
+          {
+            "name": "selectMany (500 PKs)",
+            "value": 118.59,
             "unit": "ms"
           }
         ]
