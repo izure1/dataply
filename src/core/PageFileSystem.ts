@@ -300,11 +300,18 @@ export class PageFileSystem {
     const newPage = manager.create(this.pageSize, newPageIndex)
     await this.setPage(newPageIndex, newPage, tx)
 
-    // 2-2. 나머지 (preallocationCount - 1)개를 빈 페이지로 생성하고 Free list에 오름차순 체인 연결
+    // 2-2. metadata를 먼저 저장 (재귀 appendNewPage 호출 시 올바른 pageCount를 읽도록)
     const emptyManager = this.pageFactory.getManagerFromType(PageManager.CONSTANT.PAGE_TYPE_EMPTY)
     const firstFreeIndex = newPageIndex + 1
     const lastFreeIndex = newPageIndex + preallocationCount - 1
 
+    metadataManager.setPageCount(metadata, newTotalCount)
+    if (preallocationCount > 1) {
+      metadataManager.setFreePageId(metadata, firstFreeIndex)
+    }
+    await this.setPage(0, metadata, tx)
+
+    // 2-3. 나머지 (preallocationCount - 1)개를 빈 페이지로 생성하고 Free list에 오름차순 체인 연결
     for (let i = firstFreeIndex; i <= lastFreeIndex; i++) {
       const emptyPage = emptyManager.create(this.pageSize, i)
       // 오름차순 체인: 현재 페이지의 next를 다음 페이지로 설정 (마지막은 -1)
@@ -313,14 +320,6 @@ export class PageFileSystem {
       await this.setPage(i, emptyPage, tx)
       await this.updateBitmap(i, true, tx)
     }
-
-    // 2-3. 사전할당된 빈 페이지들의 head를 메타데이터 Free list에 설정
-    if (preallocationCount > 1) {
-      metadataManager.setFreePageId(metadata, firstFreeIndex)
-    }
-
-    metadataManager.setPageCount(metadata, newTotalCount)
-    await this.setPage(0, metadata, tx)
 
     return newPageIndex
   }
