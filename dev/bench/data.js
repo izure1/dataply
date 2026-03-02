@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1772449518842,
+  "lastUpdate": 1772471494574,
   "repoUrl": "https://github.com/izure1/dataply",
   "entries": {
     "Dataply Storage Benchmark": [
@@ -1331,6 +1331,55 @@ window.BENCHMARK_DATA = {
           {
             "name": "selectMany (500 PKs)",
             "value": 110.82,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "committer": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "distinct": true,
+          "id": "b616bbad75a3a860079247867229c02b4e6e5042",
+          "message": "fix: 데이터베이스의 크기가 커졌을 경우, 비트맵 확장이 필요할 경우 메타데이터가 업데이트되지 않아 무한재귀가 발생하던 오류를 수정합니다",
+          "timestamp": "2026-03-03T01:30:32+09:00",
+          "tree_id": "b3af8f513ee8706d38e2a493a6aefa9100ff38b8",
+          "url": "https://github.com/izure1/dataply/commit/b616bbad75a3a860079247867229c02b4e6e5042"
+        },
+        "date": 1772471494155,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Bulk Insert (Batch)",
+            "value": 416.64,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert (Individual)",
+            "value": 50.41,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert with WAL",
+            "value": 182.9,
+            "unit": "ms"
+          },
+          {
+            "name": "Medium Row Insert (1KB)",
+            "value": 191.85,
+            "unit": "ms"
+          },
+          {
+            "name": "selectMany (500 PKs)",
+            "value": 116.54,
             "unit": "ms"
           }
         ]
