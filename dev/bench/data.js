@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1772446622556,
+  "lastUpdate": 1772449518842,
   "repoUrl": "https://github.com/izure1/dataply",
   "entries": {
     "Dataply Storage Benchmark": [
@@ -1282,6 +1282,55 @@ window.BENCHMARK_DATA = {
           {
             "name": "selectMany (500 PKs)",
             "value": 118.59,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "committer": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "distinct": true,
+          "id": "6373a72f79d03c23da1362ed2bf01d33899e1d77",
+          "message": "fix: setFreePage 메서드에서 순차 적용 시 데드락이 발생할 수 있었던 오류를 수정합니다",
+          "timestamp": "2026-03-02T20:03:19+09:00",
+          "tree_id": "f2e137117f1c6cd6869950d7c7e7fb16d4e3a7f8",
+          "url": "https://github.com/izure1/dataply/commit/6373a72f79d03c23da1362ed2bf01d33899e1d77"
+        },
+        "date": 1772449518012,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Bulk Insert (Batch)",
+            "value": 419.75,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert (Individual)",
+            "value": 46.8,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert with WAL",
+            "value": 294.68,
+            "unit": "ms"
+          },
+          {
+            "name": "Medium Row Insert (1KB)",
+            "value": 192.36,
+            "unit": "ms"
+          },
+          {
+            "name": "selectMany (500 PKs)",
+            "value": 110.82,
             "unit": "ms"
           }
         ]
