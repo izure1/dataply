@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1772542606874,
+  "lastUpdate": 1772547730818,
   "repoUrl": "https://github.com/izure1/dataply",
   "entries": {
     "Dataply Storage Benchmark": [
@@ -1478,6 +1478,55 @@ window.BENCHMARK_DATA = {
           {
             "name": "selectMany (500 PKs)",
             "value": 112.68,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "committer": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "distinct": true,
+          "id": "31554999212f2d1cb5e9059286fce5f757fe045c",
+          "message": "feat: 불필요하므로 더이상 비트맵은 지원되지 않습니다. 다만 free page list 는 여전히 지원되며, 페이지 재할당 기능은 그대로 유지됩니다. 비트맵 업데이트가 삭제되므로 데이터베이스 안정성과, 성능이 향상됩니다.",
+          "timestamp": "2026-03-03T23:21:03+09:00",
+          "tree_id": "6c97e88e5e858ad33ca2b10e327982a043d04e6c",
+          "url": "https://github.com/izure1/dataply/commit/31554999212f2d1cb5e9059286fce5f757fe045c"
+        },
+        "date": 1772547729911,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Bulk Insert (Batch)",
+            "value": 380.54,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert (Individual)",
+            "value": 48.64,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert with WAL",
+            "value": 187.47,
+            "unit": "ms"
+          },
+          {
+            "name": "Medium Row Insert (1KB)",
+            "value": 134.04,
+            "unit": "ms"
+          },
+          {
+            "name": "selectMany (500 PKs)",
+            "value": 113.36,
             "unit": "ms"
           }
         ]
