@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1772547730818,
+  "lastUpdate": 1772551621572,
   "repoUrl": "https://github.com/izure1/dataply",
   "entries": {
     "Dataply Storage Benchmark": [
@@ -1527,6 +1527,55 @@ window.BENCHMARK_DATA = {
           {
             "name": "selectMany (500 PKs)",
             "value": 113.36,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "committer": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "distinct": true,
+          "id": "cfc80fa5e7b4ffcef6c9aa6ac1c84e02fdb91d62",
+          "message": "fix: 데이터베이스 파일 크기가 512MB가 넘을 경우 발생할 수 있던 오류를 수정합니다",
+          "timestamp": "2026-03-04T00:25:14+09:00",
+          "tree_id": "d296319b163bcb825dee800840cec3657b2a108c",
+          "url": "https://github.com/izure1/dataply/commit/cfc80fa5e7b4ffcef6c9aa6ac1c84e02fdb91d62"
+        },
+        "date": 1772551621282,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Bulk Insert (Batch)",
+            "value": 376.04,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert (Individual)",
+            "value": 48.46,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert with WAL",
+            "value": 182.72,
+            "unit": "ms"
+          },
+          {
+            "name": "Medium Row Insert (1KB)",
+            "value": 135.12,
+            "unit": "ms"
+          },
+          {
+            "name": "selectMany (500 PKs)",
+            "value": 113.73,
             "unit": "ms"
           }
         ]
