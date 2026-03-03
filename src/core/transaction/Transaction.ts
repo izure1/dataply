@@ -17,8 +17,6 @@ export class Transaction {
   private pageLocks: Map<number, string> = new Map()
   /** Dirty Pages modified by the transaction: PageID -> Modified Page Buffer */
   private dirtyPages: Map<number, Uint8Array> = new Map()
-  /** Promise chain for serializing operations on this transaction */
-  private serialPromise: Promise<void> = Promise.resolve()
   /** Undo pages: PageID -> Original Page Buffer (Snapshot) */
   private undoPages: Map<number, Uint8Array> = new Map()
   /** BPTree Transaction instance */
@@ -29,6 +27,8 @@ export class Transaction {
   private commitHooks: (() => Promise<void>)[] = []
   /** Page MVCC Strategy for disk access */
   private readonly pageStrategy: PageMVCCStrategy
+  /** Release function for global write lock, set by DataplyAPI */
+  private _writeLockRelease: (() => void) | null = null
 
   /**
    * @param id Transaction ID
@@ -83,30 +83,23 @@ export class Transaction {
    * Registers a commit hook.
    * @param hook Function to execute
    */
-  /**
-   * Serializes asynchronous operations on this transaction.
-   * Ensures that concurrent calls (e.g., insertBatch + commit) are queued and executed sequentially.
-   * @param fn The async function to serialize
-   * @returns The result of the function
-   */
-  async serialize<T>(fn: () => Promise<T>): Promise<T> {
-    const previous = this.serialPromise
-    let resolveLock!: () => void
-    this.serialPromise = new Promise((resolve) => {
-      resolveLock = resolve
-    })
-
-    return previous.then(async () => {
-      try {
-        return await fn()
-      } finally {
-        resolveLock()
-      }
-    })
-  }
-
   onCommit(hook: () => Promise<void>) {
     this.commitHooks.push(hook)
+  }
+
+  /**
+   * Sets the global write lock release function.
+   * Called by DataplyAPI.runWithDefaultWrite when acquiring the lock.
+   */
+  __setWriteLockRelease(release: () => void): void {
+    this._writeLockRelease = release
+  }
+
+  /**
+   * Returns whether this transaction already has a write lock.
+   */
+  __hasWriteLockRelease(): boolean {
+    return this._writeLockRelease !== null
   }
 
   /**
@@ -162,7 +155,7 @@ export class Transaction {
    * Commits the transaction.
    */
   async commit(): Promise<void> {
-    return this.serialize(async () => {
+    try {
       await this.context.run(this, async () => {
         for (const hook of this.commitHooks) {
           await hook()
@@ -201,14 +194,20 @@ export class Transaction {
       this.dirtyPages.clear()
       this.undoPages.clear()
       this.releaseAllLocks()
-    })
+    } finally {
+      // Release global write lock so next write transaction can proceed
+      if (this._writeLockRelease) {
+        this._writeLockRelease()
+        this._writeLockRelease = null
+      }
+    }
   }
 
   /**
    * Rolls back the transaction.
    */
   async rollback(): Promise<void> {
-    return this.serialize(async () => {
+    try {
       if (this.bptreeTx) {
         this.bptreeTx.rollback()
       }
@@ -217,7 +216,13 @@ export class Transaction {
       this.dirtyPages.clear()
       this.undoPages.clear()
       this.releaseAllLocks()
-    })
+    } finally {
+      // Release global write lock so next write transaction can proceed
+      if (this._writeLockRelease) {
+        this._writeLockRelease()
+        this._writeLockRelease = null
+      }
+    }
   }
 
   /**

@@ -44,6 +44,8 @@ export class DataplyAPI {
   /** Whether the database was created this time. */
   private readonly isNewlyCreated: boolean
   private txIdCounter: number
+  /** Promise-chain mutex for serializing write operations */
+  private writeQueue: Promise<void> = Promise.resolve()
 
   constructor(
     protected readonly file: string,
@@ -245,15 +247,62 @@ export class DataplyAPI {
    * @param tx The transaction to use. If not provided, a new transaction is created.
    * @returns The result of the callback function.
    */
+  /**
+   * Acquires the global write lock.
+   * Returns a release function that MUST be called to unlock.
+   * Used internally by runWithDefaultWrite.
+   * @returns A release function
+   */
+  protected acquireWriteLock(): Promise<() => void> {
+    const previous = this.writeQueue
+    let release: () => void
+    this.writeQueue = new Promise<void>((resolve) => {
+      release = resolve
+    })
+    return previous.then(() => release!)
+  }
+
+  /**
+   * Runs a write callback within a transaction context with global write serialization.
+   * If no transaction is provided, a new transaction is created, committed on success, rolled back on error.
+   * If a transaction is provided (external), the write lock is acquired on first call and held until commit/rollback.
+   * Subclasses MUST use this method for all write operations instead of runWithDefault.
+   * @param callback The callback function to run.
+   * @param tx Optional external transaction.
+   * @returns The result of the callback.
+   */
+  protected async runWithDefaultWrite<T>(callback: (tx: Transaction) => Promise<T>, tx?: Transaction): Promise<T> {
+    if (!tx) {
+      // Internal transaction: acquire lock, create tx, run, commit, release
+      const release = await this.acquireWriteLock()
+      const internalTx = this.createTransaction()
+      internalTx.__setWriteLockRelease(release)
+      const [error, result] = await catchPromise(this.txContext.run(internalTx, () => callback(internalTx)))
+      if (error) {
+        await internalTx.rollback()
+        throw error
+      }
+      await internalTx.commit()
+      return result
+    }
+    // External transaction: acquire lock on first write, hold until commit/rollback
+    if (!tx.__hasWriteLockRelease()) {
+      const release = await this.acquireWriteLock()
+      tx.__setWriteLockRelease(release)
+    }
+    const [error, result] = await catchPromise(this.txContext.run(tx, () => callback(tx)))
+    if (error) {
+      throw error
+    }
+    return result
+  }
+
   protected async runWithDefault<T>(callback: (tx: Transaction) => Promise<T>, tx?: Transaction): Promise<T> {
     const isInternalTx = !tx
     if (!tx) {
       tx = this.createTransaction()
     }
-    const run = () => catchPromise(this.txContext.run(tx!, () => callback(tx!)))
-    const [error, result] = isInternalTx
-      ? await run()
-      : await tx.serialize(run)
+    const [error, result] = await catchPromise(this.txContext.run(tx, () => callback(tx)))
     if (error) {
       if (isInternalTx) {
         await tx.rollback()
@@ -285,24 +334,6 @@ export class DataplyAPI {
       tx = this.createTransaction()
     }
     let hasError = false
-
-    // For external tx, collect all values inside serialize to prevent concurrent commit.
-    // For internal tx, yield directly (no concurrent access possible).
-    if (!isInternalTx) {
-      const values = await tx.serialize(async () => {
-        const collected: T[] = []
-        const generator = this.txContext.stream(tx!, () => callback(tx!))
-        for await (const value of generator) {
-          collected.push(value)
-        }
-        return collected
-      })
-      for (const value of values) {
-        yield value
-      }
-      return
-    }
-
     try {
       const generator = this.txContext.stream(tx, () => callback(tx!))
       for await (const value of generator) {
@@ -311,11 +342,13 @@ export class DataplyAPI {
     }
     catch (error) {
       hasError = true
-      await tx.rollback()
+      if (isInternalTx) {
+        await tx.rollback()
+      }
       throw error
     }
     finally {
-      if (!hasError) {
+      if (!hasError && isInternalTx) {
         await tx.commit()
       }
     }
@@ -343,7 +376,7 @@ export class DataplyAPI {
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
-    return this.runWithDefault(async (tx) => {
+    return this.runWithDefaultWrite(async (tx) => {
       incrementRowCount = incrementRowCount ?? true
       if (typeof data === 'string') {
         data = this.textCodec.encode(data)
@@ -364,7 +397,7 @@ export class DataplyAPI {
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
-    return this.runWithDefault(async (tx) => {
+    return this.runWithDefaultWrite(async (tx) => {
       incrementRowCount = incrementRowCount ?? true
       if (typeof data === 'string') {
         data = this.textCodec.encode(data)
@@ -386,7 +419,7 @@ export class DataplyAPI {
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
-    return this.runWithDefault(async (tx) => {
+    return this.runWithDefaultWrite(async (tx) => {
       incrementRowCount = incrementRowCount ?? true
       const encodedList = dataList.map(data =>
         typeof data === 'string' ? this.textCodec.encode(data) : data
@@ -405,7 +438,7 @@ export class DataplyAPI {
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
-    return this.runWithDefault(async (tx) => {
+    return this.runWithDefaultWrite(async (tx) => {
       if (typeof data === 'string') {
         data = this.textCodec.encode(data)
       }
@@ -423,7 +456,7 @@ export class DataplyAPI {
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
-    return this.runWithDefault(async (tx) => {
+    return this.runWithDefaultWrite(async (tx) => {
       decrementRowCount = decrementRowCount ?? true
       await this.rowTableEngine.delete(pk, decrementRowCount, tx)
     }, tx)
