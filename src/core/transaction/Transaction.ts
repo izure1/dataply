@@ -17,6 +17,8 @@ export class Transaction {
   private pageLocks: Map<number, string> = new Map()
   /** Dirty Pages modified by the transaction: PageID -> Modified Page Buffer */
   private dirtyPages: Map<number, Uint8Array> = new Map()
+  /** Promise chain for serializing operations on this transaction */
+  private serialPromise: Promise<void> = Promise.resolve()
   /** Undo pages: PageID -> Original Page Buffer (Snapshot) */
   private undoPages: Map<number, Uint8Array> = new Map()
   /** BPTree Transaction instance */
@@ -81,6 +83,28 @@ export class Transaction {
    * Registers a commit hook.
    * @param hook Function to execute
    */
+  /**
+   * Serializes asynchronous operations on this transaction.
+   * Ensures that concurrent calls (e.g., insertBatch + commit) are queued and executed sequentially.
+   * @param fn The async function to serialize
+   * @returns The result of the function
+   */
+  async serialize<T>(fn: () => Promise<T>): Promise<T> {
+    const previous = this.serialPromise
+    let resolveLock!: () => void
+    this.serialPromise = new Promise((resolve) => {
+      resolveLock = resolve
+    })
+
+    return previous.then(async () => {
+      try {
+        return await fn()
+      } finally {
+        resolveLock()
+      }
+    })
+  }
+
   onCommit(hook: () => Promise<void>) {
     this.commitHooks.push(hook)
   }
@@ -138,58 +162,62 @@ export class Transaction {
    * Commits the transaction.
    */
   async commit(): Promise<void> {
-    await this.context.run(this, async () => {
-      for (const hook of this.commitHooks) {
-        await hook()
-      }
-    })
-
-    // 0. Acquire global lock to prevent concurrent checkpoint/commit issues
-    let shouldTriggerCheckpoint = false
-    await this.pfs.runGlobalLock(async () => {
-      // 1. WAL Prepare (Phase 1)
-      if (this.pfs.wal && this.dirtyPages.size > 0) {
-        await this.pfs.wal.prepareCommit(this.dirtyPages)
-        // 2. WAL Finalize (Marker)
-        await this.pfs.wal.writeCommitMarker()
-      }
-
-      // 3. Write dirty pages (this now buffers in the strategy)
-      for (const [pageId, data] of this.dirtyPages) {
-        await this.pageStrategy.write(pageId, data)
-      }
-
-      // 4. WAL Auto-Checkpoint (Determine if needed)
-      if (this.pfs.wal) {
-        this.pfs.wal.incrementWrittenPages(this.dirtyPages.size)
-        if (this.pfs.wal.shouldCheckpoint(this.pfs.options.walCheckpointThreshold)) {
-          shouldTriggerCheckpoint = true
+    return this.serialize(async () => {
+      await this.context.run(this, async () => {
+        for (const hook of this.commitHooks) {
+          await hook()
         }
+      })
+
+      // 0. Acquire global lock to prevent concurrent checkpoint/commit issues
+      let shouldTriggerCheckpoint = false
+      await this.pfs.runGlobalLock(async () => {
+        // 1. WAL Prepare (Phase 1)
+        if (this.pfs.wal && this.dirtyPages.size > 0) {
+          await this.pfs.wal.prepareCommit(this.dirtyPages)
+          // 2. WAL Finalize (Marker)
+          await this.pfs.wal.writeCommitMarker()
+        }
+
+        // 3. Write dirty pages (this now buffers in the strategy)
+        for (const [pageId, data] of this.dirtyPages) {
+          await this.pageStrategy.write(pageId, data)
+        }
+
+        // 4. WAL Auto-Checkpoint (Determine if needed)
+        if (this.pfs.wal) {
+          this.pfs.wal.incrementWrittenPages(this.dirtyPages.size)
+          if (this.pfs.wal.shouldCheckpoint(this.pfs.options.walCheckpointThreshold)) {
+            shouldTriggerCheckpoint = true
+          }
+        }
+      })
+
+      // 5. Trigger checkpoint outside the commit lock to avoid deadlock (ryoiki is non-reentrant)
+      if (shouldTriggerCheckpoint) {
+        await this.pfs.checkpoint()
       }
+
+      this.dirtyPages.clear()
+      this.undoPages.clear()
+      this.releaseAllLocks()
     })
-
-    // 5. Trigger checkpoint outside the commit lock to avoid deadlock (ryoiki is non-reentrant)
-    if (shouldTriggerCheckpoint) {
-      await this.pfs.checkpoint()
-    }
-
-    this.dirtyPages.clear()
-    this.undoPages.clear()
-    this.releaseAllLocks()
   }
 
   /**
    * Rolls back the transaction.
    */
   async rollback(): Promise<void> {
-    if (this.bptreeTx) {
-      this.bptreeTx.rollback()
-    }
+    return this.serialize(async () => {
+      if (this.bptreeTx) {
+        this.bptreeTx.rollback()
+      }
 
-    // Restore undo pages to cache (not disk - just clear dirty)
-    this.dirtyPages.clear()
-    this.undoPages.clear()
-    this.releaseAllLocks()
+      // Restore undo pages to cache (not disk - just clear dirty)
+      this.dirtyPages.clear()
+      this.undoPages.clear()
+      this.releaseAllLocks()
+    })
   }
 
   /**

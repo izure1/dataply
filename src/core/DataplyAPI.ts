@@ -250,7 +250,10 @@ export class DataplyAPI {
     if (!tx) {
       tx = this.createTransaction()
     }
-    const [error, result] = await catchPromise(this.txContext.run(tx, () => callback(tx)))
+    const run = () => catchPromise(this.txContext.run(tx!, () => callback(tx!)))
+    const [error, result] = isInternalTx
+      ? await run()
+      : await tx.serialize(run)
     if (error) {
       if (isInternalTx) {
         await tx.rollback()
@@ -282,6 +285,24 @@ export class DataplyAPI {
       tx = this.createTransaction()
     }
     let hasError = false
+
+    // For external tx, collect all values inside serialize to prevent concurrent commit.
+    // For internal tx, yield directly (no concurrent access possible).
+    if (!isInternalTx) {
+      const values = await tx.serialize(async () => {
+        const collected: T[] = []
+        const generator = this.txContext.stream(tx!, () => callback(tx!))
+        for await (const value of generator) {
+          collected.push(value)
+        }
+        return collected
+      })
+      for (const value of values) {
+        yield value
+      }
+      return
+    }
+
     try {
       const generator = this.txContext.stream(tx, () => callback(tx!))
       for await (const value of generator) {
@@ -290,13 +311,11 @@ export class DataplyAPI {
     }
     catch (error) {
       hasError = true
-      if (isInternalTx) {
-        await tx.rollback()
-      }
+      await tx.rollback()
       throw error
     }
     finally {
-      if (!hasError && isInternalTx) {
+      if (!hasError) {
         await tx.commit()
       }
     }
