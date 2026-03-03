@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1772471494574,
+  "lastUpdate": 1772535920519,
   "repoUrl": "https://github.com/izure1/dataply",
   "entries": {
     "Dataply Storage Benchmark": [
@@ -1380,6 +1380,55 @@ window.BENCHMARK_DATA = {
           {
             "name": "selectMany (500 PKs)",
             "value": 116.54,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "committer": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "distinct": true,
+          "id": "d6f4471f0e3d7993381b483b6e2ae2deb96296a0",
+          "message": "fix: insert, insertBatch, delete 등 메서드 실행 도중, transaction.commit을 병렬 호출할 경우, 직렬화를 무시한채 동작되므로 메타데이터가 망가지는 오류를 수정합니다.",
+          "timestamp": "2026-03-03T20:03:10+09:00",
+          "tree_id": "b53ca0ec87d84f4f80089b610827ff1961f6a39e",
+          "url": "https://github.com/izure1/dataply/commit/d6f4471f0e3d7993381b483b6e2ae2deb96296a0"
+        },
+        "date": 1772535920085,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Bulk Insert (Batch)",
+            "value": 410.22,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert (Individual)",
+            "value": 47.12,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert with WAL",
+            "value": 175.4,
+            "unit": "ms"
+          },
+          {
+            "name": "Medium Row Insert (1KB)",
+            "value": 191.33,
+            "unit": "ms"
+          },
+          {
+            "name": "selectMany (500 PKs)",
+            "value": 107.24,
             "unit": "ms"
           }
         ]
