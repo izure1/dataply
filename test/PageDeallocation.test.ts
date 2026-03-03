@@ -120,42 +120,4 @@ describe('Page Deallocation', () => {
       await db.close()
     }
   })
-
-  test('should handle bitmap overflow', async () => {
-    // PageSize 4096 bytes (Minimum allowed)
-    const db = new DataplyAPI(TEST_DB, { pageSize: 4096, pageCacheCapacity: 100 })
-    try {
-      await db.init()
-
-      const pfs = (db as any).pfs as PageFileSystem
-      const tx = db.createTransaction()
-
-      const highPageId = 33000 // > 31968 capacity ((4096-100)*8)
-      await pfs.setFreePage(highPageId, tx)
-
-      // ... verification logic ...
-      const factory = new PageManagerFactory()
-      const metadata = await pfs.getMetadata(tx)
-      const metadataManager = factory.getManager(metadata) as MetadataPageManager
-      const firstBitmapPageId = metadataManager.getBitmapPageId(metadata)
-
-      const firstBitmapPage = await pfs.get(firstBitmapPageId, tx)
-      const firstBitmapManager = factory.getManager(firstBitmapPage) as BitmapPageManager
-      const nextBitmapPageId = firstBitmapManager.getNextPageId(firstBitmapPage)
-
-      expect(nextBitmapPageId).not.toBe(-1)
-
-      const secondBitmapPage = await pfs.get(nextBitmapPageId, tx) as BitmapPage
-      const secondBitmapManager = factory.getManager(secondBitmapPage) as BitmapPageManager
-
-      const expectedBitIndex = highPageId - ((4096 - 100) * 8)
-      const isSet = secondBitmapManager.getBit(secondBitmapPage, expectedBitIndex)
-
-      await tx.commit()
-
-      expect(isSet).toBe(true)
-    } finally {
-      await db.close()
-    }
-  })
 })

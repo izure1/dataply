@@ -280,8 +280,6 @@ export class PageFileSystem {
       metadataManager.setFreePageId(metadata, nextFreePageId)
       await this.setPage(0, metadata, tx)
 
-      await this.updateBitmap(reusedPageId, false, tx)
-
       const manager = this.pageFactory.getManagerFromType(pageType)
       const newPage = manager.create(this.pageSize, reusedPageId)
       await this.setPage(reusedPageId, newPage, tx)
@@ -318,7 +316,6 @@ export class PageFileSystem {
       const nextId = i < lastFreeIndex ? i + 1 : -1
       emptyManager.setNextPageId(emptyPage, nextId)
       await this.setPage(i, emptyPage, tx)
-      await this.updateBitmap(i, true, tx)
     }
 
     return newPageIndex
@@ -428,29 +425,22 @@ export class PageFileSystem {
   async setFreePage(pageId: number, tx: Transaction): Promise<void> {
     if (pageId <= 0) return // 메타데이터 페이지 보호
 
-    // 1. 메타데이터 조회 및 락 획득
+    // 1. 락 획득
     await tx.__acquireWriteLock(0)
     await tx.__acquireWriteLock(pageId)
 
+    // 2. 메타데이터 조회
     const metadata = await this.getMetadata(tx)
     const metadataManager = this.pageFactory.getManager(metadata) as MetadataPageManager
-
-    // 현재 freePageId 가져오기 (Linked List의 Head)
     const currentHeadFreePageId = metadataManager.getFreePageId(metadata)
 
-    // 2. 페이지 초기화 (EmptyPage) 및 링크 연결
+    // 3. 페이지 초기화 (EmptyPage) 및 free list head에 연결 (Stack Push)
     const emptyPageManager = this.pageFactory.getManagerFromType(PageManager.CONSTANT.PAGE_TYPE_EMPTY)
     const emptyPage = emptyPageManager.create(this.pageSize, pageId)
-
-    // 다음 페이지를 이전 Head로 설정 (Stack Push)
     emptyPageManager.setNextPageId(emptyPage, currentHeadFreePageId)
-
     await this.setPage(pageId, emptyPage, tx)
 
-    // 3. 비트맵 업데이트 (Free로 표시 -> true)
-    await this.updateBitmap(pageId, true, tx)
-
-    // 4. 메타데이터 업데이트 (Head를 현재 페이지로 변경)
+    // 6. metadata의 free list head를 현재 페이지로 업데이트
     metadataManager.setFreePageId(metadata, pageId)
     await this.setPage(0, metadata, tx)
   }
