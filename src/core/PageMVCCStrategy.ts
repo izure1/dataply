@@ -73,11 +73,6 @@ export class PageMVCCStrategy {
   async write(pageId: number, data: Uint8Array): Promise<void> {
     const pageStartPos = pageId * this.pageSize
 
-    // 안전 장치: 512MB 제한
-    if (pageStartPos + this.pageSize > 512 * 1024 * 1024) {
-      throw new Error(`[Safety Limit] File write exceeds 512MB limit at position ${pageStartPos}`)
-    }
-
     // 데이터 복사본 생성 (원본 수정을 방지하기 위함)
     const dataCopy = new Uint8Array(this.pageSize)
     dataCopy.set(data)
