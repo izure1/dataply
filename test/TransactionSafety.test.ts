@@ -51,9 +51,9 @@ describe('TransactionSafety (DataplyAPI)', () => {
     // 2. 커밋 수행
     await tx.commit()
 
-    // [검증 3: 지연 쓰기] 커밋 후에도 물리적 디스크 크기는 아직 변하지 않아야 함 (메모리 & WAL에만 반영됨)
+    // [검증 3: 커밋 반영] WAL이 없는 경우 커밋 후 물리적 디스크에 즉시 반영됨
     const afterCommitDiskSize = fs.statSync(DB_PATH).size
-    expect(afterCommitDiskSize).toBe(initialDiskSize)
+    expect(afterCommitDiskSize).toBeGreaterThan(initialDiskSize)
 
     // 3. DB 종료 (자동 체크포인트 유도)
     await db.close()

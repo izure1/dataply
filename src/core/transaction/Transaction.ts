@@ -177,8 +177,13 @@ export class Transaction {
           await this.pageStrategy.write(pageId, data)
         }
 
-        // 4. WAL Auto-Checkpoint (Determine if needed)
-        if (this.pfs.wal) {
+        // 4. Flush & checkpoint
+        if (!this.pfs.wal) {
+          // WAL이 없으면 해당 트랜잭션의 dirty pages만 즉시 디스크에 기록
+          await this.pfs.strategy.flushPages(this.dirtyPages)
+        }
+        else {
+          // WAL Auto-Checkpoint (Determine if needed)
           this.pfs.wal.incrementWrittenPages(this.dirtyPages.size)
           if (this.pfs.wal.shouldCheckpoint(this.pfs.options.walCheckpointThreshold)) {
             shouldTriggerCheckpoint = true

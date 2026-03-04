@@ -116,6 +116,25 @@ export class PageMVCCStrategy {
   }
 
   /**
+   * 지정된 페이지들만 디스크에 기록합니다.
+   * WAL 없이 트랜잭션 커밋 시, 해당 트랜잭션의 dirty pages만 선택적으로 flush합니다.
+   * @param pages 기록할 페이지 맵 (PageID -> PageData)
+   */
+  async flushPages(pages: Map<number, Uint8Array>): Promise<void> {
+    if (pages.size === 0) {
+      return
+    }
+
+    const sortedPageIds = Array.from(pages.keys()).sort((a, b) => a - b)
+
+    for (const pageId of sortedPageIds) {
+      const data = pages.get(pageId)!
+      const position = pageId * this.pageSize
+      await this._writeToDisk(data, position)
+    }
+  }
+
+  /**
    * 메인 DB 파일의 물리적 동기화를 수행합니다 (fsync).
    */
   async sync(): Promise<void> {
