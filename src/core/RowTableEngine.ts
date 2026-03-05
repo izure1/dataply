@@ -6,7 +6,7 @@ import { PageFileSystem } from './PageFileSystem'
 import { Row } from './Row'
 import { KeyManager } from './KeyManager'
 import { DataPageManager, MetadataPageManager, OverflowPageManager, PageManagerFactory, IndexPageManager } from './Page'
-import { numberToBytes, bytesToNumber, getMinMaxValue } from '../utils'
+import { numberToBytes, bytesToNumber, clusterNumbers } from '../utils'
 import { Transaction } from './transaction/Transaction'
 import { TransactionContext } from './transaction/TxContext'
 
@@ -538,16 +538,36 @@ export class RowTableEngine {
       pkIndexMap.set(pks[i], i)
     }
 
-    const [minPk, maxPk] = getMinMaxValue(pks)
     const pkRidPairs: ({ pk: number, rid: number, index: number } | null)[] = new Array(pks.length).fill(null)
-
     const btx = await this.getBPTreeTransaction(tx)
-    const stream = btx.whereStream({ gte: minPk, lte: maxPk })
 
-    for await (const [rid, pk] of stream) {
-      const index = pkIndexMap.get(pk)
-      if (index !== undefined) {
-        pkRidPairs[index] = { pk, rid, index }
+    // PK를 클러스터링하여 분산된 범위를 여러 번 조회
+    const clusters = clusterNumbers(pks)
+
+    for (let i = 0, len = clusters.length; i < len; i++) {
+      const cluster = clusters[i]
+      const minPk = cluster[0]
+      const maxPk = cluster[cluster.length - 1]
+
+      // 단일 PK 클러스터는 equal 조회로 최적화
+      if (minPk === maxPk) {
+        const keys = await btx.keys({ equal: minPk })
+        if (keys.size > 0) {
+          const rid = keys.values().next().value!
+          const index = pkIndexMap.get(minPk)
+          if (index !== undefined) {
+            pkRidPairs[index] = { pk: minPk, rid, index }
+          }
+        }
+        continue
+      }
+
+      const stream = btx.whereStream({ gte: minPk, lte: maxPk })
+      for await (const [rid, pk] of stream) {
+        const index = pkIndexMap.get(pk)
+        if (index !== undefined) {
+          pkRidPairs[index] = { pk, rid, index }
+        }
       }
     }
 
