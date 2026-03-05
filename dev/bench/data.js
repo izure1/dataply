@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1772668758664,
+  "lastUpdate": 1772735089129,
   "repoUrl": "https://github.com/izure1/dataply",
   "entries": {
     "Dataply Storage Benchmark": [
@@ -1674,6 +1674,55 @@ window.BENCHMARK_DATA = {
           {
             "name": "selectMany (500 PKs)",
             "value": 109.09,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "committer": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "distinct": true,
+          "id": "22f501df3e0f0eac6e0aa3158f3b59b872ff1ce6",
+          "message": "feat: selectMany 메서드의 pks의 범위가 국소적이지 않고 균등하게 분포되어있을 경우, 풀 스캔에 가까운 커다란 범위를 스캔하던 현상을 클러스터링을 통해 최적화합니다.",
+          "timestamp": "2026-03-06T03:23:28+09:00",
+          "tree_id": "7fc89ac149b5cb6fa4e89556d97541d00360d15f",
+          "url": "https://github.com/izure1/dataply/commit/22f501df3e0f0eac6e0aa3158f3b59b872ff1ce6"
+        },
+        "date": 1772735088809,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Bulk Insert (Batch)",
+            "value": 420.9,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert (Individual)",
+            "value": 66.4,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert with WAL",
+            "value": 175.6,
+            "unit": "ms"
+          },
+          {
+            "name": "Medium Row Insert (1KB)",
+            "value": 199.25,
+            "unit": "ms"
+          },
+          {
+            "name": "selectMany (500 PKs)",
+            "value": 110.15,
             "unit": "ms"
           }
         ]
