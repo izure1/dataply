@@ -111,10 +111,10 @@ function calcThreshold(sortedGaps: Float64Array, n: number): number {
 /**
  * Sorts the input array and splits it into clusters based on the gaps between consecutive elements.
  * @param numbers Array of numbers to cluster
- * @param gapMultiplier Multiplier for the gap threshold (default is calculated automatically)
+ * @param maxGap Optional fixed gap threshold. If not provided, it is calculated automatically.
  * @returns Array of clusters
  */
-export function clusterNumbers(numbers: number[] | Float64Array, gapMultiplier?: number): Float64Array[] {
+export function clusterNumbers(numbers: number[] | Float64Array, maxGap?: number): Float64Array[] {
   const n = numbers.length
   if (n === 0) return []
   if (n === 1) return [new Float64Array([numbers[0]])]
@@ -134,13 +134,10 @@ export function clusterNumbers(numbers: number[] | Float64Array, gapMultiplier?:
   const sortedGaps = gaps.slice().sort()
   let threshold: number
 
-  if (gapMultiplier !== undefined) {
-    // 수동 지정: 기존 IQR 공식 유지
-    const q3 = sortedGaps[Math.floor((n - 1) * 0.75)]
-    const iqr = q3 - sortedGaps[Math.floor((n - 1) * 0.25)]
-    threshold = q3 + iqr * gapMultiplier
-  } else {
-    // 자동 계산: 분포 형태 무관하게 robust한 threshold
+  if (maxGap !== undefined) {
+    threshold = maxGap
+  }
+  else {
     threshold = calcThreshold(sortedGaps, n)
   }
 

@@ -542,7 +542,7 @@ export class RowTableEngine {
     const btx = await this.getBPTreeTransaction(tx)
 
     // PK를 클러스터링하여 분산된 범위를 여러 번 조회
-    const clusters = clusterNumbers(pks)
+    const clusters = clusterNumbers(pks, this.order / 2)
 
     for (let i = 0, len = clusters.length; i < len; i++) {
       const cluster = clusters[i]
