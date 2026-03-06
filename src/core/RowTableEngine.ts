@@ -538,7 +538,11 @@ export class RowTableEngine {
       pkIndexMap.set(pks[i], i)
     }
 
-    const pkRidPairs: ({ pk: number, rid: number, index: number } | null)[] = new Array(pks.length).fill(null)
+    const validCount = pks.length
+    const pkArray = new Float64Array(validCount).fill(0)
+    const ridArray = new Float64Array(validCount).fill(0)
+    const indexArray = new Float64Array(validCount).fill(0)
+
     const btx = await this.getBPTreeTransaction(tx)
 
     // PK를 클러스터링하여 분산된 범위를 여러 번 조회
@@ -556,7 +560,9 @@ export class RowTableEngine {
           const rid = keys.values().next().value!
           const index = pkIndexMap.get(minPk)
           if (index !== undefined) {
-            pkRidPairs[index] = { pk: minPk, rid, index }
+            pkArray[index] = minPk
+            ridArray[index] = rid
+            indexArray[index] = index
           }
         }
         continue
@@ -566,12 +572,14 @@ export class RowTableEngine {
       for await (const [rid, pk] of stream) {
         const index = pkIndexMap.get(pk)
         if (index !== undefined) {
-          pkRidPairs[index] = { pk, rid, index }
+          pkArray[index] = pk
+          ridArray[index] = rid
+          indexArray[index] = index
         }
       }
     }
 
-    return this.fetchRowsByRids(pkRidPairs, tx)
+    return this.fetchRowsByRids(validCount, pkArray, ridArray, indexArray, tx)
   }
 
   /**
@@ -581,28 +589,31 @@ export class RowTableEngine {
    * @returns Array of row data in the same order as input PKs
    */
   private async fetchRowsByRids(
-    pkRidPairs: ({
-      pk: number,
-      rid: number,
-      index: number
-    } | null)[],
+    validCount: number,
+    pkArray: Float64Array,
+    ridArray: Float64Array,
+    indexArray: Float64Array,
     tx: Transaction
   ): Promise<(Uint8Array | null)[]> {
-    const result: (Uint8Array | null)[] = new Array(pkRidPairs.length).fill(null)
-    if (pkRidPairs.length === 0) return result
+    const result: (Uint8Array | null)[] = new Array(validCount).fill(null)
+    if (validCount === 0) return result
 
     // Group items by pageId using bitwise operations for speed
     const pageGroupMap = new Map<number, { pk: number, slotIndex: number, index: number }[]>()
-    for (const pair of pkRidPairs) {
-      if (pair === null) continue
-      const rid = pair.rid
+    for (let i = 0; i < validCount; i++) {
+      const pk = pkArray[i]
+      const rid = ridArray[i]
+      const index = indexArray[i]
+
+      if (pk === 0 && rid === 0 && index === 0) continue
+
       const slotIndex = rid % 65536
       const pageId = Math.floor(rid / 65536)
 
       if (!pageGroupMap.has(pageId)) {
         pageGroupMap.set(pageId, [])
       }
-      pageGroupMap.get(pageId)!.push({ pk: pair.pk, slotIndex, index: pair.index })
+      pageGroupMap.get(pageId)!.push({ pk, slotIndex, index })
     }
 
     // 순차 읽기를 위한 정렬
@@ -615,7 +626,8 @@ export class RowTableEngine {
       }
 
       const manager = this.factory.getManager(page)
-      for (const item of items) {
+      for (let i = 0, len = items.length; i < len; i++) {
+        const item = items[i]
         const row = manager.getRow(page, item.slotIndex)
 
         if (this.rowManager.getDeletedFlag(row)) {
