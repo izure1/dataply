@@ -38,6 +38,11 @@ export interface DataplyMetadata {
    * The total number of data rows in the dataply.
    */
   rowCount: number
+  /**
+   * The usage of the dataply. It is calculated based on the remaining page capacity.
+   * The value is between 0 and 1.
+   */
+  usage: number
 }
 
 export type DataPage = Uint8Array & { __pageType: 'data' }

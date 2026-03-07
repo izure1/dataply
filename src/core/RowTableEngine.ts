@@ -147,10 +147,16 @@ export class RowTableEngine {
     const metadataPage = await this.pfs.getMetadata(tx)
     const manager = this.factory.getManagerFromType(MetadataPageManager.CONSTANT.PAGE_TYPE_METADATA) as MetadataPageManager
 
+    const pageSize = manager.getPageSize(metadataPage)
+    const pageCount = manager.getPageCount(metadataPage)
+    const rowCount = manager.getRowCount(metadataPage)
+    const usage = pageCount / Math.pow(2, 32)
+
     return {
-      pageSize: manager.getPageSize(metadataPage),
-      pageCount: manager.getPageCount(metadataPage),
-      rowCount: manager.getRowCount(metadataPage)
+      pageSize,
+      pageCount,
+      rowCount,
+      usage,
     }
   }
 
