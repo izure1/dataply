@@ -114,7 +114,10 @@ function calcThreshold(sortedGaps: Float64Array, n: number): number {
  * @param maxGap Optional fixed gap threshold. If not provided, it is calculated automatically.
  * @returns Array of clusters
  */
-export function clusterNumbers(numbers: number[] | Float64Array, maxGap?: number): Float64Array[] {
+export function clusterNumbersByGap(
+  numbers: number[] | Float64Array,
+  maxGap?: number
+): Float64Array[] {
   const n = numbers.length
   if (n === 0) return []
   if (n === 1) return [new Float64Array([numbers[0]])]
@@ -153,5 +156,32 @@ export function clusterNumbers(numbers: number[] | Float64Array, maxGap?: number
   }
   clusters.push(sorted.subarray(clusterStart))
 
+  return clusters
+}
+
+export function clusterNumbersByPagination(
+  numbers: number[] | Float64Array,
+  pagingSize: number,
+  startPageId: number = 0
+): Float64Array[] {
+  const n = numbers.length
+  if (n === 0) return []
+  if (n === 1) return [new Float64Array([numbers[0]])]
+
+  const sorted = (
+    numbers instanceof Float64Array ? numbers.slice() : Float64Array.from(numbers)
+  ).sort()
+
+  const clusters: Float64Array[] = []
+  let start = 0
+  for (let i = 0, len = n - 1; i < len; i++) {
+    const paginationIndex = Math.floor((sorted[i] - startPageId) / pagingSize)
+    const nextPaginationIndex = Math.floor((sorted[i + 1] - startPageId) / pagingSize)
+    if (paginationIndex !== nextPaginationIndex) {
+      clusters.push(sorted.subarray(start, i + 1))
+      start = i + 1
+    }
+  }
+  clusters.push(sorted.subarray(start))
   return clusters
 }

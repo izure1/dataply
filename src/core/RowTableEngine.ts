@@ -6,7 +6,7 @@ import { PageFileSystem } from './PageFileSystem'
 import { Row } from './Row'
 import { KeyManager } from './KeyManager'
 import { DataPageManager, MetadataPageManager, OverflowPageManager, PageManagerFactory, IndexPageManager } from './Page'
-import { numberToBytes, bytesToNumber, clusterNumbers } from '../utils'
+import { numberToBytes, bytesToNumber, clusterNumbersByPagination } from '../utils'
 import { Transaction } from './transaction/Transaction'
 import { TransactionContext } from './transaction/TxContext'
 
@@ -529,8 +529,22 @@ export class RowTableEngine {
    * @returns Array of raw data of the rows in the same order as input PKs
    */
   async selectMany(pks: number[] | Float64Array, tx: Transaction): Promise<(Uint8Array | null)[]> {
+    const collections = await this.collectItemsByPage(pks, tx)
+    return this.fetchRowsByRids(collections, pks.length, tx)
+  }
+
+  /**
+   * Collects items by page ID to minimize I/O.
+   * @param pks Array of PKs to look up
+   * @param tx Transaction
+   * @returns Map of page ID to array of {pk, slotIndex, index} pairs
+   */
+  async collectItemsByPage(
+    pks: number[] | Float64Array,
+    tx: Transaction
+  ): Promise<Map<number, { pk: number, slotIndex: number, index: number }[]>> {
     if (pks.length === 0) {
-      return []
+      return new Map()
     }
 
     const pkIndexMap = new Map<number, number>()
@@ -538,15 +552,20 @@ export class RowTableEngine {
       pkIndexMap.set(pks[i], i)
     }
 
-    const validCount = pks.length
-    const pkArray = new Float64Array(validCount).fill(0)
-    const ridArray = new Float64Array(validCount).fill(0)
-    const indexArray = new Float64Array(validCount).fill(0)
-
     const btx = await this.getBPTreeTransaction(tx)
-
     // PK를 클러스터링하여 분산된 범위를 여러 번 조회
-    const clusters = clusterNumbers(pks, this.order / 2)
+    const clusters = clusterNumbersByPagination(pks, this.order, 1)
+    // Group items by pageId using bitwise operations for speed
+    const collections = new Map<number, { pk: number, slotIndex: number, index: number }[]>()
+
+    const insertToCollections = (pk: number, rid: number, index: number) => {
+      const slotIndex = rid % 65536
+      const pageId = Math.floor(rid / 65536)
+      if (!collections.has(pageId)) {
+        collections.set(pageId, [])
+      }
+      collections.get(pageId)!.push({ pk, slotIndex, index })
+    }
 
     for (let i = 0, len = clusters.length; i < len; i++) {
       const cluster = clusters[i]
@@ -560,9 +579,7 @@ export class RowTableEngine {
           const rid = keys.values().next().value!
           const index = pkIndexMap.get(minPk)
           if (index !== undefined) {
-            pkArray[index] = minPk
-            ridArray[index] = rid
-            indexArray[index] = index
+            insertToCollections(minPk, rid, index)
           }
         }
         continue
@@ -572,14 +589,12 @@ export class RowTableEngine {
       for await (const [rid, pk] of stream) {
         const index = pkIndexMap.get(pk)
         if (index !== undefined) {
-          pkArray[index] = pk
-          ridArray[index] = rid
-          indexArray[index] = index
+          insertToCollections(pk, rid, index)
         }
       }
     }
 
-    return this.fetchRowsByRids(validCount, pkArray, ridArray, indexArray, tx)
+    return collections
   }
 
   /**
@@ -589,37 +604,17 @@ export class RowTableEngine {
    * @returns Array of row data in the same order as input PKs
    */
   private async fetchRowsByRids(
-    validCount: number,
-    pkArray: Float64Array,
-    ridArray: Float64Array,
-    indexArray: Float64Array,
+    collections: Map<number, { pk: number, slotIndex: number, index: number }[]>,
+    itemsCount: number,
     tx: Transaction
   ): Promise<(Uint8Array | null)[]> {
-    const result: (Uint8Array | null)[] = new Array(validCount).fill(null)
-    if (validCount === 0) return result
-
-    // Group items by pageId using bitwise operations for speed
-    const pageGroupMap = new Map<number, { pk: number, slotIndex: number, index: number }[]>()
-    for (let i = 0; i < validCount; i++) {
-      const pk = pkArray[i]
-      const rid = ridArray[i]
-      const index = indexArray[i]
-
-      if (pk === 0 && rid === 0 && index === 0) continue
-
-      const slotIndex = rid % 65536
-      const pageId = Math.floor(rid / 65536)
-
-      if (!pageGroupMap.has(pageId)) {
-        pageGroupMap.set(pageId, [])
-      }
-      pageGroupMap.get(pageId)!.push({ pk, slotIndex, index })
-    }
+    const result: (Uint8Array | null)[] = new Array(itemsCount).fill(null)
+    if (itemsCount === 0) return result
 
     // 순차 읽기를 위한 정렬
-    const sortedPageIds = Array.from(pageGroupMap.keys()).sort((a, b) => a - b)
+    const sortedPageIds = Array.from(collections.keys()).sort((a, b) => a - b)
     await Promise.all(sortedPageIds.map(async (pageId) => {
-      const items = pageGroupMap.get(pageId)!
+      const items = collections.get(pageId)!
       const page = await this.pfs.get(pageId, tx)
       if (!this.factory.isDataPage(page)) {
         throw new Error(`Page ${pageId} is not a data page`)
