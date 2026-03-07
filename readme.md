@@ -18,7 +18,7 @@ Dataply provides essential features for high-performance data management:
 - **MVCC & Isolation**: Snapshot isolation via Multi-Version Concurrency Control (MVCC) enables non-blocking reads.
 - **Reliability (WAL)**: Write-Ahead Logging (WAL) ensures data integrity and automatic crash recovery.
 - **Atomic Transactions**: Full support for ACID-compliant Commit and Rollback operations.
-- **Efficient Storage**: Fixed-size page management with LRU-based page caching and Bitmap space optimization.
+- **Efficient Storage**: Fixed-size page management with LRU-based page caching and Free List space optimization (Bitmap-based management is deprecated).
 - **Type Safety**: Comprehensive TypeScript definitions for a seamless developer experience.
 
 ## Installation
@@ -166,6 +166,8 @@ Opens a database file. If the file does not exist, it creates and initializes a 
 - `options.pageSize`: Size of a page (Default: 8192, must be a power of 2)
 - `options.pageCacheCapacity`: Maximum number of pages to keep in memory (Default: 10000)
 - `options.wal`: Path to the WAL file. If omitted, WAL is disabled.
+- `options.pagePreallocationCount`: The number of pages to preallocate when creating a new page (Default: 1000).
+- `options.walCheckpointThreshold`: The total number of pages written to the WAL before automatically clearing it (Default: 1000).
 
 #### `async init(): Promise<void>`
 Initializes the instance. Must be called before performing any CRUD operations.
@@ -173,11 +175,17 @@ Initializes the instance. Must be called before performing any CRUD operations.
 #### `async insert(data: string | Uint8Array, tx?: Transaction): Promise<number>`
 Inserts new data. Returns the Primary Key (PK) of the created row.
 
+#### `async insertAsOverflow(data: string | Uint8Array, tx?: Transaction): Promise<number>`
+Forcibly inserts data into an overflow page, even if it could fit within a standard data page. Returns the Primary Key (PK).
+
 #### `async insertBatch(dataList: (string | Uint8Array)[], tx?: Transaction): Promise<number[]>`
 Inserts multiple rows at once. This is significantly faster than multiple individual inserts as it minimizes internal transaction overhead.
 
 #### `async select(pk: number, asRaw?: boolean, tx?: Transaction): Promise<string | Uint8Array | null>`
 Retrieves data based on the PK. Returns `Uint8Array` if `asRaw` is true.
+
+#### `async selectMany(pks: number[] | Float64Array, asRaw?: boolean, tx?: Transaction): Promise<(string | Uint8Array | null)[]>`
+Retrieves multiple data records in batch based on the provided PKs. This is more efficient than individual `select` calls for multiple lookups.
 
 #### `async update(pk: number, data: string | Uint8Array, tx?: Transaction): Promise<void>`
 Updates existing data.
@@ -257,7 +265,7 @@ For a detailed visual guide on Dataply's internal architecture, class diagrams, 
 - **Fixed-size Pages**: All data is managed in fixed-size units (default 8KB) called pages.
 - **Page Cache**: Minimizes disk I/O by caching frequently accessed pages in memory (LRU Strategy).
 - **Dirty Page Tracking**: Tracks modified pages (Dirty) to synchronize them with disk efficiently only at the time of commit.
-- **Bitmap Management**: Efficiently tracks the allocation and deallocation of pages using a bitmap structure, facilitating fast space reclamation and reuse. For more details on this mechanism, see [Page Reclamation and Reuse Guide](docs/page_reclamation.md).
+- **Free List Management**: Efficiently tracks the allocation and deallocation of pages using a Free List (stack-like structure), facilitating fast space reclamation and reuse. (The older Bitmap-based mechanism is deprecated but remains for backward compatibility). For more details on this mechanism, see [Page Reclamation and Reuse Guide](docs/page_reclamation.md).
 - **Detailed Structure**: For technical details on the physical layout, see [structure.md](docs/structure.md).
 
 #### Page & Row Layout

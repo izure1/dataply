@@ -17,7 +17,7 @@ The database releases physical space and returns it to the system in the followi
 
 | Component | Role | Description |
 | :--- | :--- | :--- |
-| **Bitmap Page** | **Status Map** | A map that uses 1 bit per page to track the allocation status of all pages in the database. (1: Free, 0: Used) |
+| **Bitmap Page** | **(Deprecated)** | A map that uses 1 bit per page to track the allocation status. This mechanism is deprecated in favor of the Free List but is maintained for backward compatibility. |
 | **Free List** | **Standby Queue** | Manages empty pages linked together in a stack-like structure (Linked List). |
 | **Metadata** | **Control Tower** | Stores the ID of the first page available for reuse (`freePageId`). |
 
@@ -34,7 +34,7 @@ Registers space into the list to ensure room for new data.
 1.  **Header Reset**: Change the page type to `EmptyPage`.
 2.  **Stack Push**: Point the target page's `nextPageId` to the current `freePageId`.
 3.  **Pointer Sync**: Update the `freePageId` in metadata to the current page's ID.
-4.  **Bitmap Set**: Set the corresponding bit to `1 (Free)` for fast lookup.
+4.  **Bitmap Set**: (Deprecated) Set the corresponding bit to `1 (Free)` for fast lookup.
 
 ### Phase 2: Page Reuse (Allocation)
 Before expanding the file size, the system prioritizes taking space from the reclaimed list.
@@ -43,7 +43,7 @@ Before expanding the file size, the system prioritizes taking space from the rec
 2.  **Stack Pop**:
     - If not `-1`, extract the page at the front of the list.
     - Update `freePageId` to the `nextPageId` of the extracted page.
-3.  **Type Reset**: Re-initialize the header and set bitmap bit to `0 (Used)`.
+3.  **Type Reset**: Re-initialize the header and (Deprecated) set bitmap bit to `0 (Used)`.
 
 ---
 
@@ -69,8 +69,8 @@ graph LR
 
 ---
 
-## 5. Value of the Bitmap-Based Approach
+## 5. Value of the Free List-Based Approach (Formerly Bitmap-Based)
 
-*   **Performance Optimization**: Quickly finds empty space using only the bitmap (which can be cached in memory) without having to open and inspect actual page data on disk.
+*   **Performance Optimization**: Quickly finds empty space using the Free List (stack structure) without having to scan large areas of the file.
 *   **Fragmentation Prevention**: Suppresses indiscriminate file expansion and prioritizes filling "holes" within the file to increase data density.
 *   **Rapid Recovery**: Upon restart after an abnormal shutdown, the system can quickly verify storage integrity by cross-referencing the bitmap with header information.

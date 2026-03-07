@@ -59,7 +59,9 @@ classDiagram
     class RowTableEngine {
         -BPTree bptree
         +insert()
+        +insertBatch()
         +selectByPK()
+        +selectMany()
     }
 
     class BPTree {
@@ -138,7 +140,7 @@ classDiagram
 
 ## Transaction Write Flow
 
-The following diagram illustrates the call flow during data insertion. It shows how changes in the B+Tree are stored in the transaction buffer via the page system and persisted to disk at commit time.
+The following diagram illustrates the call flow during data insertion. It shows how changes in the B+Tree are stored in the transaction buffer via the page system and persisted to disk at commit time. **Batch insertions (`insertBatch`) follow a similar flow but optimize I/O by acquiring locks once and updating metadata in bulk.**
 
 ```mermaid
 sequenceDiagram

@@ -22,7 +22,7 @@ The first page (Page 0) of every Dataply database is the **Metadata Page**. It s
 | 126 | 4 | `rootIndexOrder` | Degree of the root node |
 | 130 | 4 | `lastInsertPageId`| ID of the last active data page |
 | 134 | 6 | `lastRowPk` | Highest PK allocated so far |
-| 140 | 4 | `bitmapPageId` | First page of the allocation bitmap |
+| 140 | 4 | `bitmapPageId` | (Deprecated) First page of the allocation bitmap. Kept for backward compatibility. |
 | 144 | 4 | `freePageId` | Head of the reclaimed page stack |
 
 ---
