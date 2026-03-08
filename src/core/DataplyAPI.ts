@@ -515,9 +515,11 @@ export class DataplyAPI {
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
-    return this.hook.trigger('close', void 0, async () => {
-      await this.pfs.close()
-      fs.closeSync(this.fileHandle)
+    return this.runWithDefaultWrite(() => {
+      return this.hook.trigger('close', void 0, async () => {
+        await this.pfs.close()
+        fs.closeSync(this.fileHandle)
+      })
     })
   }
 }
