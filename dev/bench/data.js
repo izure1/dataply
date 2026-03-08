@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1772895446712,
+  "lastUpdate": 1772966946939,
   "repoUrl": "https://github.com/izure1/dataply",
   "entries": {
     "Dataply Storage Benchmark": [
@@ -1870,6 +1870,55 @@ window.BENCHMARK_DATA = {
           {
             "name": "selectMany (500 PKs)",
             "value": 110.26,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "committer": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "distinct": true,
+          "id": "01767c8e764ac1b3e78736efa47f907648a7c320",
+          "message": "fix: 다른 메서드 호출 도중에 db.close 메서드를 병렬적으로 호출하면 오류가 발생하던 현상을 수정합니다. 이제 db.close는 호출되면 이전 작업이 전부 완료될때까지 대기하고, 직렬적으로 수행됩니다.",
+          "timestamp": "2026-03-08T19:40:05+09:00",
+          "tree_id": "e2c84e6ad21d27c3aec83a40298705d7ac85d197",
+          "url": "https://github.com/izure1/dataply/commit/01767c8e764ac1b3e78736efa47f907648a7c320"
+        },
+        "date": 1772966946558,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Bulk Insert (Batch)",
+            "value": 415.76,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert (Individual)",
+            "value": 62.76,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert with WAL",
+            "value": 147.3,
+            "unit": "ms"
+          },
+          {
+            "name": "Medium Row Insert (1KB)",
+            "value": 197.68,
+            "unit": "ms"
+          },
+          {
+            "name": "selectMany (500 PKs)",
+            "value": 102.11,
             "unit": "ms"
           }
         ]
