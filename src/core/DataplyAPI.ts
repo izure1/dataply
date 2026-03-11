@@ -1,5 +1,5 @@
 import fs from 'node:fs'
-import type { DataplyOptions, MetadataPage, BitmapPage, DataPage, DataplyMetadata } from '../types'
+import { DataplyOptions, MetadataPage, BitmapPage, DataPage, DataplyMetadata, LogLevel } from '../types'
 import { type IHookall, useHookall } from 'hookall'
 import { PageFileSystem } from './PageFileSystem'
 import { MetadataPageManager, DataPageManager, BitmapPageManager, IndexPageManager } from './Page'
@@ -9,6 +9,7 @@ import { catchPromise } from '../utils/catchPromise'
 import { LockManager } from './transaction/LockManager'
 import { Transaction } from './transaction/Transaction'
 import { TransactionContext } from './transaction/TxContext'
+import { Logger } from './Logger'
 
 interface DataplyAPIAsyncHook {
   init: (tx: Transaction, isNewlyCreated: boolean) => Promise<Transaction>
@@ -39,6 +40,8 @@ export class DataplyAPI {
   protected readonly txContext: TransactionContext
   /** Hook */
   protected readonly hook: IHookall<DataplyAPIAsyncHook>
+  /** Logger */
+  private readonly logger: Logger
   /** Whether the database was initialized via `init()` */
   protected initialized: boolean
   /** Whether the database was created this time. */
@@ -62,6 +65,7 @@ export class DataplyAPI {
       this.options
     )
     this.textCodec = new TextCodec()
+    this.logger = new Logger(this.options.logLevel)
     this.txContext = new TransactionContext()
     this.lockManager = new LockManager()
     this.rowTableEngine = new RowTableEngine(this.pfs, this.txContext, this.options)
@@ -97,6 +101,7 @@ export class DataplyAPI {
       pagePreallocationCount: 1000,
       wal: null,
       walCheckpointThreshold: 1000,
+      logLevel: LogLevel.Info,
     }, options)
   }
 

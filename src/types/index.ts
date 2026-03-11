@@ -1,3 +1,26 @@
+export enum LogLevel {
+  /**
+   * No logging.
+   */
+  None = 0,
+  /**
+   * Debug logging.
+   */
+  Debug = 1,
+  /**
+   * Info logging.
+  */
+  Info = 2,
+  /**
+    * Warning logging.
+  */
+  Warning = 3,
+  /**
+   * Error logging.
+   */
+  Error = 4,
+}
+
 export interface DataplyOptions {
   /**
    * The size of a page in bytes.
@@ -10,6 +33,8 @@ export interface DataplyOptions {
   wal?: string | undefined | null
   /**
    * The maximum number of pages to cache in memory.
+   * This value **DOES NOT** guarantee that the application's memory usage will be exactly `pageSize * pageCacheCapacity`.
+   * This value is only a recommendation for optimizing memory usage.
    * Default is 10000.
    */
   pageCacheCapacity?: number
@@ -23,6 +48,11 @@ export interface DataplyOptions {
    * Default is 1000.
    */
   walCheckpointThreshold?: number
+  /**
+   * The log level.
+   * Default is `LogLevel.Info`.
+   */
+  logLevel?: LogLevel
 }
 
 export interface DataplyMetadata {
