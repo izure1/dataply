@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1772966946939,
+  "lastUpdate": 1773190622188,
   "repoUrl": "https://github.com/izure1/dataply",
   "entries": {
     "Dataply Storage Benchmark": [
@@ -1919,6 +1919,55 @@ window.BENCHMARK_DATA = {
           {
             "name": "selectMany (500 PKs)",
             "value": 102.11,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "committer": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "distinct": true,
+          "id": "23a97dad3b271b7193e873e7a2166ccc628fe486",
+          "message": "chore: 버전 업데이트",
+          "timestamp": "2026-03-11T09:55:56+09:00",
+          "tree_id": "2c9c0459f5746358a78434f9be6d595201622b5f",
+          "url": "https://github.com/izure1/dataply/commit/23a97dad3b271b7193e873e7a2166ccc628fe486"
+        },
+        "date": 1773190621637,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Bulk Insert (Batch)",
+            "value": 431.6,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert (Individual)",
+            "value": 68.1,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert with WAL",
+            "value": 177.97,
+            "unit": "ms"
+          },
+          {
+            "name": "Medium Row Insert (1KB)",
+            "value": 218.31,
+            "unit": "ms"
+          },
+          {
+            "name": "selectMany (500 PKs)",
+            "value": 109.22,
             "unit": "ms"
           }
         ]
