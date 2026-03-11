@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1773190622188,
+  "lastUpdate": 1773208375188,
   "repoUrl": "https://github.com/izure1/dataply",
   "entries": {
     "Dataply Storage Benchmark": [
@@ -1968,6 +1968,55 @@ window.BENCHMARK_DATA = {
           {
             "name": "selectMany (500 PKs)",
             "value": 109.22,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "committer": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "distinct": true,
+          "id": "b9fb94af066b4b67eb5d7e1c0f0c0e5c913748f0",
+          "message": "feat: Logger 클래스를 이용한 로그 기능 구현",
+          "timestamp": "2026-03-11T14:51:30+09:00",
+          "tree_id": "2499cc87832f63e57ae57370c5908f59403a05c1",
+          "url": "https://github.com/izure1/dataply/commit/b9fb94af066b4b67eb5d7e1c0f0c0e5c913748f0"
+        },
+        "date": 1773208374893,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Bulk Insert (Batch)",
+            "value": 417.12,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert (Individual)",
+            "value": 67.49,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert with WAL",
+            "value": 172.95,
+            "unit": "ms"
+          },
+          {
+            "name": "Medium Row Insert (1KB)",
+            "value": 203.52,
+            "unit": "ms"
+          },
+          {
+            "name": "selectMany (500 PKs)",
+            "value": 107.87,
             "unit": "ms"
           }
         ]
