@@ -14,6 +14,7 @@ export class PageFileSystem {
   protected readonly walManager: WALManager | null
   protected readonly pageManagerFactory: PageManagerFactory
   protected readonly pageStrategy: PageMVCCStrategy
+  protected readonly logger: Logger
   /** 글로벌 동기화(체크포인트/커밋)를 위한 Mutex */
   private lockPromise: Promise<void> = Promise.resolve()
 
@@ -26,12 +27,14 @@ export class PageFileSystem {
     readonly pageSize: number,
     readonly pageCacheCapacity: number,
     readonly options: Required<DataplyOptions>,
-    protected readonly logger: Logger
+    logger: Logger,
+    walLogger?: Logger
   ) {
     const walPath = options.wal
-    this.walManager = walPath ? new WALManager(walPath, pageSize, this.logger) : null
+    this.walManager = walPath && walLogger ? new WALManager(walPath, pageSize, walLogger) : null
     this.pageManagerFactory = new PageManagerFactory()
     this.pageStrategy = new PageMVCCStrategy(fileHandle, pageSize, pageCacheCapacity)
+    this.logger = logger
   }
 
   /**

@@ -2,7 +2,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { PageFileSystem } from '../src/core/PageFileSystem'
 import { MetadataPageManager, PageManager, PageManagerFactory } from '../src/core/Page'
-import { Logger } from '../src/core/Logger'
+import { LoggerManager } from '../src/core/Logger'
 import { MetadataPage } from '../src/types'
 import { Transaction } from '../src/core/transaction/Transaction'
 import { TransactionContext } from '../src/core/transaction/TxContext'
@@ -21,7 +21,7 @@ describe('PageFileSystem', () => {
   beforeEach(() => {
     // 파일 생성 및 초기화
     fd = fs.openSync(TEST_FILE, 'w+')
-    pfs = new PageFileSystem(fd, PAGE_SIZE, PAGE_CACHE_CAPACITY, { logLevel: 0, pageSize: PAGE_SIZE, pageCacheCapacity: PAGE_CACHE_CAPACITY, pagePreallocationCount: 1, wal: null, walCheckpointThreshold: 1000 }, new Logger('Test', 0))
+    pfs = new PageFileSystem(fd, PAGE_SIZE, PAGE_CACHE_CAPACITY, { logLevel: 0, pageSize: PAGE_SIZE, pageCacheCapacity: PAGE_CACHE_CAPACITY, pagePreallocationCount: 1, wal: null, walCheckpointThreshold: 1000 }, new LoggerManager(0).create('Test'))
     lockManager = new LockManager()
     txContext = new TransactionContext()
     tx = new Transaction(1, txContext, pfs.getPageStrategy(), lockManager, pfs)

@@ -24,13 +24,14 @@ export class RowTableEngine {
   protected readonly maxBodySize: number
   private readonly ridBuffer: Uint8Array
   private readonly pageIdBuffer: Uint8Array
+  private readonly logger: Logger
   private initialized = false
 
   constructor(
     protected readonly pfs: PageFileSystem,
     protected readonly txContext: TransactionContext,
     protected readonly options: Required<DataplyOptions>,
-    protected readonly logger: Logger
+    logger: Logger
   ) {
     this.factory = new PageManagerFactory()
     this.metadataPageManager = this.factory.getManagerFromType(MetadataPageManager.CONSTANT.PAGE_TYPE_METADATA) as MetadataPageManager
@@ -38,6 +39,7 @@ export class RowTableEngine {
     this.overflowPageManager = this.factory.getManagerFromType(OverflowPageManager.CONSTANT.PAGE_TYPE_OVERFLOW) as OverflowPageManager
     this.rowManager = new Row()
     this.keyManager = new KeyManager()
+    this.logger = logger
     this.ridBuffer = new Uint8Array(Row.CONSTANT.SIZE_RID)
     this.pageIdBuffer = new Uint8Array(DataPageManager.CONSTANT.SIZE_PAGE_ID)
     this.maxBodySize = this.pfs.pageSize - DataPageManager.CONSTANT.SIZE_PAGE_HEADER

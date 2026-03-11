@@ -16,7 +16,7 @@ import { catchPromise } from '../utils/catchPromise'
 import { LockManager } from './transaction/LockManager'
 import { Transaction } from './transaction/Transaction'
 import { TransactionContext } from './transaction/TxContext'
-import { Logger } from './Logger'
+import { LoggerManager, Logger } from './Logger'
 
 interface DataplyAPIAsyncHook {
   init: (tx: Transaction, isNewlyCreated: boolean) => Promise<Transaction>
@@ -47,7 +47,9 @@ export class DataplyAPI {
   protected readonly txContext: TransactionContext
   /** Hook */
   protected readonly hook: IHookall<DataplyAPIAsyncHook>
-  /** Logger */
+  /** Base Logger */
+  protected readonly loggerManager: LoggerManager
+  /** Logger module for DataplyAPI */
   protected readonly logger: Logger
   /** Whether the database was initialized via `init()` */
   protected initialized: boolean
@@ -63,7 +65,8 @@ export class DataplyAPI {
   ) {
     this.hook = useHookall(this)
     this.options = this.verboseOptions(options)
-    this.logger = new Logger('DataplyAPI', this.options.logLevel)
+    this.loggerManager = new LoggerManager(this.options.logLevel)
+    this.logger = this.loggerManager.create('DataplyAPI')
     this.isNewlyCreated = !fs.existsSync(file)
     this.fileHandle = this.createOrOpen(file, this.options)
     this.pfs = new PageFileSystem(
@@ -71,12 +74,13 @@ export class DataplyAPI {
       this.options.pageSize,
       this.options.pageCacheCapacity,
       this.options,
-      this.logger
+      this.loggerManager.create('PageFileSystem'),
+      options.wal ? this.loggerManager.create('WALManager') : undefined
     )
     this.textCodec = new TextCodec()
     this.txContext = new TransactionContext()
     this.lockManager = new LockManager()
-    this.rowTableEngine = new RowTableEngine(this.pfs, this.txContext, this.options, this.logger)
+    this.rowTableEngine = new RowTableEngine(this.pfs, this.txContext, this.options, this.loggerManager.create('RowTableEngine'))
     this.initialized = false
     this.txIdCounter = 0
     this.logger.debug(`DataplyAPI instance created with file: ${file}`)

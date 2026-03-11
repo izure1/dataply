@@ -16,6 +16,7 @@ export class WALManager {
   private buffer: Uint8Array
   private view: DataView
   private totalWrittenPages: number = 0
+  private readonly logger: Logger
 
   /**
    * Constructor
@@ -23,7 +24,7 @@ export class WALManager {
    * @param pageSize Page size
    * @param logger Logger instance
    */
-  constructor(walFilePath: string, pageSize: number, private readonly logger: Logger) {
+  constructor(walFilePath: string, pageSize: number, logger: Logger) {
     // 페이지 크기는 비트 연산 최적화를 위해 2의 거듭제곱이어야 함
     if ((pageSize & (pageSize - 1)) !== 0) {
       throw new Error('Page size must be a power of 2')
@@ -35,6 +36,7 @@ export class WALManager {
     // 페이지 크기는 고정이므로 항상 동일한 크기의 버퍼를 재사용
     this.buffer = new Uint8Array(this.entrySize)
     this.view = new DataView(this.buffer.buffer)
+    this.logger = logger
   }
 
   /**

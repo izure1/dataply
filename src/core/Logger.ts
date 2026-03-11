@@ -7,15 +7,13 @@ const Colors = {
   warn: '\x1b[33m',  // Yellow
   error: '\x1b[31m', // Red
   white: '\x1b[37m', // White
-  grey: '\x1b[90m',
+  grey: '\x1b[90m',  // Grey
 }
 
-export class Logger {
+export class LoggerManager {
   private level: LogLevel
-  private moduleName: string
 
-  constructor(moduleName: string, level: LogLevel = LogLevel.Info) {
-    this.moduleName = moduleName
+  constructor(level: LogLevel = LogLevel.Info) {
     this.level = level
   }
 
@@ -23,34 +21,40 @@ export class Logger {
     this.level = level
   }
 
-  private shouldLog(level: LogLevel): boolean {
+  shouldLog(level: LogLevel): boolean {
     if (this.level === LogLevel.None) return false
     return level >= this.level
   }
 
+  create(moduleName: string): Logger {
+    return new Logger(this, moduleName)
+  }
+}
+
+export class Logger {
+  constructor(private readonly parent: LoggerManager, private readonly moduleName: string) { }
+
   debug(message: string, ...args: any[]): void {
-    if (this.shouldLog(LogLevel.Debug)) {
+    if (this.parent.shouldLog(LogLevel.Debug)) {
       console.debug(`${Colors.debug}[DEBUG] [${this.moduleName}]${Colors.reset} ${Colors.white}${message}${Colors.reset}`, ...args)
     }
   }
 
   info(message: string, ...args: any[]): void {
-    if (this.shouldLog(LogLevel.Info)) {
+    if (this.parent.shouldLog(LogLevel.Info)) {
       console.info(`${Colors.info}[INFO] [${this.moduleName}]${Colors.reset} ${Colors.white}${message}${Colors.reset}`, ...args)
     }
   }
 
   warn(message: string, ...args: any[]): void {
-    if (this.shouldLog(LogLevel.Warning)) {
+    if (this.parent.shouldLog(LogLevel.Warning)) {
       console.warn(`${Colors.warn}[WARN] [${this.moduleName}]${Colors.reset} ${Colors.white}${message}${Colors.reset}`, ...args)
     }
   }
 
   error(message: string, ...args: any[]): void {
-    if (this.shouldLog(LogLevel.Error)) {
+    if (this.parent.shouldLog(LogLevel.Error)) {
       console.error(`${Colors.error}[ERROR] [${this.moduleName}]${Colors.reset} ${Colors.white}${message}${Colors.reset}`, ...args)
     }
   }
 }
-
-
