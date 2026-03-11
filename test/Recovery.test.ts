@@ -117,7 +117,8 @@ describe('Recovery Integration Test', () => {
 
     // WAL에 직접 데이터를 추가하여 "커밋 후 sync 전 crash" 시나리오 시뮬레이션
     const { WALManager } = require('../src/core/WALManager')
-    const walManager = new WALManager(walPath, pageSize)
+    const { Logger } = require('../src/core/Logger')
+    const walManager = new WALManager(walPath, pageSize, new Logger('Test', 0))
     walManager.open()
 
     // 추가 데이터를 WAL에만 기록 (디스크 sync 없이)

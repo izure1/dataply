@@ -1,5 +1,6 @@
 
 import { WALManager } from '../src/core/WALManager'
+import { Logger } from '../src/core/Logger'
 import fs from 'node:fs'
 import path from 'node:path'
 
@@ -27,7 +28,7 @@ describe('WALManager', () => {
   })
 
   test('should append pages to log', async () => {
-    const walManager = new WALManager(walPath, pageSize)
+    const walManager = new WALManager(walPath, pageSize, new Logger('Test', 0))
     walManager.open()
 
     const page1Data = new Uint8Array(pageSize).fill(1)
@@ -47,7 +48,7 @@ describe('WALManager', () => {
   })
 
   test('should read all pages from log', async () => {
-    const walManager = new WALManager(walPath, pageSize)
+    const walManager = new WALManager(walPath, pageSize, new Logger('Test', 0))
     walManager.open()
 
     const page1Data = new Uint8Array(pageSize).fill(1)
@@ -72,7 +73,7 @@ describe('WALManager', () => {
     walManager.close()
 
     // Re-open and read
-    const walManagerReader = new WALManager(walPath, pageSize)
+    const walManagerReader = new WALManager(walPath, pageSize, new Logger('Test', 0))
     const restoredPages = walManagerReader.readAllSync()
     walManagerReader.close()
 
@@ -82,7 +83,7 @@ describe('WALManager', () => {
   })
 
   test('should clear log', async () => {
-    const walManager = new WALManager(walPath, pageSize)
+    const walManager = new WALManager(walPath, pageSize, new Logger('Test', 0))
     walManager.open()
 
     const pages = new Map<number, Uint8Array>()
@@ -103,7 +104,7 @@ describe('WALManager', () => {
   })
 
   test('should persist data after closing and reopening', async () => {
-    const walManager = new WALManager(walPath, pageSize)
+    const walManager = new WALManager(walPath, pageSize, new Logger('Test', 0))
     walManager.open()
     const pages = new Map<number, Uint8Array>()
     const page1Data = new Uint8Array(pageSize).fill(10)
@@ -114,7 +115,7 @@ describe('WALManager', () => {
     walManager.close()
 
     // Reopen
-    const walManager2 = new WALManager(walPath, pageSize)
+    const walManager2 = new WALManager(walPath, pageSize, new Logger('Test', 0))
     walManager2.open()
 
     const restored = walManager2.readAllSync()
@@ -125,7 +126,7 @@ describe('WALManager', () => {
   })
 
   test('should handle large number of pages', async () => {
-    const walManager = new WALManager(walPath, pageSize)
+    const walManager = new WALManager(walPath, pageSize, new Logger('Test', 0))
     walManager.open()
     const pages = new Map<number, Uint8Array>()
     const count = 100

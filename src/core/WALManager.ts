@@ -1,5 +1,7 @@
 import fs from 'node:fs'
 import { PageManagerFactory } from './Page'
+import { Logger } from './Logger'
+import { LogLevel } from '../types'
 
 /**
  * WAL (Write-Ahead Logging) Manager class.
@@ -19,8 +21,9 @@ export class WALManager {
    * Constructor
    * @param walFilePath WAL file path
    * @param pageSize Page size
+   * @param logger Logger instance
    */
-  constructor(walFilePath: string, pageSize: number) {
+  constructor(walFilePath: string, pageSize: number, private readonly logger: Logger) {
     // 페이지 크기는 비트 연산 최적화를 위해 2의 거듭제곱이어야 함
     if ((pageSize & (pageSize - 1)) !== 0) {
       throw new Error('Page size must be a power of 2')
@@ -70,11 +73,11 @@ export class WALManager {
       try {
         const manager = new PageManagerFactory().getManager(data)
         if (!manager.verifyChecksum(data)) {
-          console.warn(`[WALManager] Checksum verification failed for PageID ${pageId} during recovery. Ignoring changes.`)
+          this.logger.warn(`Checksum verification failed for PageID ${pageId} during recovery. Ignoring changes.`)
           continue
         }
       } catch (e) {
-        console.warn(`[WALManager] Failed to verify checksum for PageID ${pageId} during recovery: ${e}. Ignoring changes.`)
+        this.logger.warn(`Failed to verify checksum for PageID ${pageId} during recovery: ${e}. Ignoring changes.`)
         continue
       }
 

@@ -3,6 +3,7 @@ import type { Transaction } from './transaction/Transaction'
 import { IndexPageManager, MetadataPageManager, PageManager, PageManagerFactory, BitmapPageManager } from './Page'
 import { WALManager } from './WALManager'
 import { PageMVCCStrategy } from './PageMVCCStrategy'
+import { Logger } from './Logger'
 
 /**
  * Page File System class.
@@ -24,10 +25,11 @@ export class PageFileSystem {
     readonly fileHandle: number,
     readonly pageSize: number,
     readonly pageCacheCapacity: number,
-    readonly options: Required<DataplyOptions>
+    readonly options: Required<DataplyOptions>,
+    protected readonly logger: Logger
   ) {
     const walPath = options.wal
-    this.walManager = walPath ? new WALManager(walPath, pageSize) : null
+    this.walManager = walPath ? new WALManager(walPath, pageSize, this.logger) : null
     this.pageManagerFactory = new PageManagerFactory()
     this.pageStrategy = new PageMVCCStrategy(fileHandle, pageSize, pageCacheCapacity)
   }
@@ -56,7 +58,9 @@ export class PageFileSystem {
    * Performs WAL recovery if necessary.
    */
   async init(): Promise<void> {
+    this.logger.info('Initializing')
     if (this.walManager) {
+      this.logger.debug('WALManager found, starting recovery')
       await this.walManager.recover(async (pageId, data) => {
         await this.pageStrategy.write(pageId, data)
       })
@@ -262,6 +266,7 @@ export class PageFileSystem {
    * @returns Created or reused page ID
    */
   async appendNewPage(pageType: number = PageManager.CONSTANT.PAGE_TYPE_EMPTY, tx: Transaction): Promise<number> {
+    this.logger.debug(`Appending new page of type ${pageType}`)
     await tx.__acquireWriteLock(0)
     const metadata = await this.getMetadata(tx)
     const metadataManager = this.pageFactory.getManager(metadata) as MetadataPageManager
@@ -402,6 +407,7 @@ export class PageFileSystem {
    * @param tx Transaction
    */
   async freeChain(startPageId: number, tx: Transaction): Promise<void> {
+    this.logger.debug(`Freeing chain starting at page ${startPageId}`)
     let currentPageId = startPageId
     const visited = new Set<number>()
     while (currentPageId !== -1 && currentPageId !== 0) {
@@ -451,6 +457,7 @@ export class PageFileSystem {
    */
   async commitToWAL(dirtyPages: Map<number, Uint8Array>): Promise<void> {
     if (this.walManager) {
+      this.logger.debug(`Committing ${dirtyPages.size} pages to WAL`)
       await this.walManager.prepareCommit(dirtyPages)
       await this.walManager.finalizeCommit(true) // 활성 트랜잭션이 있을 수 있으므로 true 전달 (체크포인트에서 비움)
     }
@@ -463,6 +470,7 @@ export class PageFileSystem {
    * 3. WAL 로그 파일 비우기 (Clear/Truncate)
    */
   async checkpoint(): Promise<void> {
+    this.logger.info('Starting checkpoint')
     await this.runGlobalLock(async () => {
       // 1. Flush dirty pages from cache to disk
       await this.pageStrategy.flush()
@@ -481,6 +489,7 @@ export class PageFileSystem {
    * Closes the page file system.
    */
   async close(): Promise<void> {
+    this.logger.info('Closing')
     // 정상 종료 시에는 모든 변경사항을 디스크에 반영하고 WAL을 정리합니다.
     await this.checkpoint()
 

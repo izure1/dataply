@@ -87,7 +87,7 @@ describe('WAL Failure Simulation Test', () => {
     const dataply2 = new Dataply(dbPath, { pageSize, wal: walPath })
 
     // init() 도중 readAllSync 루프가 도는데, 이때 잔여 바이트를 안전하게 처리하는지 확인
-    await expect(dataply2.init()).resolves.not.toThrow()
+    await dataply2.init()
 
     expect(await dataply2.select(1)).toBe('Base Data')
     await dataply2.close()
@@ -128,7 +128,7 @@ describe('WAL Failure Simulation Test', () => {
     const dataply2 = new Dataply(dbPath, { pageSize, wal: walPath })
 
     // recover() 내의 verifyChecksum 로직이 동작하고 "Ignoring changes" 경고와 함께 진행되어야 함
-    await expect(dataply2.init()).resolves.not.toThrow()
+    await dataply2.init()
 
     // 기존 데이터는 안전해야 함
     expect(await dataply2.select(1)).toBe('Original')

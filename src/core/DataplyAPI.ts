@@ -1,5 +1,12 @@
 import fs from 'node:fs'
-import { DataplyOptions, MetadataPage, BitmapPage, DataPage, DataplyMetadata, LogLevel } from '../types'
+import {
+  type DataplyOptions,
+  type MetadataPage,
+  type BitmapPage,
+  type DataPage,
+  type DataplyMetadata,
+  LogLevel
+} from '../types'
 import { type IHookall, useHookall } from 'hookall'
 import { PageFileSystem } from './PageFileSystem'
 import { MetadataPageManager, DataPageManager, BitmapPageManager, IndexPageManager } from './Page'
@@ -41,7 +48,7 @@ export class DataplyAPI {
   /** Hook */
   protected readonly hook: IHookall<DataplyAPIAsyncHook>
   /** Logger */
-  private readonly logger: Logger
+  protected readonly logger: Logger
   /** Whether the database was initialized via `init()` */
   protected initialized: boolean
   /** Whether the database was created this time. */
@@ -56,21 +63,23 @@ export class DataplyAPI {
   ) {
     this.hook = useHookall(this)
     this.options = this.verboseOptions(options)
+    this.logger = new Logger('DataplyAPI', this.options.logLevel)
     this.isNewlyCreated = !fs.existsSync(file)
     this.fileHandle = this.createOrOpen(file, this.options)
     this.pfs = new PageFileSystem(
       this.fileHandle,
       this.options.pageSize,
       this.options.pageCacheCapacity,
-      this.options
+      this.options,
+      this.logger
     )
     this.textCodec = new TextCodec()
-    this.logger = new Logger(this.options.logLevel)
     this.txContext = new TransactionContext()
     this.lockManager = new LockManager()
-    this.rowTableEngine = new RowTableEngine(this.pfs, this.txContext, this.options)
+    this.rowTableEngine = new RowTableEngine(this.pfs, this.txContext, this.options, this.logger)
     this.initialized = false
     this.txIdCounter = 0
+    this.logger.debug(`DataplyAPI instance created with file: ${file}`)
   }
 
   /**
@@ -80,6 +89,7 @@ export class DataplyAPI {
    * @returns Whether the page file is a valid Dataply file
    */
   protected verifyFormat(fileHandle: number): boolean {
+    this.logger.debug(`Verifying format for file handle: ${fileHandle}`)
     const size = MetadataPageManager.CONSTANT.OFFSET_MAGIC_STRING + MetadataPageManager.CONSTANT.MAGIC_STRING.length
     const metadataPage = new Uint8Array(size)
     fs.readSync(fileHandle, metadataPage, 0, size, 0)
@@ -113,6 +123,7 @@ export class DataplyAPI {
    * @param fileHandle File handle
    */
   protected initializeFile(file: string, fileHandle: number, options: Required<DataplyOptions>): void {
+    this.logger.info(`Initializing new dataply file: ${file}`)
     const metadataPageManager = new MetadataPageManager()
     const bitmapPageManager = new BitmapPageManager()
     const dataPageManager = new DataPageManager()
@@ -172,6 +183,7 @@ export class DataplyAPI {
    * @returns File handle
    */
   protected createOrOpen(file: string, options: Required<DataplyOptions>): number {
+    this.logger.info(`Opening dataply file: ${file}`)
     let fileHandle: number
     if (options.pageCacheCapacity < 100) {
       throw new Error('Page cache capacity must be at least 100')
@@ -213,6 +225,7 @@ export class DataplyAPI {
    * If not called, the dataply instance cannot be used.
    */
   async init(): Promise<void> {
+    this.logger.info('Initializing DataplyAPI')
     if (this.initialized) {
       return
     }
@@ -234,6 +247,7 @@ export class DataplyAPI {
    * @returns Transaction object
    */
   createTransaction(): Transaction {
+    this.logger.debug(`Creating transaction: ${this.txIdCounter + 1}`)
     return new Transaction(
       ++this.txIdCounter,
       this.txContext,
@@ -259,6 +273,7 @@ export class DataplyAPI {
    * @returns A release function
    */
   protected acquireWriteLock(): Promise<() => void> {
+    this.logger.debug('Acquiring write lock')
     const previous = this.writeQueue
     let release: () => void
     this.writeQueue = new Promise<void>((resolve) => {
@@ -277,6 +292,7 @@ export class DataplyAPI {
    * @returns The result of the callback.
    */
   protected async runWithDefaultWrite<T>(callback: (tx: Transaction) => Promise<T>, tx?: Transaction): Promise<T> {
+    this.logger.debug('Running with default write transaction')
     if (!tx) {
       // Internal transaction: acquire lock, create tx, run, commit, release
       const release = await this.acquireWriteLock()
@@ -303,6 +319,7 @@ export class DataplyAPI {
   }
 
   protected async runWithDefault<T>(callback: (tx: Transaction) => Promise<T>, tx?: Transaction): Promise<T> {
+    this.logger.debug('Running with default transaction')
     const isInternalTx = !tx
     if (!tx) {
       tx = this.createTransaction()
@@ -334,6 +351,7 @@ export class DataplyAPI {
     callback: (tx: Transaction) => AsyncGenerator<T>,
     tx?: Transaction
   ): AsyncGenerator<T> {
+    this.logger.debug('Streaming with default transaction')
     const isInternalTx = !tx
     if (!tx) {
       tx = this.createTransaction()
@@ -364,6 +382,7 @@ export class DataplyAPI {
    * @returns Metadata of the dataply.
    */
   async getMetadata(tx?: Transaction): Promise<DataplyMetadata> {
+    this.logger.debug('Getting metadata')
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
@@ -378,6 +397,7 @@ export class DataplyAPI {
    * @returns PK of the added data
    */
   async insert(data: string | Uint8Array, incrementRowCount?: boolean, tx?: Transaction): Promise<number> {
+    this.logger.debug('Inserting data')
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
@@ -399,6 +419,7 @@ export class DataplyAPI {
    * @returns PK of the added data
    */
   async insertAsOverflow(data: string | Uint8Array, incrementRowCount?: boolean, tx?: Transaction): Promise<number> {
+    this.logger.debug('Inserting data as overflow')
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
@@ -421,6 +442,7 @@ export class DataplyAPI {
    * @returns Array of PKs of the added data
    */
   async insertBatch(dataList: (string | Uint8Array)[], incrementRowCount?: boolean, tx?: Transaction): Promise<number[]> {
+    this.logger.debug(`Inserting batch data: ${dataList.length} items`)
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
@@ -440,6 +462,7 @@ export class DataplyAPI {
    * @param tx Transaction
    */
   async update(pk: number, data: string | Uint8Array, tx?: Transaction): Promise<void> {
+    this.logger.debug(`Updating data for PK: ${pk}`)
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
@@ -458,6 +481,7 @@ export class DataplyAPI {
    * @param tx Transaction
    */
   async delete(pk: number, decrementRowCount?: boolean, tx?: Transaction): Promise<void> {
+    this.logger.debug(`Deleting data for PK: ${pk}`)
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
@@ -478,6 +502,7 @@ export class DataplyAPI {
   async select(pk: number, asRaw: false, tx?: Transaction): Promise<string | null>
   async select(pk: number, asRaw?: boolean, tx?: Transaction): Promise<string | null>
   async select(pk: number, asRaw: boolean = false, tx?: Transaction): Promise<Uint8Array | string | null> {
+    this.logger.debug(`Selecting data for PK: ${pk}`)
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
@@ -500,6 +525,7 @@ export class DataplyAPI {
   async selectMany(pks: number[] | Float64Array, asRaw: false, tx?: Transaction): Promise<(string | null)[]>
   async selectMany(pks: number[] | Float64Array, asRaw?: boolean, tx?: Transaction): Promise<(string | null)[]>
   async selectMany(pks: number[] | Float64Array, asRaw: boolean = false, tx?: Transaction): Promise<(Uint8Array | string | null)[]> {
+    this.logger.debug(`Selecting many data: ${pks.length} keys`)
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
@@ -517,6 +543,7 @@ export class DataplyAPI {
    * Closes the dataply file.
    */
   async close(): Promise<void> {
+    this.logger.info('Closing DataplyAPI')
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }

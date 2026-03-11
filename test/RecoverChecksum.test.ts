@@ -55,7 +55,8 @@ describe('Recovery Checksum with Dataply API', () => {
     await dataply.close() // Clean start DB.
 
     const { WALManager } = require('../src/core/WALManager')
-    const walManager = new WALManager(WAL_FILE, PAGE_SIZE)
+    const { Logger } = require('../src/core/Logger')
+    const walManager = new WALManager(WAL_FILE, PAGE_SIZE, new Logger('Test', 0))
     await walManager.open()
 
     // Create a page buffer
@@ -111,8 +112,9 @@ describe('Recovery Checksum with Dataply API', () => {
 
     const { WALManager } = require('../src/core/WALManager')
     const { DataPageManager } = require('../src/core/Page')
+    const { Logger } = require('../src/core/Logger')
 
-    const walManager = new WALManager(WAL_FILE, PAGE_SIZE)
+    const walManager = new WALManager(WAL_FILE, PAGE_SIZE, new Logger('Test', 0))
     await walManager.open()
 
     const pageId = 1

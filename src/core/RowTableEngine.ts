@@ -9,6 +9,7 @@ import { DataPageManager, MetadataPageManager, OverflowPageManager, PageManagerF
 import { numberToBytes, bytesToNumber, clusterNumbersByPagination } from '../utils'
 import { Transaction } from './transaction/Transaction'
 import { TransactionContext } from './transaction/TxContext'
+import { Logger } from './Logger'
 
 export class RowTableEngine {
   protected readonly bptree: BPTreeAsync<number, number>
@@ -28,7 +29,8 @@ export class RowTableEngine {
   constructor(
     protected readonly pfs: PageFileSystem,
     protected readonly txContext: TransactionContext,
-    protected readonly options: Required<DataplyOptions>
+    protected readonly options: Required<DataplyOptions>,
+    protected readonly logger: Logger
   ) {
     this.factory = new PageManagerFactory()
     this.metadataPageManager = this.factory.getManagerFromType(MetadataPageManager.CONSTANT.PAGE_TYPE_METADATA) as MetadataPageManager
@@ -89,6 +91,7 @@ export class RowTableEngine {
    */
   async init(): Promise<void> {
     if (!this.initialized) {
+      this.logger.info('Initializing B+ Tree')
       await this.bptree.init()
       this.initialized = true
     }
@@ -141,6 +144,7 @@ export class RowTableEngine {
    * @returns Metadata
    */
   async getMetadata(tx: Transaction): Promise<DataplyMetadata> {
+    this.logger.debug('Getting metadata')
     if (!this.initialized) {
       throw new Error('RowTableEngine instance is not initialized')
     }
@@ -174,6 +178,7 @@ export class RowTableEngine {
     overflowForcly: boolean,
     tx: Transaction
   ): Promise<number[]> {
+    this.logger.debug(`Inserting ${dataList.length} rows (overflowForcly: ${overflowForcly})`)
     if (dataList.length === 0) {
       return []
     }
@@ -311,6 +316,7 @@ export class RowTableEngine {
    * @param tx Transaction
    */
   async update(pk: number, data: Uint8Array, tx: Transaction): Promise<void> {
+    this.logger.debug(`Updating row with PK: ${pk}`)
     // 쓰기 작업 전 메타데이터 락을 획득하여 동시성 충돌을 방지합니다.
     await tx.__acquireWriteLock(0)
 
@@ -440,6 +446,7 @@ export class RowTableEngine {
    * @param tx Transaction
    */
   async delete(pk: number, decrementRowCount: boolean, tx: Transaction): Promise<void> {
+    this.logger.debug(`Deleting row with PK: ${pk}`)
     // 쓰기 작업 전 메타데이터 락을 획득하여 동시성 충돌을 방지합니다.
     await tx.__acquireWriteLock(0)
 
@@ -520,6 +527,7 @@ export class RowTableEngine {
    * @returns Raw data of the row
    */
   async selectByPK(pk: number, tx: Transaction): Promise<Uint8Array | null> {
+    this.logger.debug(`Selecting row by PK: ${pk}`)
     const rid = await this.getRidByPK(pk, tx)
     if (rid === null) {
       return null
@@ -535,6 +543,7 @@ export class RowTableEngine {
    * @returns Array of raw data of the rows in the same order as input PKs
    */
   async selectMany(pks: number[] | Float64Array, tx: Transaction): Promise<(Uint8Array | null)[]> {
+    this.logger.debug(`Selecting many rows (${pks.length} PKs)`)
     const collections = await this.collectItemsByPage(pks, tx)
     return this.fetchRowsByRids(collections, pks.length, tx)
   }
