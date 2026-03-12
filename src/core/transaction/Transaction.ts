@@ -195,11 +195,10 @@ export class Transaction {
       if (shouldTriggerCheckpoint) {
         await this.pfs.checkpoint()
       }
-
+    } finally {
       this.dirtyPages.clear()
       this.undoPages.clear()
       this.releaseAllLocks()
-    } finally {
       // Release global write lock so next write transaction can proceed
       if (this._writeLockRelease) {
         this._writeLockRelease()
