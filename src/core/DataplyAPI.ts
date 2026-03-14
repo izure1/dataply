@@ -8,6 +8,7 @@ import {
   LogLevel
 } from '../types'
 import { type IHookall, useHookall } from 'hookall'
+import { Ryoiki } from 'ryoiki'
 import { PageFileSystem } from './PageFileSystem'
 import { MetadataPageManager, DataPageManager, BitmapPageManager, IndexPageManager } from './Page'
 import { RowTableEngine } from './RowTableEngine'
@@ -58,12 +59,15 @@ export class DataplyAPI {
   private txIdCounter: number
   /** Promise-chain mutex for serializing write operations */
   private writeQueue: Promise<void> = Promise.resolve()
+  /** Lock manager. Used for managing transactions */
+  protected readonly latcher: Ryoiki
 
   constructor(
     protected readonly file: string,
     options: DataplyOptions
   ) {
     this.hook = useHookall(this)
+    this.latcher = new Ryoiki()
     this.options = this.verboseOptions(options)
     this.loggerManager = new LoggerManager(this.options.logLevel)
     this.logger = this.loggerManager.create('DataplyAPI')
@@ -84,6 +88,38 @@ export class DataplyAPI {
     this.initialized = false
     this.txIdCounter = 0
     this.logger.debug(`DataplyAPI instance created with file: ${file}`)
+  }
+
+  /**
+   * Acquire a read lock on the given page ID and execute the given function.
+   * @param pageId Page ID to acquire a read lock on
+   * @param fn Function to execute while holding the read lock
+   * @returns The result of the given function
+   */
+  async latchReadLock<T>(pageId: number, fn: () => Promise<T>): Promise<T> {
+    let lockId: string
+    return this.latcher.readLock(this.latcher.range(pageId, 1), async (_lockId) => {
+      lockId = _lockId
+      return fn()
+    }).finally(() => {
+      this.latcher.readUnlock(lockId)
+    })
+  }
+
+  /**
+   * Acquire a write lock on the given page ID and execute the given function.
+   * @param pageId Page ID to acquire a write lock on
+   * @param fn Function to execute while holding the write lock
+   * @returns The result of the given function
+   */
+  async latchWriteLock<T>(pageId: number, fn: () => Promise<T>): Promise<T> {
+    let lockId: string
+    return this.latcher.writeLock(this.latcher.range(pageId, 1), async (_lockId) => {
+      lockId = _lockId
+      return fn()
+    }).finally(() => {
+      this.latcher.writeUnlock(lockId)
+    })
   }
 
   /**
@@ -276,7 +312,7 @@ export class DataplyAPI {
    * Used internally by runWithDefaultWrite.
    * @returns A release function
    */
-  protected acquireWriteLock(): Promise<() => void> {
+  protected async acquireWriteLock(): Promise<() => void> {
     this.logger.debug('Acquiring write lock')
     const previous = this.writeQueue
     let release: () => void
