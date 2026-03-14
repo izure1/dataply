@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1773504025210,
+  "lastUpdate": 1773530627336,
   "repoUrl": "https://github.com/izure1/dataply",
   "entries": {
     "Dataply Storage Benchmark": [
@@ -2262,6 +2262,55 @@ window.BENCHMARK_DATA = {
           {
             "name": "selectMany (500 PKs)",
             "value": 135.02,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "committer": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "distinct": true,
+          "id": "86f8e2d4078c3fc245a47fdae2765d0d791ff0e3",
+          "message": "refactor: PageMVCCStrategy를 mvcc-api 라이브러리를 사용하도록 리팩토링",
+          "timestamp": "2026-03-15T08:22:55+09:00",
+          "tree_id": "779ec7067910a436117dbf62a5d7172958b9da97",
+          "url": "https://github.com/izure1/dataply/commit/86f8e2d4078c3fc245a47fdae2765d0d791ff0e3"
+        },
+        "date": 1773530626945,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Bulk Insert (Batch)",
+            "value": 776.14,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert (Individual)",
+            "value": 163.59,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert with WAL",
+            "value": 177.33,
+            "unit": "ms"
+          },
+          {
+            "name": "Medium Row Insert (1KB)",
+            "value": 261.32,
+            "unit": "ms"
+          },
+          {
+            "name": "selectMany (500 PKs)",
+            "value": 135.01,
             "unit": "ms"
           }
         ]
