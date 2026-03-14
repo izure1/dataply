@@ -24,7 +24,7 @@ describe('PageFileSystem', () => {
     pfs = new PageFileSystem(fd, PAGE_SIZE, PAGE_CACHE_CAPACITY, { logLevel: 0, pageSize: PAGE_SIZE, pageCacheCapacity: PAGE_CACHE_CAPACITY, pagePreallocationCount: 1, wal: null, walCheckpointThreshold: 1000 }, new LoggerManager(0).create('Test'))
     lockManager = new LockManager()
     txContext = new TransactionContext()
-    tx = new Transaction(1, txContext, pfs.getPageStrategy(), lockManager, pfs)
+    tx = new Transaction(1, txContext, pfs.getRootTransaction(), lockManager, pfs)
   })
 
   afterEach(async () => {

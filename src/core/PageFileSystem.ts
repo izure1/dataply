@@ -1,5 +1,6 @@
 import type { BitmapPage, IndexPage, MetadataPage, DataplyOptions } from '../types'
 import type { Transaction } from './transaction/Transaction'
+import { AsyncMVCCTransaction } from 'mvcc-api'
 import { IndexPageManager, MetadataPageManager, PageManager, PageManagerFactory, BitmapPageManager } from './Page'
 import { WALManager } from './WALManager'
 import { PageMVCCStrategy } from './PageMVCCStrategy'
@@ -14,6 +15,7 @@ export class PageFileSystem {
   protected readonly walManager: WALManager | null
   protected readonly pageManagerFactory: PageManagerFactory
   protected readonly pageStrategy: PageMVCCStrategy
+  protected readonly rootTransaction: AsyncMVCCTransaction<PageMVCCStrategy, number, Uint8Array>
   protected readonly logger: Logger
   /** 글로벌 동기화(체크포인트/커밋)를 위한 Mutex */
   private lockPromise: Promise<void> = Promise.resolve()
@@ -33,7 +35,8 @@ export class PageFileSystem {
     const walPath = options.wal
     this.walManager = walPath && walLogger ? new WALManager(walPath, pageSize, walLogger) : null
     this.pageManagerFactory = new PageManagerFactory()
-    this.pageStrategy = new PageMVCCStrategy(fileHandle, pageSize, pageCacheCapacity)
+    this.pageStrategy = new PageMVCCStrategy(fileHandle, pageSize)
+    this.rootTransaction = new AsyncMVCCTransaction(this.pageStrategy, { cacheCapacity: pageCacheCapacity })
     this.logger = logger
   }
 
@@ -77,6 +80,13 @@ export class PageFileSystem {
    */
   getPageStrategy(): PageMVCCStrategy {
     return this.pageStrategy
+  }
+
+  /**
+   * Returns the root MVCC transaction.
+   */
+  getRootTransaction(): AsyncMVCCTransaction<PageMVCCStrategy, number, Uint8Array> {
+    return this.rootTransaction
   }
 
   /**
@@ -455,33 +465,17 @@ export class PageFileSystem {
   }
 
   /**
-   * WAL에 커밋합니다.
-   * @param dirtyPages 변경된 페이지들
-   */
-  async commitToWAL(dirtyPages: Map<number, Uint8Array>): Promise<void> {
-    if (this.walManager) {
-      this.logger.debug(`Committing ${dirtyPages.size} pages to WAL`)
-      await this.walManager.prepareCommit(dirtyPages)
-      await this.walManager.finalizeCommit(true) // 활성 트랜잭션이 있을 수 있으므로 true 전달 (체크포인트에서 비움)
-    }
-  }
-
-  /**
    * 체크포인트를 수행합니다.
-   * 1. 메모리의 더티 페이지를 DB 파일에 기록 (Flush)
-   * 2. DB 파일 물리적 동기화 (Sync/fsync)
-   * 3. WAL 로그 파일 비우기 (Clear/Truncate)
+   * 1. DB 파일 물리적 동기화 (Sync/fsync)
+   * 2. WAL 로그 파일 비우기 (Clear/Truncate)
    */
   async checkpoint(): Promise<void> {
     this.logger.info('Starting checkpoint')
     await this.runGlobalLock(async () => {
-      // 1. Flush dirty pages from cache to disk
-      await this.pageStrategy.flush()
-
-      // 2. Physical sync (fsync)
+      // 1. Physical sync (fsync)
       await this.pageStrategy.sync()
 
-      // 3. Clear WAL
+      // 2. Clear WAL
       if (this.walManager) {
         await this.walManager.clear()
       }

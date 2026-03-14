@@ -1,11 +1,13 @@
 import type { PageFileSystem } from '../PageFileSystem'
+import type { AsyncMVCCTransaction } from 'mvcc-api'
+import type { PageMVCCStrategy } from '../PageMVCCStrategy'
 import { LockManager } from './LockManager'
 import { TransactionContext } from './TxContext'
-import { PageMVCCStrategy } from '../PageMVCCStrategy'
 
 /**
  * Transaction class.
  * Manages the lifecycle and resources of a database transaction.
+ * Internally wraps a nested AsyncMVCCTransaction for snapshot isolation.
  */
 export class Transaction {
   /** Transaction ID */
@@ -14,36 +16,44 @@ export class Transaction {
   private heldLocks: Set<string> = new Set()
   /** Held page locks (PageID -> LockID) */
   private pageLocks: Map<number, string> = new Map()
-  /** Dirty Pages modified by the transaction: PageID -> Modified Page Buffer */
-  private dirtyPages: Map<number, Uint8Array> = new Map()
-  /** Undo pages: PageID -> Original Page Buffer (Snapshot) */
-  private undoPages: Map<number, Uint8Array> = new Map()
   /** List of callbacks to execute on commit */
   private commitHooks: (() => Promise<void>)[] = []
-  /** Page MVCC Strategy for disk access */
-  private readonly pageStrategy: PageMVCCStrategy
+  /** Nested MVCC Transaction for snapshot isolation (lazy init) */
+  private mvccTx: AsyncMVCCTransaction<PageMVCCStrategy, number, Uint8Array> | null = null
+  /** Root MVCC Transaction reference */
+  private readonly rootTx: AsyncMVCCTransaction<PageMVCCStrategy, number, Uint8Array>
   /** Release function for global write lock, set by DataplyAPI */
   private _writeLockRelease: (() => void) | null = null
 
   /**
    * @param id Transaction ID
    * @param context Transaction context
-   * @param pageStrategy Page MVCC Strategy for disk I/O
+   * @param rootTx Root MVCC Transaction
    * @param lockManager LockManager instance
    * @param pfs Page File System
-   * @param reloadBPTree Callback to reload BPTree cache on rollback
    */
   constructor(
     id: number,
     readonly context: TransactionContext,
-    pageStrategy: PageMVCCStrategy,
+    rootTx: AsyncMVCCTransaction<PageMVCCStrategy, number, Uint8Array>,
     private readonly lockManager: LockManager,
     private readonly pfs: PageFileSystem,
   ) {
     this.id = id
-    this.pageStrategy = pageStrategy
+    this.rootTx = rootTx
   }
 
+  /**
+   * Lazily initializes the nested MVCC transaction.
+   * This ensures the snapshot is taken at the time of first access,
+   * picking up the latest committed root version.
+   */
+  private ensureMvccTx(): AsyncMVCCTransaction<PageMVCCStrategy, number, Uint8Array> {
+    if (!this.mvccTx) {
+      this.mvccTx = this.rootTx.createNested()
+    }
+    return this.mvccTx
+  }
 
   /**
    * Registers a commit hook.
@@ -69,35 +79,43 @@ export class Transaction {
   }
 
   /**
-   * Reads a page. Uses dirty buffer if available, otherwise disk.
+   * Reads a page through the MVCC transaction.
    * @param pageId Page ID
    * @returns Page data
    */
   async readPage(pageId: number): Promise<Uint8Array> {
-    // Check dirty buffer first
-    const dirty = this.dirtyPages.get(pageId)
-    if (dirty) {
-      return dirty
+    const tx = this.ensureMvccTx()
+    const data = await tx.read(pageId)
+    if (data === null) {
+      // 페이지가 없으면 빈 페이지 반환
+      return new Uint8Array(this.pfs.pageSize)
     }
-    // Read from disk via strategy
-    return await this.pageStrategy.read(pageId)
+    // Copy-on-Read: mvccTx.read()는 root diskCache의 참조를 반환할 수 있음.
+    // 호출자가 페이지를 in-place로 변이하면 diskCache가 오염됨.
+    // 복사본을 반환하여 방지.
+    const copy = new Uint8Array(data.length)
+    copy.set(data)
+    return copy
   }
 
   /**
-   * Writes a page to the transaction buffer.
+   * Writes a page through the MVCC transaction.
    * @param pageId Page ID
    * @param data Page data
    */
   async writePage(pageId: number, data: Uint8Array): Promise<void> {
-    // Save undo snapshot if not already saved
-    if (!this.undoPages.has(pageId)) {
-      const existingData = await this.pageStrategy.read(pageId)
-      const snapshot = new Uint8Array(existingData.length)
-      snapshot.set(existingData)
-      this.undoPages.set(pageId, snapshot)
+    const tx = this.ensureMvccTx()
+
+    // Copy-on-Write: mvcc-api에 참조 타입 전달 시 복사본 필요
+    const copy = new Uint8Array(data.length)
+    copy.set(data)
+
+    const exists = await tx.exists(pageId)
+    if (exists) {
+      await tx.write(pageId, copy)
+    } else {
+      await tx.create(pageId, copy)
     }
-    // Store in dirty buffer
-    this.dirtyPages.set(pageId, data)
   }
 
   /**
@@ -128,42 +146,54 @@ export class Transaction {
         }
       })
 
+      const tx = this.ensureMvccTx()
+
       // 0. Acquire global lock to prevent concurrent checkpoint/commit issues
       let shouldTriggerCheckpoint = false
       await this.pfs.runGlobalLock(async () => {
-        // 1. WAL Prepare (Phase 1)
-        if (this.pfs.wal && this.dirtyPages.size > 0) {
-          await this.pfs.wal.prepareCommit(this.dirtyPages)
-          // 2. WAL Finalize (Marker)
+        // 1. Collect dirty pages from the nested MVCC tx for WAL
+        const entries = tx.getResultEntries()
+        const dirtyPages = new Map<number, Uint8Array>()
+        for (const entry of [...entries.created, ...entries.updated]) {
+          dirtyPages.set(entry.key, entry.data)
+        }
+        const hasDirtyPages = dirtyPages.size > 0
+
+        // 2. WAL Prepare (Phase 1)
+        if (this.pfs.wal && hasDirtyPages) {
+          await this.pfs.wal.prepareCommit(dirtyPages)
+          // WAL Commit Marker
           await this.pfs.wal.writeCommitMarker()
         }
 
-        // 3. Write dirty pages (this now buffers in the strategy)
-        for (const [pageId, data] of this.dirtyPages) {
-          await this.pageStrategy.write(pageId, data)
+        // 3. Commit nested MVCC tx (merge to root)
+        await tx.commit()
+
+        // 4. Commit root MVCC tx (writes to disk via strategy)
+        if (hasDirtyPages) {
+          await this.rootTx.commit()
         }
 
-        // 4. Flush & checkpoint
-        if (!this.pfs.wal) {
-          // WAL이 없으면 해당 트랜잭션의 dirty pages만 즉시 디스크에 기록
-          await this.pfs.strategy.flushPages(this.dirtyPages)
-        }
-        else {
-          // WAL Auto-Checkpoint (Determine if needed)
-          this.pfs.wal.incrementWrittenPages(this.dirtyPages.size)
-          if (this.pfs.wal.shouldCheckpoint(this.pfs.options.walCheckpointThreshold)) {
-            shouldTriggerCheckpoint = true
+        // 5. Checkpoint logic
+        if (hasDirtyPages) {
+          if (!this.pfs.wal) {
+            // WAL이 없으면 즉시 fsync
+            await this.pfs.strategy.sync()
+          } else {
+            // WAL Auto-Checkpoint
+            this.pfs.wal.incrementWrittenPages(dirtyPages.size)
+            if (this.pfs.wal.shouldCheckpoint(this.pfs.options.walCheckpointThreshold)) {
+              shouldTriggerCheckpoint = true
+            }
           }
         }
       })
 
-      // 5. Trigger checkpoint outside the commit lock to avoid deadlock (ryoiki is non-reentrant)
+      // 6. Trigger checkpoint outside the commit lock to avoid deadlock (ryoiki is non-reentrant)
       if (shouldTriggerCheckpoint) {
         await this.pfs.checkpoint()
       }
     } finally {
-      this.dirtyPages.clear()
-      this.undoPages.clear()
       this.releaseAllLocks()
       // Release global write lock so next write transaction can proceed
       if (this._writeLockRelease) {
@@ -178,10 +208,9 @@ export class Transaction {
    */
   async rollback(): Promise<void> {
     try {
-      // Clear dirty pages first so reload reads from disk (not stale dirty data)
-      this.dirtyPages.clear()
-      this.undoPages.clear()
-
+      if (this.mvccTx) {
+        this.mvccTx.rollback()
+      }
       this.releaseAllLocks()
     } finally {
       // Release global write lock so next write transaction can proceed
@@ -190,13 +219,6 @@ export class Transaction {
         this._writeLockRelease = null
       }
     }
-  }
-
-  /**
-   * Returns the dirty pages map.
-   */
-  __getDirtyPages(): Map<number, Uint8Array> {
-    return this.dirtyPages
   }
 
   /**

@@ -59,13 +59,13 @@ describe('NoWAL Persistence Bug', () => {
     const sizeAfterCommit = fs.statSync(TEST_FILE).size
     console.log(`[WITH WAL] File size after commit (before close): ${sizeAfterCommit}`)
 
-    // 디스크에서 직접 읽어보기
-    const strategy = (dataply as any).api.pfs.pageStrategy
-    const dirtyPagesCount = strategy.dirtyPages.size
-    console.log(`[WITH WAL] Dirty pages count after commit: ${dirtyPagesCount}`)
+    // 디스크에서 직접 읽어보기 (mvcc-api 기반)
+    const rootTx = (dataply as any).api.pfs.rootTransaction
+    const writeBufferSize = rootTx.writeBuffer.size
+    console.log(`[WITH WAL] Root writeBuffer size after commit: ${writeBufferSize}`)
 
-    // WAL 있으면 체크포인트 후 dirty pages가 0이어야 함
-    expect(dirtyPagesCount).toBe(0)
+    // WAL 있으면 체크포인트 후 rootTx writeBuffer가 비어있어야 함
+    expect(writeBufferSize).toBe(0)
 
     await dataply.close()
   })

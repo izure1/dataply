@@ -151,7 +151,7 @@ export class DataplyAPI {
       pagePreallocationCount: 1000,
       wal: null,
       walCheckpointThreshold: 1000,
-      logLevel: LogLevel.Info,
+      logLevel: LogLevel.None,
     }, options)
   }
 
@@ -291,7 +291,7 @@ export class DataplyAPI {
     return new Transaction(
       ++this.txIdCounter,
       this.txContext,
-      this.pfs.getPageStrategy(),
+      this.pfs.getRootTransaction(),
       this.lockManager,
       this.pfs,
     )

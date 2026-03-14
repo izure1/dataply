@@ -15,8 +15,7 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
   constructor(
     readonly order: number,
     protected readonly pfs: PageFileSystem,
-    protected readonly txContext: TransactionContext,
-    protected readonly api: DataplyAPI
+    protected readonly txContext: TransactionContext
   ) {
     super(order)
     this.factory = new PageManagerFactory()
