@@ -474,7 +474,6 @@ export class PageFileSystem {
     await this.runGlobalLock(async () => {
       // 1. Physical sync (fsync)
       await this.pageStrategy.sync()
-
       // 2. Clear WAL
       if (this.walManager) {
         await this.walManager.clear()

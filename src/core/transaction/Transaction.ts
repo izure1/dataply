@@ -105,16 +105,14 @@ export class Transaction {
    */
   async writePage(pageId: number, data: Uint8Array): Promise<void> {
     const tx = this.ensureMvccTx()
-
     // Copy-on-Write: mvcc-api에 참조 타입 전달 시 복사본 필요
-    const copy = new Uint8Array(data.length)
-    copy.set(data)
-
     const exists = await tx.exists(pageId)
     if (exists) {
+      const copy = new Uint8Array(data.length)
+      copy.set(data)
       await tx.write(pageId, copy)
     } else {
-      await tx.create(pageId, copy)
+      await tx.create(pageId, data)
     }
   }
 
@@ -179,7 +177,8 @@ export class Transaction {
           if (!this.pfs.wal) {
             // WAL이 없으면 즉시 fsync
             await this.pfs.strategy.sync()
-          } else {
+          }
+          else {
             // WAL Auto-Checkpoint
             this.pfs.wal.incrementWrittenPages(dirtyPages.size)
             if (this.pfs.wal.shouldCheckpoint(this.pfs.options.walCheckpointThreshold)) {
