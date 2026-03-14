@@ -6,17 +6,17 @@ describe('NoWAL Persistence Bug', () => {
   const TEST_FILE = path.join(__dirname, 'test_nowal_persistence.dat')
   const WAL_FILE = path.join(__dirname, 'test_nowal_persistence.wal')
 
-  afterEach(async () => {
-    for (const f of [TEST_FILE, WAL_FILE]) {
-      if (fs.existsSync(f)) {
-        try { await fs.promises.unlink(f) } catch { }
-      }
-    }
-  })
+  // afterEach(async () => {
+  //   for (const f of [TEST_FILE, WAL_FILE]) {
+  //     if (fs.existsSync(f)) {
+  //       try { await fs.promises.unlink(f) } catch { }
+  //     }
+  //   }
+  // })
 
   test('WITHOUT WAL: dirty pages should be flushed to disk after commit', async () => {
     // WAL 없이 데이터 삽입
-    const dataply = new Dataply(TEST_FILE, { pageSize: 4096 })
+    const dataply = new Dataply(TEST_FILE, { pageSize: 4096, pagePreallocationCount: 10, walCheckpointThreshold: 1, logLevel: 1 })
     await dataply.init()
 
     // 초기 파일 크기 기록

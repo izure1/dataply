@@ -257,7 +257,7 @@ export class DataplyAPI {
       this.txContext,
       this.pfs.getPageStrategy(),
       this.lockManager,
-      this.pfs
+      this.pfs,
     )
   }
 

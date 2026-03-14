@@ -1,5 +1,4 @@
 import type { PageFileSystem } from '../PageFileSystem'
-import { BPTreeAsyncTransaction } from 'serializable-bptree'
 import { LockManager } from './LockManager'
 import { TransactionContext } from './TxContext'
 import { PageMVCCStrategy } from '../PageMVCCStrategy'
@@ -19,10 +18,6 @@ export class Transaction {
   private dirtyPages: Map<number, Uint8Array> = new Map()
   /** Undo pages: PageID -> Original Page Buffer (Snapshot) */
   private undoPages: Map<number, Uint8Array> = new Map()
-  /** BPTree Transaction instance */
-  private bptreeTx?: BPTreeAsyncTransaction<number, number>
-  /** Whether the BPTree transaction is dirty */
-  private bptreeDirty: boolean = false
   /** List of callbacks to execute on commit */
   private commitHooks: (() => Promise<void>)[] = []
   /** Page MVCC Strategy for disk access */
@@ -36,48 +31,19 @@ export class Transaction {
    * @param pageStrategy Page MVCC Strategy for disk I/O
    * @param lockManager LockManager instance
    * @param pfs Page File System
+   * @param reloadBPTree Callback to reload BPTree cache on rollback
    */
   constructor(
     id: number,
     readonly context: TransactionContext,
     pageStrategy: PageMVCCStrategy,
     private readonly lockManager: LockManager,
-    private readonly pfs: PageFileSystem
+    private readonly pfs: PageFileSystem,
   ) {
     this.id = id
     this.pageStrategy = pageStrategy
   }
 
-  /**
-   * Sets the BPTree transaction.
-   * @param tx BPTree transaction
-   */
-  __setBPTreeTransaction(tx: BPTreeAsyncTransaction<number, number>) {
-    this.bptreeTx = tx
-  }
-
-  /**
-   * Returns the BPTree transaction.
-   * @returns BPTree transaction
-   */
-  __getBPTreeTransaction(): BPTreeAsyncTransaction<number, number> | undefined {
-    return this.bptreeTx
-  }
-
-  /**
-   * Marks the BPTree transaction as dirty.
-   */
-  __markBPTreeDirty() {
-    this.bptreeDirty = true
-  }
-
-  /**
-   * Returns whether the BPTree transaction is dirty.
-   * @returns True if dirty
-   */
-  __isBPTreeDirty() {
-    return this.bptreeDirty
-  }
 
   /**
    * Registers a commit hook.
@@ -212,13 +178,10 @@ export class Transaction {
    */
   async rollback(): Promise<void> {
     try {
-      if (this.bptreeTx) {
-        this.bptreeTx.rollback()
-      }
-
-      // Restore undo pages to cache (not disk - just clear dirty)
+      // Clear dirty pages first so reload reads from disk (not stale dirty data)
       this.dirtyPages.clear()
       this.undoPages.clear()
+
       this.releaseAllLocks()
     } finally {
       // Release global write lock so next write transaction can proceed

@@ -1,6 +1,6 @@
 import os from 'node:os'
 import type { DataPage, DataplyMetadata, DataplyOptions } from '../types'
-import { NumericComparator, BPTreeAsync, BPTreeAsyncTransaction } from 'serializable-bptree'
+import { NumericComparator, BPTreePureAsync } from 'serializable-bptree'
 import { RowIdentifierStrategy } from './RowIndexStrategy'
 import { PageFileSystem } from './PageFileSystem'
 import { Row } from './Row'
@@ -12,7 +12,7 @@ import { TransactionContext } from './transaction/TxContext'
 import { Logger } from './Logger'
 
 export class RowTableEngine {
-  protected readonly bptree: BPTreeAsync<number, number>
+  protected readonly bptree: BPTreePureAsync<number, number>
   protected readonly strategy: RowIdentifierStrategy
   protected readonly order: number
   protected readonly factory: PageManagerFactory
@@ -49,43 +49,13 @@ export class RowTableEngine {
     const nodeMemory = (this.order * 24) + 256
     const capacity = Math.max(1000, Math.min(1000000, Math.floor(budget / nodeMemory)))
 
-    this.bptree = new BPTreeAsync(
+    this.bptree = new BPTreePureAsync(
       this.strategy,
       new NumericComparator(),
       {
         capacity
       }
     )
-  }
-
-  /**
-   * Retrieves the BPTree transaction associated with the given transaction.
-   * If it doesn't exist, it creates a new one and registers commit/rollback hooks.
-   * @param tx Dataply transaction
-   * @returns BPTree transaction
-   */
-  private async getBPTreeTransaction(tx: Transaction): Promise<BPTreeAsyncTransaction<number, number>> {
-    let btx = tx.__getBPTreeTransaction()
-    if (!btx) {
-      btx = await this.bptree.createTransaction()
-      tx.__setBPTreeTransaction(btx)
-      tx.onCommit(async () => {
-        if (!tx.__isBPTreeDirty()) {
-          return
-        }
-        if (!btx) return
-        const result = await btx.commit()
-        if (result.success) {
-          // 삭제된 노드들의 ID를 추출하여 Strategy에서 삭제
-          for (const entry of result.deleted) {
-            await this.strategy.delete(entry.key)
-          }
-        } else {
-          throw new Error(`BPTree transaction commit failed. Current Root: ${this.bptree.getRootId()}`)
-        }
-      })
-    }
-    return btx
   }
 
   /**
@@ -188,9 +158,6 @@ export class RowTableEngine {
     // 메타데이터(Page 0) 쓰기 락 획득 (한 번만)
     await tx.__acquireWriteLock(0)
 
-    // BPTree 트랜잭션을 미리 획득 (한 번만)
-    const btx = await this.getBPTreeTransaction(tx)
-
     const pks: number[] = []
     const metadataPage = await this.pfs.getMetadata(tx)
     let lastPk = this.metadataPageManager.getLastRowPk(metadataPage)
@@ -271,10 +238,9 @@ export class RowTableEngine {
       pks.push(pk)
     }
 
-    await btx.batchInsert(batchInsertData)
+    await this.bptree.batchInsert(batchInsertData)
 
     // 메타데이터를 한 번만 업데이트합니다.
-    tx.__markBPTreeDirty()
     const freshMetadataPage = await this.pfs.getMetadata(tx)
     this.metadataPageManager.setLastInsertPageId(freshMetadataPage, lastInsertDataPageId)
     this.metadataPageManager.setLastRowPk(freshMetadataPage, lastPk)
@@ -297,8 +263,7 @@ export class RowTableEngine {
    * @returns RID or null (if not found)
    */
   private async getRidByPK(pk: number, tx: Transaction): Promise<number | null> {
-    const btx = await this.getBPTreeTransaction(tx)
-    const keys = await btx.keys({ equal: pk })
+    const keys = await this.bptree.keys({ equal: pk })
     if (keys.size === 0) {
       return null
     }
@@ -431,10 +396,8 @@ export class RowTableEngine {
     const newRidNumeric = this.getRID()
 
     // B+트리 업데이트
-    const btx = await this.getBPTreeTransaction(tx)
-    await btx.delete(oldRidNumeric, pk)
-    await btx.insert(newRidNumeric, pk)
-    tx.__markBPTreeDirty()
+    await this.bptree.delete(oldRidNumeric, pk)
+    await this.bptree.insert(newRidNumeric, pk)
 
     const freshMetadataPage = await this.pfs.getMetadata(tx)
     this.metadataPageManager.setLastInsertPageId(freshMetadataPage, lastInsertDataPageId)
@@ -482,9 +445,7 @@ export class RowTableEngine {
     await this.pfs.setPage(pageId, page, tx)
 
     // B+트리에서 삭제합니다.
-    const btx = await this.getBPTreeTransaction(tx)
-    await btx.delete(rid, pk)
-    tx.__markBPTreeDirty()
+    await this.bptree.delete(rid, pk)
 
     if (decrementRowCount) {
       const metadataPage = await this.pfs.getMetadata(tx)
@@ -569,7 +530,7 @@ export class RowTableEngine {
       pkIndexMap.set(pks[i], i)
     }
 
-    const btx = await this.getBPTreeTransaction(tx)
+
     // PK를 클러스터링하여 분산된 범위를 여러 번 조회
     const clusters = clusterNumbersByPagination(pks, this.order, 1)
     // Group items by pageId using bitwise operations for speed
@@ -591,7 +552,7 @@ export class RowTableEngine {
 
       // 단일 PK 클러스터는 equal 조회로 최적화
       if (minPk === maxPk) {
-        const keys = await btx.keys({ equal: minPk })
+        const keys = await this.bptree.keys({ equal: minPk })
         if (keys.size > 0) {
           const rid = keys.values().next().value!
           const index = pkIndexMap.get(minPk)
@@ -602,7 +563,7 @@ export class RowTableEngine {
         continue
       }
 
-      const stream = btx.whereStream({ gte: minPk, lte: maxPk })
+      const stream = this.bptree.whereStream({ gte: minPk, lte: maxPk })
       for await (const [rid, pk] of stream) {
         const index = pkIndexMap.get(pk)
         if (index !== undefined) {
