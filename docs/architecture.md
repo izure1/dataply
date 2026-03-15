@@ -12,7 +12,8 @@ Dataply is an embedded database based on B+Tree indexing and page-based storage 
 classDiagram
     class Dataply {
         +init()
-        +createTransaction()
+        +withWriteTransaction()
+        +withReadTransaction()
         +insert()
         +select()
     }
@@ -20,7 +21,8 @@ classDiagram
     class DataplyAPI {
         -PageFileSystem pfs
         -RowTableEngine rowTableEngine
-        +createTransaction()
+        +withWriteTransaction()
+        +withReadTransaction()
     }
 
     class Transaction {
@@ -102,7 +104,7 @@ classDiagram
 - **Role**: Top-level interface for user interaction.
 - **Responsibilities**:
   - Database initialization and shutdown (`init`, `close`).
-  - Transaction context creation and management (`createTransaction`).
+  - Transaction context management via callback patterns (`withWriteTransaction`, etc.).
   - Delegation of requests to lower-level engines (`ROW_TABLE`, `KEY_VALUE`, etc.).
 
 #### 2. Transaction
@@ -155,7 +157,7 @@ sequenceDiagram
     participant Disk
 
     User->>API: insert(data)
-    API->>API: createTransaction() (Implicit)
+    API->>API: withWriteTransaction() (Implicit)
     API->>Engine: insert(data, tx)
     
     rect rgb(240, 240, 240)

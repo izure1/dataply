@@ -250,7 +250,7 @@ export class DataplyAPI {
    * A transaction must be terminated by calling either `commit` or `rollback`.
    * @returns Transaction object
    */
-  protected createTransaction(): Transaction {
+  createTransaction(): Transaction {
     this.logger.debug(`Creating transaction: ${this.txIdCounter + 1}`)
     return new Transaction(
       ++this.txIdCounter,
@@ -262,21 +262,12 @@ export class DataplyAPI {
   }
 
   /**
-   * Runs a callback function within a transaction context.
-   * If no transaction is provided, a new transaction is created.
-   * The transaction is committed if the callback completes successfully,
-   * or rolled back if an error occurs.
-   * @param callback The callback function to run within the transaction context.
-   * @param tx The transaction to use. If not provided, a new transaction is created.
-   * @returns The result of the callback function.
-   */
-  /**
    * Acquires the global write lock.
    * Returns a release function that MUST be called to unlock.
    * Used internally by runWithDefaultWrite.
    * @returns A release function
    */
-  protected async acquireWriteLock(): Promise<() => void> {
+  async acquireWriteLock(): Promise<() => void> {
     this.logger.debug('Acquiring write lock')
     const previous = this.writeQueue
     let release: () => void

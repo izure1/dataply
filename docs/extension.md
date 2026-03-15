@@ -168,8 +168,8 @@ class MyDatabaseService {
   }
 
   async upsertConfig(newConfig: object) {
-    // runWithDefault automates internal transaction handling
-    return this.api.runWithDefault(async (tx) => {
+    // withWriteTransaction automates internal transaction handling
+    return this.api.withWriteTransaction(async (tx) => {
       return this.api.update(1, JSON.stringify(newConfig), tx);
     });
   }

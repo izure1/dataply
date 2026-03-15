@@ -105,23 +105,17 @@ db.init().then(() => {
 ## Transaction Management
 
 ### Explicit Transactions
-You can group multiple operations into a single unit of work to ensure atomicity.
+You can group multiple operations into a single unit of work to ensure atomicity. The `withWriteTransaction` method handles the transaction lifecycle automatically, committing on success and rolling back on failure.
 
 ```typescript
-const tx = dataply.createTransaction()
-
-try {
-  await dataply.insert('Data 1', tx)
+await dataply.withWriteTransaction(async (tx) => {
+  const pk = await dataply.insert('Data 1', tx)
   await dataply.update(pk, 'Updated Data', tx)
-  
-  await tx.commit() // Persist changes to disk and clear WAL on success
-} catch (error) {
-  await tx.rollback() // Revert all changes on failure (Undo)
-}
+}) // Persists changes automatically on success or rolls back on failure
 ```
 
 ### Global Transactions
-You can perform atomic operations across multiple `Dataply` instances using the `GlobalTransaction` class. This uses a **2-Phase Commit (2PC)** mechanism to ensure that either all instances commit successfully or all are rolled back.
+You can perform atomic operations across multiple `Dataply` instances using the `GlobalTransaction` class. This safely acquires write locks on all instances sequentially and manages the transaction lifecycle to ensure either all instances commit successfully or all are rolled back.
 
 ```typescript
 import { Dataply, GlobalTransaction } from 'dataply'
@@ -132,22 +126,13 @@ const db2 = new Dataply('./db2.db', { wal: './db2.wal' })
 await db1.init()
 await db2.init()
 
-const tx1 = db1.createTransaction()
-const tx2 = db2.createTransaction()
-
-const globalTx = new GlobalTransaction()
-globalTx.add(tx1)
-globalTx.add(tx2)
-
 try {
-  await db1.insert('Data for DB1', tx1)
-  await db2.insert('Data for DB2', tx2)
-  
-  // Commit transactions across all instances
-  // Note: This is a best-effort atomic commit.
-  await globalTx.commit() 
+  await GlobalTransaction.Run([db1, db2], async ([tx1, tx2]) => {
+    await db1.insert('Data for DB1', tx1)
+    await db2.insert('Data for DB2', tx2)
+  })
 } catch (error) {
-  await globalTx.rollback()
+  console.error('Global transaction failed and rolled back.', error)
 }
 ```
 
@@ -196,30 +181,22 @@ Marks data as deleted.
 #### `async getMetadata(tx?: Transaction): Promise<DataplyMetadata>`
 Returns the current metadata of the dataply, including `pageSize`, `pageCount`, and `rowCount`.
 
-#### `createTransaction(): Transaction`
-Creates a new transaction instance.
+#### `async withWriteTransaction<T>(callback: (tx: Transaction) => Promise<T>, tx?: Transaction): Promise<T>`
+Executes write operations within a serialized write-lock transaction. Automatically commits on success and rolls back on failure if creating a new internal transaction.
+
+#### `async withReadTransaction<T>(callback: (tx: Transaction) => Promise<T>, tx?: Transaction): Promise<T>`
+Executes read operations within a transaction context.
+
+#### `async *withReadStreamTransaction<T>(callback: (tx: Transaction) => AsyncGenerator<T>, tx?: Transaction): AsyncGenerator<T>`
+Executes streaming read operations using an async generator in a transaction.
 
 #### `async close(): Promise<void>`
 Closes the file handles and shuts down safely.
 
-### Transaction Class
-
-#### `async commit(): Promise<void>`
-Permanently reflects all changes made during the transaction to disk and releases locks.
-
-#### `async rollback(): Promise<void>`
-Cancels all changes made during the transaction and restores the original state.
-
 ### GlobalTransaction Class
 
-#### `add(tx: Transaction): void`
-Registers a transaction from a Dataply instance to the global unit.
-
-#### `async commit(): Promise<void>`
-Executes a coordinated commit across all registered transactions. Note that without a prepare phase, this is a best-effort atomic commit.
-
-#### `async rollback(): Promise<void>`
-Rolls back all registered transactions simultaneously.
+#### `static async Run<T>(dbs: Dataply[], callback: (txs: Transaction[]) => Promise<T>): Promise<T>`
+Executes a callback-based global transaction across multiple Dataply instances sequentially locking them to prevent deadlocks, providing true atomicity within the Dataply nodes. Automatically commits on success and rolls back on failure.
 
 ## Extending Dataply
 

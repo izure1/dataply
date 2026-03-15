@@ -37,17 +37,17 @@ describe('GlobalTransaction', () => {
   })
 
   test('should commit across multiple instances atomically', async () => {
-    const tx1 = (db1 as any).createTransaction()
-    const tx2 = (db2 as any).createTransaction()
+    await GlobalTransaction.Run([db1, db2], async ([tx1, tx2]) => {
+      await db1.insert('data1', tx1)
+      await db2.insert('data2', tx2)
 
-    const globalTx = new GlobalTransaction()
-    globalTx.add(tx1)
-    globalTx.add(tx2)
+      // Uncommitted data should be visible within the transaction context
+      const result1 = await db1.select(1, false, tx1)
+      const result2 = await db2.select(1, false, tx2)
 
-    await db1.insert('data1', tx1)
-    await db2.insert('data2', tx2)
-
-    await globalTx.commit()
+      expect(result1).toBe('data1')
+      expect(result2).toBe('data2')
+    })
 
     // Verify data persistence after restart
     await db1.close()
@@ -58,25 +58,30 @@ describe('GlobalTransaction', () => {
     await db1.init()
     await db2.init()
 
-    const result1 = await db1.select(1, false)
-    const result2 = await db2.select(1, false)
+    const commited1 = await db1.select(1)
+    const commited2 = await db2.select(1)
 
-    expect(result1).toBe('data1')
-    expect(result2).toBe('data2')
+    expect(commited1).toBe('data1')
+    expect(commited2).toBe('data2')
   })
 
   test('should rollback all instances if rollback is called', async () => {
-    const tx1 = (db1 as any).createTransaction()
-    const tx2 = (db2 as any).createTransaction()
+    try {
+      await GlobalTransaction.Run([db1, db2], async ([tx1, tx2]) => {
+        await db1.insert('data1', tx1)
+        await db2.insert('data2', tx2)
 
-    const globalTx = new GlobalTransaction()
-    globalTx.add(tx1)
-    globalTx.add(tx2)
+        const result1 = await db1.select(1, false, tx1)
+        const result2 = await db2.select(1, false, tx2)
 
-    await db1.insert('data1', tx1)
-    await db2.insert('data2', tx2)
+        expect(result1).toBe('data1')
+        expect(result2).toBe('data2')
 
-    await globalTx.rollback()
+        throw new Error('Rollback Triggered')
+      })
+    } catch (e: any) {
+      if (e.message !== 'Rollback Triggered') throw e
+    }
 
     const result1 = await db1.select(1, false)
     const result2 = await db2.select(1, false)
@@ -84,8 +89,6 @@ describe('GlobalTransaction', () => {
     expect(result1).toBe(null)
     expect(result2).toBe(null)
   })
-
-
 
   test('should succeed even if one instance does not have WAL configured (Atomicity compromised for that instance)', async () => {
     let db3: Dataply | undefined
@@ -97,18 +100,10 @@ describe('GlobalTransaction', () => {
       db3 = new Dataply(db3Path) // No WAL
       await db3.init()
 
-      const tx1 = (db1 as any).createTransaction()
-      const tx3 = (db3 as any).createTransaction()
-
-      const globalTx = new GlobalTransaction()
-      globalTx.add(tx1)
-      globalTx.add(tx3)
-
-      await db1.insert('data1', tx1)
-      await db3.insert('data3', tx3)
-
-      // Should succeed without error
-      await globalTx.commit()
+      await GlobalTransaction.Run([db1, db3!], async ([tx1, tx3]) => {
+        await db1.insert('data1', tx1)
+        await db3!.insert('data3', tx3)
+      })
 
       await db1.close()
       await db3.close()
