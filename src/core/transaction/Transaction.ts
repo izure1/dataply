@@ -83,7 +83,7 @@ export class Transaction {
    * @param pageId Page ID
    * @returns Page data
    */
-  async readPage(pageId: number): Promise<Uint8Array> {
+  async __readPage(pageId: number): Promise<Uint8Array> {
     const tx = this.ensureMvccTx()
     const data = await tx.read(pageId)
     if (data === null) {
@@ -103,7 +103,7 @@ export class Transaction {
    * @param pageId Page ID
    * @param data Page data
    */
-  async writePage(pageId: number, data: Uint8Array): Promise<void> {
+  async __writePage(pageId: number, data: Uint8Array): Promise<void> {
     const tx = this.ensureMvccTx()
     // Copy-on-Write: mvcc-api에 참조 타입 전달 시 복사본 필요
     const exists = await tx.exists(pageId)

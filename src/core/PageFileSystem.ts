@@ -162,12 +162,7 @@ export class PageFileSystem {
    * @returns 페이지 버퍼
    */
   async get(pageIndex: number, tx: Transaction): Promise<Uint8Array> {
-    const page = await tx.readPage(pageIndex)
-    if (page === null) {
-      // 페이지가 없으면 빈 페이지 반환
-      return new Uint8Array(this.pageSize)
-    }
-    return page
+    return tx.__readPage(pageIndex)
   }
 
   /**
@@ -269,7 +264,7 @@ export class PageFileSystem {
     manager.updateChecksum(page)
 
     await tx.__acquireWriteLock(pageIndex)
-    await tx.writePage(pageIndex, page)
+    await tx.__writePage(pageIndex, page)
   }
 
   /**
@@ -368,7 +363,8 @@ export class PageFileSystem {
           manager.setNextPageId(page, newPageId)
           await this.setPage(currentPageId, page, tx)
           currentPageId = newPageId
-        } else {
+        }
+        else {
           currentPageId = nextPageId
         }
         continue
@@ -399,10 +395,12 @@ export class PageFileSystem {
           manager.setNextPageId(page, newPageId)
           await this.setPage(currentPageId, page, tx)
           currentPageId = newPageId
-        } else {
+        }
+        else {
           currentPageId = nextPageId
         }
-      } else {
+      }
+      else {
         // 데이터 쓰기가 완료되었는데 다음 페이지가 남아있다면 잘라내기(Truncate)
         let nextPageId = manager.getNextPageId(page)
         if (nextPageId !== -1) {
