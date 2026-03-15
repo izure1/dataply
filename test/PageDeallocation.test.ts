@@ -52,12 +52,11 @@ describe('Page Deallocation', () => {
       }
 
       const pfs = (db as any).pfs as PageFileSystem
-      const tx = db.createTransaction()
-
-      const page = await pfs.get(pageId, tx)
-      const pageType = PageManager.GetPageType(page)
-
-      await tx.commit()
+      let pageType: number = PageManager.CONSTANT.PAGE_TYPE_EMPTY
+      await db.withReadTransaction(async (tx) => {
+        const page = await pfs.get(pageId, tx)
+        pageType = PageManager.GetPageType(page)
+      })
 
       // 데이터 페이지가 해제되었음을 확인합니다. 
       // CoW 트랜잭션의 특성상 해제된 페이지가 즉시 인덱스 페이지로 재사용될 수 있으므로
@@ -83,37 +82,35 @@ describe('Page Deallocation', () => {
       const pk = await db.insert(largeData)
 
       const pfs = (db as any).pfs as PageFileSystem
-      let tx = db.createTransaction()
-
-      // Find the overflow page dynamically starting from page 3
       let overflowPageId = -1
-      for (let i = 3; i < 20; i++) {
-        const p = await pfs.get(i, tx)
-        if (new PageManagerFactory().isOverflowPage(p)) {
-          overflowPageId = i
-          break
+      await db.withReadTransaction(async (tx) => {
+        // Find the overflow page dynamically starting from page 3
+        for (let i = 3; i < 20; i++) {
+          const p = await pfs.get(i, tx)
+          if (new PageManagerFactory().isOverflowPage(p)) {
+            overflowPageId = i
+            break
+          }
         }
-      }
 
-      if (overflowPageId === -1) {
-        throw new Error('Could not find any overflow page')
-      }
+        if (overflowPageId === -1) {
+          throw new Error('Could not find any overflow page')
+        }
 
-      const overflowPage = await pfs.get(overflowPageId, tx)
-      const isOverflow = (new PageManagerFactory().isOverflowPage(overflowPage))
-      expect(isOverflow).toBe(true)
-
-      await tx.commit()
+        const overflowPage = await pfs.get(overflowPageId, tx)
+        const isOverflow = (new PageManagerFactory().isOverflowPage(overflowPage))
+        expect(isOverflow).toBe(true)
+      })
 
       // 2. Delete the row
       await db.delete(pk)
 
       // 3. Verify overflow page is now EMPTY
-      tx = db.createTransaction()
-      const freePage = await pfs.get(overflowPageId, tx)
-      const finalPageType = PageManager.GetPageType(freePage)
-
-      await tx.commit()
+      let finalPageType = -1
+      await db.withReadTransaction(async (tx) => {
+        const freePage = await pfs.get(overflowPageId, tx)
+        finalPageType = PageManager.GetPageType(freePage)
+      })
 
       expect(finalPageType).toBe(PageManager.CONSTANT.PAGE_TYPE_EMPTY)
     } finally {

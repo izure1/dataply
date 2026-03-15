@@ -64,14 +64,16 @@ describe('Dataply Update', () => {
 
   test('should work with transactions', async () => {
     const pk = await dataply.insert('initial')
-    const tx = dataply.createTransaction()
-    await dataply.update(pk, 'updated in tx', tx)
+    let beforeCommit: string | null = null
 
-    // 이전에 읽으면 initial이어야 함 (MVCC 지원 여부에 따라 다르지만, 현재 구현상 tx 내에서만 보임)
-    const beforeCommit = await dataply.select(pk, false)
+    await dataply.withWriteTransaction(async (tx) => {
+      await dataply.update(pk, 'updated in tx', tx)
+
+      // 이전에 읽으면 initial이어야 함 (MVCC 지원 여부에 따라 다르지만, 현재 구현상 tx 내에서만 보임)
+      beforeCommit = await dataply.select(pk, false)
+    })
+
     expect(beforeCommit).toBe('initial')
-
-    await tx.commit()
 
     const afterCommit = await dataply.select(pk, false)
     expect(afterCommit).toBe('updated in tx')

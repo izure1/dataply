@@ -26,8 +26,33 @@ export class Dataply {
    * A transaction must be terminated by calling either `commit` or `rollback`.
    * @returns Transaction object
    */
-  createTransaction(): Transaction {
-    return this.api.createTransaction()
+  protected createTransaction(): Transaction {
+    // Note: It's protected in DataplyAPI, so we cast it to any to access if needed, or we just rely on the exposed public methods.
+    return (this.api as any).createTransaction()
+  }
+
+  /**
+   * Runs a write callback within a transaction context.
+   */
+  async withWriteTransaction<T>(callback: (tx: Transaction) => Promise<T>, tx?: Transaction): Promise<T> {
+    return this.api.withWriteTransaction(callback, tx)
+  }
+
+  /**
+   * Runs a read callback within a transaction context.
+   */
+  async withReadTransaction<T>(callback: (tx: Transaction) => Promise<T>, tx?: Transaction): Promise<T> {
+    return this.api.withReadTransaction(callback, tx)
+  }
+
+  /**
+   * Runs a generator callback function within a transaction context.
+   */
+  async *withReadStreamTransaction<T>(
+    callback: (tx: Transaction) => AsyncGenerator<T>,
+    tx?: Transaction
+  ): AsyncGenerator<T> {
+    return this.api.withReadStreamTransaction(callback, tx)
   }
 
   /**

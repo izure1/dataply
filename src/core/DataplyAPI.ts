@@ -233,7 +233,7 @@ export class DataplyAPI {
     if (this.initialized) {
       return
     }
-    await this.runWithDefault(async (tx) => {
+    await this.withReadTransaction(async (tx) => {
       await this.hook.trigger('init', tx, async (tx) => {
         // VFS/PFS 초기화 (복구 로직 포함)
         await this.pfs.init()
@@ -250,7 +250,7 @@ export class DataplyAPI {
    * A transaction must be terminated by calling either `commit` or `rollback`.
    * @returns Transaction object
    */
-  createTransaction(): Transaction {
+  protected createTransaction(): Transaction {
     this.logger.debug(`Creating transaction: ${this.txIdCounter + 1}`)
     return new Transaction(
       ++this.txIdCounter,
@@ -295,7 +295,7 @@ export class DataplyAPI {
    * @param tx Optional external transaction.
    * @returns The result of the callback.
    */
-  protected async runWithDefaultWrite<T>(callback: (tx: Transaction) => Promise<T>, tx?: Transaction): Promise<T> {
+  async withWriteTransaction<T>(callback: (tx: Transaction) => Promise<T>, tx?: Transaction): Promise<T> {
     this.logger.debug('Running with default write transaction')
     if (!tx) {
       // Internal transaction: acquire lock, create tx, run, commit, release
@@ -322,7 +322,7 @@ export class DataplyAPI {
     return result
   }
 
-  protected async runWithDefault<T>(callback: (tx: Transaction) => Promise<T>, tx?: Transaction): Promise<T> {
+  async withReadTransaction<T>(callback: (tx: Transaction) => Promise<T>, tx?: Transaction): Promise<T> {
     this.logger.debug('Running with default transaction')
     const isInternalTx = !tx
     if (!tx) {
@@ -351,7 +351,7 @@ export class DataplyAPI {
    * @param tx The transaction to use. If not provided, a new transaction is created.
    * @returns An AsyncGenerator that yields values from the callback.
    */
-  protected async *streamWithDefault<T>(
+  async *withReadStreamTransaction<T>(
     callback: (tx: Transaction) => AsyncGenerator<T>,
     tx?: Transaction
   ): AsyncGenerator<T> {
@@ -390,7 +390,7 @@ export class DataplyAPI {
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
-    return this.runWithDefault((tx) => this.rowTableEngine.getMetadata(tx), tx)
+    return this.withReadTransaction((tx) => this.rowTableEngine.getMetadata(tx), tx)
   }
 
   /**
@@ -405,7 +405,7 @@ export class DataplyAPI {
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
-    return this.runWithDefaultWrite(async (tx) => {
+    return this.withWriteTransaction(async (tx) => {
       incrementRowCount = incrementRowCount ?? true
       if (typeof data === 'string') {
         data = this.textCodec.encode(data)
@@ -427,7 +427,7 @@ export class DataplyAPI {
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
-    return this.runWithDefaultWrite(async (tx) => {
+    return this.withWriteTransaction(async (tx) => {
       incrementRowCount = incrementRowCount ?? true
       if (typeof data === 'string') {
         data = this.textCodec.encode(data)
@@ -450,7 +450,7 @@ export class DataplyAPI {
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
-    return this.runWithDefaultWrite(async (tx) => {
+    return this.withWriteTransaction(async (tx) => {
       incrementRowCount = incrementRowCount ?? true
       const encodedList = dataList.map(data =>
         typeof data === 'string' ? this.textCodec.encode(data) : data
@@ -470,7 +470,7 @@ export class DataplyAPI {
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
-    return this.runWithDefaultWrite(async (tx) => {
+    return this.withWriteTransaction(async (tx) => {
       if (typeof data === 'string') {
         data = this.textCodec.encode(data)
       }
@@ -489,7 +489,7 @@ export class DataplyAPI {
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
-    return this.runWithDefaultWrite(async (tx) => {
+    return this.withWriteTransaction(async (tx) => {
       decrementRowCount = decrementRowCount ?? true
       await this.rowTableEngine.delete(pk, decrementRowCount, tx)
     }, tx)
@@ -510,7 +510,7 @@ export class DataplyAPI {
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
-    return this.runWithDefault(async (tx) => {
+    return this.withReadTransaction(async (tx) => {
       const data = await this.rowTableEngine.selectByPK(pk, tx)
       if (data === null) return null
       if (asRaw) return data
@@ -533,7 +533,7 @@ export class DataplyAPI {
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
-    return this.runWithDefault(async (tx) => {
+    return this.withReadTransaction(async (tx) => {
       const results = await this.rowTableEngine.selectMany(pks, tx)
       return results.map(data => {
         if (data === null) return null
@@ -551,7 +551,7 @@ export class DataplyAPI {
     if (!this.initialized) {
       throw new Error('Dataply instance is not initialized')
     }
-    return this.runWithDefaultWrite(() => {
+    return this.withWriteTransaction(() => {
       return this.hook.trigger('close', void 0, async () => {
         await this.pfs.close()
         fs.closeSync(this.fileHandle)

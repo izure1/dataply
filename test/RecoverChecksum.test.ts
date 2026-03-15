@@ -48,9 +48,10 @@ describe('Recovery Checksum with Dataply API', () => {
     const data = new Uint8Array([10, 20, 30])
     const pk = await dataply.insert(data)
 
-    const tx = dataply.createTransaction()
-    const pk2 = await dataply.insert(new Uint8Array([99]), tx)
-    await tx.commit()
+    let pk2 = 0
+    await dataply.withWriteTransaction(async (tx) => {
+      pk2 = await dataply.insert(new Uint8Array([99]), tx)
+    })
 
     await dataply.close() // Clean start DB.
 
@@ -94,7 +95,7 @@ describe('Recovery Checksum with Dataply API', () => {
     // 4. Assert
     // Verify using internal PFS to see if page content is overwritten by WAL
     const pfs = (dataply2 as any).api.pfs
-    const page = await pfs.get(pageId, dataply2.createTransaction())
+    const page = await pfs.get(pageId, (dataply2 as any).api.createTransaction())
 
     // Check a random byte in body
     const bodyStart = 24 // approximate header size
@@ -137,7 +138,7 @@ describe('Recovery Checksum with Dataply API', () => {
 
     // 3. Verify
     const pfs = (dataply as any).api.pfs
-    const page = await pfs.get(pageId, dataply.createTransaction())
+    const page = await pfs.get(pageId, (dataply as any).api.createTransaction())
 
     expect(page[100]).toBe(77) // Should have recovered
 

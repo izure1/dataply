@@ -44,10 +44,11 @@ describe('Page Reuse', () => {
     const lastPagePk = await db.insert(new Uint8Array(dataSize))
     pks.push(lastPagePk)
 
-    let tx = db.createTransaction()
-    const pageCountBeforeDelete = await pfs.getPageCount(tx)
+    let pageCountBeforeDelete = 0
+    await db.withReadTransaction(async (tx) => {
+      pageCountBeforeDelete = await pfs.getPageCount(tx)
+    })
     console.log('Page Count Before Delete:', pageCountBeforeDelete) // Expect 5 (Meta, Bitmap, Data2, Data3, Data4)
-    await tx.commit()
 
     // 4. Delete rows in Page 2 and Page 3 to free them
     // Pks 1-6 are in Page 2 and 3.
@@ -57,10 +58,12 @@ describe('Page Reuse', () => {
     }
 
     // Verify Free List
-    tx = db.createTransaction()
-    const metadata = await pfs.getMetadata(tx)
-    const metadataManager = new PageManagerFactory().getManager(metadata) as MetadataPageManager
-    const freeHead = metadataManager.getFreePageId(metadata)
+    let freeHead = -1
+    await db.withReadTransaction(async (tx) => {
+      const metadata = await pfs.getMetadata(tx)
+      const metadataManager = new PageManagerFactory().getManager(metadata) as MetadataPageManager
+      freeHead = metadataManager.getFreePageId(metadata)
+    })
     console.log('Free Head after delete:', freeHead)
 
     // We expect Page 2 and 3 to be in the Free List (Order depends on delete order, usually LIFO)
@@ -68,7 +71,6 @@ describe('Page Reuse', () => {
     // Stack: Metadata -> 3 -> 2 -> -1
 
     expect(freeHead).not.toBe(-1)
-    await tx.commit()
 
     // 5. Trigger Reuse
     // Currently Last Insert Page is Page 4. It has 1 row.
@@ -86,34 +88,33 @@ describe('Page Reuse', () => {
     await db.insert(new Uint8Array(dataSize))
 
     // Verify
-    tx = db.createTransaction()
+    await db.withReadTransaction(async (tx) => {
+      // Check Metadata Last Insert Page ID
+      const metaReuse = await pfs.getMetadata(tx)
+      const metadataManager = new PageManagerFactory().getManager(metaReuse) as MetadataPageManager
+      const lastInsertPageId = metadataManager.getLastInsertPageId(metaReuse)
+      console.log('New Last Insert Page ID (Should be Reused):', lastInsertPageId)
 
-    // Check Metadata Last Insert Page ID
-    const metaReuse = await pfs.getMetadata(tx)
-    const lastInsertPageId = metadataManager.getLastInsertPageId(metaReuse)
-    console.log('New Last Insert Page ID (Should be Reused):', lastInsertPageId)
+      // Instead of hardcoding 2 or 3, we verify that the page ID is one that was previously allocated
+      // and that the total page count did NOT increase (proving reuse).
 
-    // Instead of hardcoding 2 or 3, we verify that the page ID is one that was previously allocated
-    // and that the total page count did NOT increase (proving reuse).
+      const finalPageCount = await pfs.getPageCount(tx)
+      console.log('Final Page Count:', finalPageCount)
 
-    const finalPageCount = await pfs.getPageCount(tx)
-    console.log('Final Page Count:', finalPageCount)
+      // Page Count should be same as before delete (initially 6, after delete 6, after reuse 6)
+      // Because we reused a page, we didn't append a new one.
+      expect(finalPageCount).toBe(pageCountBeforeDelete)
 
-    // Page Count should be same as before delete (initially 6, after delete 6, after reuse 6)
-    // Because we reused a page, we didn't append a new one.
-    expect(finalPageCount).toBe(pageCountBeforeDelete)
+      // Check Bitmap
+      const bitmapPageId = metadataManager.getBitmapPageId(metaReuse)
+      const bitmapPage = await pfs.get(bitmapPageId, tx) as BitmapPage
+      const bitmapManager = new PageManagerFactory().getManager(bitmapPage) as BitmapPageManager
 
-    // Check Bitmap
-    const bitmapPageId = metadataManager.getBitmapPageId(metaReuse)
-    const bitmapPage = await pfs.get(bitmapPageId, tx) as BitmapPage
-    const bitmapManager = new PageManagerFactory().getManager(bitmapPage) as BitmapPageManager
-
-    // The reused page should be marked Used (0)
-    const isUsed = !bitmapManager.getBit(bitmapPage, lastInsertPageId)
-    console.log(`Bitmap for Reused Page ${lastInsertPageId} (expect Used/False):`, bitmapManager.getBit(bitmapPage, lastInsertPageId))
-    expect(isUsed).toBe(true)
-
-    await tx.commit()
+      // The reused page should be marked Used (0)
+      const isUsed = !bitmapManager.getBit(bitmapPage, lastInsertPageId)
+      console.log(`Bitmap for Reused Page ${lastInsertPageId} (expect Used/False):`, bitmapManager.getBit(bitmapPage, lastInsertPageId))
+      expect(isUsed).toBe(true)
+    })
 
     await db.close()
   })

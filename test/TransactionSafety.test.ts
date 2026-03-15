@@ -26,30 +26,27 @@ describe('TransactionSafety (DataplyAPI)', () => {
     // 초기 상태의 물리적 디스크 크기 측정
     const initialDiskSize = fs.statSync(DB_PATH).size
 
-    const tx = db.createTransaction()
-
-    // 1. 대량의 데이터를 삽입하여 파일 확장이 필요한 상황을 만듦
-    // (보통 3페이지 초기화 상태이므로, 그 이상의 데이터를 넣음)
     const largeData = new Uint8Array(5000).fill(0x1)
     const pks: number[] = []
 
-    // 여러 번 삽입하여 확실히 페이지 확장을 유도
-    for (let i = 0; i < 10; i++) {
-      pks.push(await db.insert(largeData, true, tx))
-    }
+    await db.withWriteTransaction(async (tx) => {
+      // 1. 대량의 데이터를 삽입하여 파일 확장이 필요한 상황을 만듦
+      // (보통 3페이지 초기화 상태이므로, 그 이상의 데이터를 넣음)
+      // 여러 번 삽입하여 확실히 페이지 확장을 유도
+      for (let i = 0; i < 10; i++) {
+        pks.push(await db.insert(largeData, true, tx))
+      }
 
-    // [검증 1: 격리성] 커밋 전이므로 물리적 디스크 크기는 변하지 않아야 함
-    const currentDiskSize = fs.statSync(DB_PATH).size
-    expect(currentDiskSize).toBe(initialDiskSize)
+      // [검증 1: 격리성] 커밋 전이므로 물리적 디스크 크기는 변하지 않아야 함
+      const currentDiskSize = fs.statSync(DB_PATH).size
+      expect(currentDiskSize).toBe(initialDiskSize)
 
-    // [검증 2: 가시성] 트랜잭션 내부(Uncommitted)에서는 데이터가 조회가 되어야 함
-    for (const pk of pks) {
-      const selected = await db.select(pk, true, tx)
-      expect(selected).toEqual(largeData)
-    }
-
-    // 2. 커밋 수행
-    await tx.commit()
+      // [검증 2: 가시성] 트랜잭션 내부(Uncommitted)에서는 데이터가 조회가 되어야 함
+      for (const pk of pks) {
+        const selected = await db.select(pk, true, tx)
+        expect(selected).toEqual(largeData)
+      }
+    })
 
     // [검증 3: 커밋 반영] WAL이 없는 경우 커밋 후 물리적 디스크에 즉시 반영됨
     const afterCommitDiskSize = fs.statSync(DB_PATH).size
@@ -75,23 +72,21 @@ describe('TransactionSafety (DataplyAPI)', () => {
     const db = new DataplyAPI(DB_PATH, { pageSize: 4096, pageCacheCapacity: 100 })
     await db.init()
 
-    const tx = db.createTransaction()
-
-    // 10개의 각기 다른 페이지에 쓰기가 발생하도록 유도 (데이터 크기와 횟수 조절)
     const dataSize = 2000 // 한 페이지에 약 2개 들어감
     const pks: number[] = []
 
-    for (let i = 0; i < 20; i++) {
-      const data = new Uint8Array(dataSize).fill(i)
-      pks.push(await db.insert(data, true, tx))
-    }
+    await db.withWriteTransaction(async (tx) => {
+      // 10개의 각기 다른 페이지에 쓰기가 발생하도록 유도 (데이터 크기와 횟수 조절)
+      for (let i = 0; i < 20; i++) {
+        const data = new Uint8Array(dataSize).fill(i)
+        pks.push(await db.insert(data, true, tx))
+      }
 
-    // 중간 조회: 캐시에서 쫓겨났을 법한 첫 번째 데이터 확인
-    // (Transaction이 Dirty Page를 본딩하고 있으므로 성공해야 함)
-    const firstData = await db.select(pks[0], true, tx)
-    expect(firstData).toEqual(new Uint8Array(dataSize).fill(0))
-
-    await tx.commit()
+      // 중간 조회: 캐시에서 쫓겨났을 법한 첫 번째 데이터 확인
+      // (Transaction이 Dirty Page를 본딩하고 있으므로 성공해야 함)
+      const firstData = await db.select(pks[0], true, tx)
+      expect(firstData).toEqual(new Uint8Array(dataSize).fill(0))
+    })
 
     // 커밋 후 전체 데이터 재검증
     for (let i = 0; i < 20; i++) {
@@ -111,15 +106,20 @@ describe('TransactionSafety (DataplyAPI)', () => {
     const diskSizeAfterFirst = fs.statSync(DB_PATH).size
 
     // 2. 수정 트랜잭션 시작
-    const tx = db.createTransaction()
-    await db.update(initialPk, "modified", tx)
-    await db.insert("new data", true, tx)
+    try {
+      await db.withWriteTransaction(async (tx) => {
+        await db.update(initialPk, "modified", tx)
+        await db.insert("new data", true, tx)
 
-    // 트랜잭션 내 확인
-    expect(await db.select(initialPk, false, tx)).toBe("modified")
+        // 트랜잭션 내 확인
+        expect(await db.select(initialPk, false, tx)).toBe("modified")
 
-    // 3. 롤백 수행
-    await tx.rollback()
+        // 3. 롤백 수행
+        throw new Error('Rollback')
+      })
+    } catch (e: any) {
+      if (e.message !== 'Rollback') throw e
+    }
 
     // [검증] 물리적 디스크 크기가 변하지 않았는지 확인
     expect(fs.statSync(DB_PATH).size).toBe(diskSizeAfterFirst)

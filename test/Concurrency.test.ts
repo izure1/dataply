@@ -45,13 +45,14 @@ describe('Concurrency (MVCC)', () => {
     await dataply.init()
 
     // Sequential inserts to verify correct PK increment
-    const tx1 = dataply.createTransaction()
-    const pk1 = await dataply.insert('data1', tx1)
-    await tx1.commit()
+    let pk1 = 0, pk2 = 0
+    await dataply!.withWriteTransaction(async (tx1) => {
+      pk1 = await dataply!.insert('data1', tx1)
+    })
 
-    const tx2 = dataply.createTransaction()
-    const pk2 = await dataply.insert('data2', tx2)
-    await tx2.commit()
+    await dataply!.withWriteTransaction(async (tx2) => {
+      pk2 = await dataply!.insert('data2', tx2)
+    })
 
     // Verify PKs are distinct and incremented
     expect(pk1).toBe(1)
@@ -69,14 +70,19 @@ describe('Concurrency (MVCC)', () => {
     await dataply.init()
 
     // Insert initial data and commit
-    const tx1 = dataply.createTransaction()
-    await dataply.insert('initial_data', tx1)
-    await tx1.commit()
+    await dataply!.withWriteTransaction(async (tx1) => {
+      await dataply!.insert('initial_data', tx1)
+    })
 
     // Start a write transaction, modify, but rollback
-    const writeTx = dataply.createTransaction()
-    await dataply.insert('new_data', writeTx)
-    await writeTx.rollback()
+    try {
+      await dataply!.withWriteTransaction(async (writeTx) => {
+        await dataply!.insert('new_data', writeTx)
+        throw new Error('Rollback')
+      })
+    } catch (e: any) {
+      if (e.message !== 'Rollback') throw e
+    }
 
     // Verify that the committed data (pk=1) is still visible
     const initialResult = await dataply.select(1, false)
@@ -92,10 +98,10 @@ describe('Concurrency (MVCC)', () => {
 
     // Multiple sequential transactions
     for (let i = 0; i < insertCount; i++) {
-      const tx = dataply.createTransaction()
-      const pk = await dataply.insert(`data-${i}`, tx)
-      await tx.commit()
-      pks.push(pk)
+      await dataply.withWriteTransaction(async (tx) => {
+        const pk = await dataply!.insert(`data-${i}`, tx)
+        pks.push(pk)
+      })
     }
 
     // Verify all PKs are unique and sequential
@@ -113,19 +119,25 @@ describe('Concurrency (MVCC)', () => {
     await dataply.init()
 
     // First transaction: commit
-    const tx1 = dataply.createTransaction()
-    const pk1 = await dataply.insert('committed-1', tx1)
-    await tx1.commit()
+    let pk1 = 0, pk3 = 0
+    await dataply!.withWriteTransaction(async (tx1) => {
+      pk1 = await dataply!.insert('committed-1', tx1)
+    })
 
     // Second transaction: rollback
-    const tx2 = dataply.createTransaction()
-    await dataply.insert('rolled-back', tx2)
-    await tx2.rollback()
+    try {
+      await dataply!.withWriteTransaction(async (tx2) => {
+        await dataply!.insert('rolled-back', tx2)
+        throw new Error('Rollback')
+      })
+    } catch (e: any) {
+      if (e.message !== 'Rollback') throw e
+    }
 
     // Third transaction: commit
-    const tx3 = dataply.createTransaction()
-    const pk3 = await dataply.insert('committed-2', tx3)
-    await tx3.commit()
+    await dataply!.withWriteTransaction(async (tx3) => {
+      pk3 = await dataply!.insert('committed-2', tx3)
+    })
 
     // Verify committed data is accessible
     expect(await dataply.select(pk1, false)).toBe('committed-1')
@@ -137,16 +149,15 @@ describe('Concurrency (MVCC)', () => {
     await dataply.init()
 
     const batchSize = 50
-    const tx = dataply.createTransaction()
     const pks: number[] = []
 
     // Insert many rows in a single transaction
-    for (let i = 0; i < batchSize; i++) {
-      const pk = await dataply.insert(`batch-${i}`, tx)
-      pks.push(pk)
-    }
-
-    await tx.commit()
+    await dataply!.withWriteTransaction(async (tx) => {
+      for (let i = 0; i < batchSize; i++) {
+        const pk = await dataply!.insert(`batch-${i}`, tx)
+        pks.push(pk)
+      }
+    })
 
     // Verify all inserts were persisted
     expect(pks.length).toBe(batchSize)
@@ -163,20 +174,18 @@ describe('Concurrency (MVCC)', () => {
     await dataply.init()
 
     // Insert and commit initial data
-    const tx1 = dataply.createTransaction()
-    await dataply.insert('visible-data', tx1)
-    await tx1.commit()
-
-    // Start a new write transaction
-    const tx2 = dataply.createTransaction()
-    await dataply.insert('pending-data', tx2)
+    await dataply.withWriteTransaction(async (tx1) => {
+      await dataply!.insert('visible-data', tx1)
+    })
 
     // Read committed data (should see 'visible-data')
     const result = await dataply.select(1, false)
     expect(result).toBe('visible-data')
 
-    // Commit the pending transaction
-    await tx2.commit()
+    // Start a new write transaction
+    await dataply.withWriteTransaction(async (tx2) => {
+      await dataply!.insert('pending-data', tx2)
+    })
 
     // Now we should see the new data too
     const newResult = await dataply.select(2, false)
@@ -188,25 +197,31 @@ describe('Concurrency (MVCC)', () => {
     await dataply.init()
 
     // First, insert some committed data
-    const tx1 = dataply.createTransaction()
-    await dataply.insert('base-data', tx1)
-    await tx1.commit()
+    await dataply.withWriteTransaction(async (tx1) => {
+      await dataply!.insert('base-data', tx1)
+    })
 
     // Start a large batch insert and rollback
-    const tx2 = dataply.createTransaction()
-    for (let i = 0; i < 20; i++) {
-      await dataply.insert(`rollback-${i}`, tx2)
+    try {
+      await dataply.withWriteTransaction(async (tx2) => {
+        for (let i = 0; i < 20; i++) {
+          await dataply!.insert(`rollback-${i}`, tx2)
+        }
+        throw new Error('Rollback')
+      })
+    } catch (e: any) {
+      if (e.message !== 'Rollback') throw e
     }
-    await tx2.rollback()
 
     // Verify base data is still intact
     const baseResult = await dataply.select(1, false)
     expect(baseResult).toBe('base-data')
 
     // Insert new data after rollback (should work correctly)
-    const tx3 = dataply.createTransaction()
-    const pk = await dataply.insert('after-rollback', tx3)
-    await tx3.commit()
+    let pk = 0
+    await dataply.withWriteTransaction(async (tx3) => {
+      pk = await dataply!.insert('after-rollback', tx3)
+    })
 
     const afterResult = await dataply.select(pk, false)
     expect(afterResult).toBe('after-rollback')
@@ -218,10 +233,11 @@ describe('Concurrency (MVCC)', () => {
 
     const concurrencyLevel = 50
     const operations = Array(concurrencyLevel).fill(0).map(async (_, i) => {
-      const tx = dataply!.createTransaction()
-      // insert followed by commit, interleaved by JS event loop
-      const pk = await dataply!.insert(`concurrent-data-${i}`, tx)
-      await tx.commit()
+      let pk = 0
+      await dataply!.withWriteTransaction(async (tx) => {
+        // insert followed by commit, interleaved by JS event loop
+        pk = await dataply!.insert(`concurrent-data-${i}`, tx)
+      })
       return { pk, data: `concurrent-data-${i}` }
     })
 
@@ -249,25 +265,24 @@ describe('Concurrency (MVCC)', () => {
     await dataply.init()
 
     // 0. 초기 데이터 세팅 (Update/Delete 대상)
-    const txInit = dataply.createTransaction()
-    const targetPk = await dataply.insert('target-row', txInit)
-    await txInit.commit()
+    let targetPk = 0
+    await dataply.withWriteTransaction(async (txInit) => {
+      targetPk = await dataply!.insert('target-row', txInit)
+    })
 
     // 1. Batch Insert 트랜잭션 시작 (약 5초 소요 예정)
-    const txBatch = dataply.createTransaction()
     const batchSize = 10
     const insertDelay = 500 // 0.5초 * 10개 = 5초
     const batchPks: number[] = []
 
-    const batchInsertTask = (async () => {
+    const batchInsertTask = dataply.withWriteTransaction(async (txBatch) => {
       for (let i = 0; i < batchSize; i++) {
         // 천천히 삽입
         await new Promise(resolve => setTimeout(resolve, insertDelay))
         const pk = await dataply!.insert(`batch-data-${i}`, txBatch)
         batchPks.push(pk)
       }
-      await txBatch.commit()
-    })()
+    })
 
     // 2. Select는 즉시 가능해야 함 (Non-blocking)
     // Batch Insert가 진행되는 도중(예: 1초 후) 조회 시도
@@ -285,13 +300,11 @@ describe('Concurrency (MVCC)', () => {
 
     let updateFinished = false
     const startUpdate = Date.now()
-    const updateTask = (async () => {
-      const txUpdate = dataply!.createTransaction()
+    const updateTask = dataply.withWriteTransaction(async (txUpdate) => {
       // 여기서 Batch Tx가 끝날 때까지 대기해야 함 (메타데이터 락 때문)
       await dataply!.update(targetPk, 'updated-target', txUpdate)
-      await txUpdate.commit()
       updateFinished = true
-    })()
+    })
 
     // 아직 Batch가 3초 정도 남았으므로 Update는 끝나면 안 됨
     await new Promise(resolve => setTimeout(resolve, 500))

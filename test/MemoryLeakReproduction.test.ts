@@ -8,7 +8,7 @@ import fs from 'node:fs'
 // DataplyAPI의 protected streamWithDefault를 테스트하기 위해 확장
 class TestDataplyAPI extends DataplyAPI {
   public async *testStream<T>(callback: (tx: Transaction) => AsyncGenerator<T>) {
-    yield* this.streamWithDefault(callback)
+    yield* this.withReadStreamTransaction(callback)
   }
 
   public getLockManager() {

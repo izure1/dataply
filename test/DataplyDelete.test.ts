@@ -32,14 +32,19 @@ describe('Dataply Delete Transaction Tests', () => {
     expect(await dataply.select(pk)).toBe(data)
 
     // Start transaction and delete
-    const tx = dataply.createTransaction()
-    await dataply.delete(pk, tx)
+    try {
+      await dataply.withWriteTransaction(async (tx) => {
+        await dataply.delete(pk, tx)
 
-    // Verify deleted within transaction
-    expect(await dataply.select(pk, false, tx)).toBeNull()
+        // Verify deleted within transaction
+        expect(await dataply.select(pk, false, tx)).toBeNull()
 
-    // Rollback
-    await tx.rollback()
+        // Rollback
+        throw new Error('Rollback')
+      })
+    } catch (e: any) {
+      if (e.message !== 'Rollback') throw e
+    }
 
     // Verify data is restored
     expect(await dataply.select(pk)).toBe(data)
@@ -54,9 +59,9 @@ describe('Dataply Delete Transaction Tests', () => {
     const data = 'shared data'
     const pk = await dataply.insert(data)
 
-    // Create two transactions
-    const tx1 = dataply.createTransaction()
-    const tx2 = dataply.createTransaction()
+    // Create two transactions via any cast to explicitly test interleaving engine isolation
+    const tx1 = (dataply as any).createTransaction()
+    const tx2 = (dataply as any).createTransaction()
 
     // Tx1 deletes the row
     await dataply.delete(pk, tx1)

@@ -19,7 +19,7 @@ export class Transaction {
   /** List of callbacks to execute on commit */
   private commitHooks: (() => Promise<void>)[] = []
   /** Nested MVCC Transaction for snapshot isolation (lazy init) */
-  private mvccTx: AsyncMVCCTransaction<PageMVCCStrategy, number, Uint8Array> | null = null
+  private readonly mvccTx: AsyncMVCCTransaction<PageMVCCStrategy, number, Uint8Array>
   /** Root MVCC Transaction reference */
   private readonly rootTx: AsyncMVCCTransaction<PageMVCCStrategy, number, Uint8Array>
   /** Release function for global write lock, set by DataplyAPI */
@@ -41,18 +41,7 @@ export class Transaction {
   ) {
     this.id = id
     this.rootTx = rootTx
-  }
-
-  /**
-   * Lazily initializes the nested MVCC transaction.
-   * This ensures the snapshot is taken at the time of first access,
-   * picking up the latest committed root version.
-   */
-  private ensureMvccTx(): AsyncMVCCTransaction<PageMVCCStrategy, number, Uint8Array> {
-    if (!this.mvccTx) {
-      this.mvccTx = this.rootTx.createNested()
-    }
-    return this.mvccTx
+    this.mvccTx = rootTx.createNested()
   }
 
   /**
@@ -84,8 +73,7 @@ export class Transaction {
    * @returns Page data
    */
   async __readPage(pageId: number): Promise<Uint8Array> {
-    const tx = this.ensureMvccTx()
-    const data = await tx.read(pageId)
+    const data = await this.mvccTx.read(pageId)
     if (data === null) {
       // 페이지가 없으면 빈 페이지 반환
       return new Uint8Array(this.pfs.pageSize)
@@ -104,15 +92,14 @@ export class Transaction {
    * @param data Page data
    */
   async __writePage(pageId: number, data: Uint8Array): Promise<void> {
-    const tx = this.ensureMvccTx()
     // Copy-on-Write: mvcc-api에 참조 타입 전달 시 복사본 필요
-    const exists = await tx.exists(pageId)
+    const exists = await this.mvccTx.exists(pageId)
     if (exists) {
       const copy = new Uint8Array(data.length)
       copy.set(data)
-      await tx.write(pageId, copy)
+      await this.mvccTx.write(pageId, copy)
     } else {
-      await tx.create(pageId, data)
+      await this.mvccTx.create(pageId, data)
     }
   }
 
@@ -144,13 +131,11 @@ export class Transaction {
         }
       })
 
-      const tx = this.ensureMvccTx()
-
       // 0. Acquire global lock to prevent concurrent checkpoint/commit issues
       let shouldTriggerCheckpoint = false
       await this.pfs.runGlobalLock(async () => {
         // 1. Collect dirty pages from the nested MVCC tx for WAL
-        const entries = tx.getResultEntries()
+        const entries = this.mvccTx.getResultEntries()
         const dirtyPages = new Map<number, Uint8Array>()
         for (const entry of [...entries.created, ...entries.updated]) {
           dirtyPages.set(entry.key, entry.data)
@@ -165,7 +150,7 @@ export class Transaction {
         }
 
         // 3. Commit nested MVCC tx (merge to root)
-        await tx.commit()
+        await this.mvccTx.commit()
 
         // 4. Commit root MVCC tx (writes to disk via strategy)
         if (hasDirtyPages) {

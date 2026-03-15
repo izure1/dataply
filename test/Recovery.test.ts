@@ -98,10 +98,11 @@ describe('Recovery Integration Test', () => {
     await dataply1.init()
 
     // 2. 트랜잭션으로 데이터 삽입 및 커밋
-    const tx = dataply1.createTransaction()
-    const pk1 = await dataply1.insert('Committed Data 1', tx)
-    const pk2 = await dataply1.insert('Committed Data 2', tx)
-    await tx.commit()
+    let pk1 = 0, pk2 = 0
+    await dataply1.withWriteTransaction(async (tx) => {
+      pk1 = await dataply1.insert('Committed Data 1', tx)
+      pk2 = await dataply1.insert('Committed Data 2', tx)
+    })
 
     // 3. Crash 시뮬레이션: close()를 호출하지 않고 프로세스 종료를 모방
     // WAL에는 데이터가 있지만, db 파일은 sync되었을 수도 있고 아닐 수도 있음
@@ -156,12 +157,16 @@ describe('Recovery Integration Test', () => {
     const pkCommitted = await dataply1.insert('This is committed')
 
     // 2. 새 트랜잭션에서 데이터 삽입 (커밋 안함)
-    const tx = dataply1.createTransaction()
-    const pkUncommitted = await dataply1.insert('This is NOT committed', tx)
-    // tx.commit()을 호출하지 않음 - 롤백도 하지 않음
-
-    // 3. Crash 시뮬레이션 - 롤백을 먼저 수행해야 close가 가능
-    await tx.rollback()
+    let pkUncommitted = 0
+    try {
+      await dataply1.withWriteTransaction(async (tx) => {
+        pkUncommitted = await dataply1.insert('This is NOT committed', tx)
+        // 3. Crash 시뮬레이션 - 롤백을 먼저 수행해야 close가 가능하므로 롤백 강제 발생
+        throw new Error('Rollback')
+      })
+    } catch (e: any) {
+      if (e.message !== 'Rollback') throw e
+    }
     await dataply1.close()
 
     // 4. 재시작 후 확인
@@ -219,10 +224,10 @@ describe('Recovery Integration Test', () => {
 
     // 5개의 개별 트랜잭션
     for (let i = 0; i < 5; i++) {
-      const tx = dataply1.createTransaction()
-      const pk = await dataply1.insert(`Transaction ${i} Data`, tx)
-      pks.push(pk)
-      await tx.commit()
+      await dataply1.withWriteTransaction(async (tx) => {
+        const pk = await dataply1.insert(`Transaction ${i} Data`, tx)
+        pks.push(pk)
+      })
     }
 
     await dataply1.close()
@@ -328,22 +333,31 @@ describe('Recovery Integration Test', () => {
     const pk1 = await dataply1.insert('Committed Data 1')
 
     // 2. 추가 트랜잭션 수행 및 커밋
-    const tx = dataply1.createTransaction()
-    const pk2 = await dataply1.insert('Committed Data 2', tx)
-    await tx.commit()
+    let pk2 = 0
+    await dataply1.withWriteTransaction(async (tx) => {
+      pk2 = await dataply1.insert('Committed Data 2', tx)
+    })
 
-    // 3. 미커밋 데이터 추가 (이는 복구되지 않아야 함)
-    const tx2 = dataply1.createTransaction()
-    await dataply1.insert('Uncommitted Data', tx2)
+    // 3. 미커밋 데이터 쓰기 도중 강제 종료 시뮬레이션 (이는 복구되지 않아야 함)
+    // withWriteTransaction 안에서 강제로 파일 핸들을 닫아 예외 상황을 만든다
+    try {
+      await dataply1.withWriteTransaction(async (tx2) => {
+        await dataply1.insert('Uncommitted Data', tx2)
 
-    // 4. 강제 종료 시뮬레이션
-    // private 속성에 접근하여 파일 핸들 강제 종료
-    const rawDataply = (dataply1 as any).api
-    const fd = rawDataply.fileHandle
-    const walFd = (rawDataply.pfs.walManager as any)?.fd
+        // 4. 강제 종료 시뮬레이션
+        // private 속성에 접근하여 파일 핸들 강제 종료
+        const rawDataply = (dataply1 as any).api
+        const fd = rawDataply.fileHandle
+        const walFd = (rawDataply.pfs.walManager as any)?.fd
 
-    if (fd) fs.closeSync(fd)
-    if (walFd) fs.closeSync(walFd)
+        if (fd) fs.closeSync(fd)
+        if (walFd) fs.closeSync(walFd)
+
+        throw new Error('Crash')
+      })
+    } catch (e) {
+      // Ignore crash error
+    }
 
     // 5. 재시작 및 검증
     const dataply2 = new Dataply(dbPath, { pageSize, wal: walPath })
@@ -372,12 +386,14 @@ describe('Recovery Integration Test', () => {
     // 1. 베이스 데이터
     const pkBase = await dataply1.insert('Base Data')
 
-    // 2. 트랜잭션 시작
-    const tx = dataply1.createTransaction()
-    const pkAsync = await dataply1.insert('Async Commit Data', tx)
+    // 2. 비동기 커밋 강제 재현
+    let pkAsync = 0
+    dataply1.withWriteTransaction(async (tx) => {
+      pkAsync = await dataply1.insert('Async Commit Data', tx)
+    }).catch(() => { }) // 에러 무시
 
-    // 3. 커밋 요청만 하고 기다리지 않음
-    tx.commit().catch(() => { }) // 에러 무시
+    // Event Loop이 withWriteTransaction 콜백을 실행하도록 잠시 양보
+    await new Promise(resolve => setTimeout(resolve, 0))
 
     // 4. 즉시 강제 종료 (매우 짧은 시간 내에 종료된 것으로 가정)
     // 실제로는 OS 스케줄링에 따라 일부 기록될 수도 있지만, 

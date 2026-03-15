@@ -37,8 +37,8 @@ describe('GlobalTransaction', () => {
   })
 
   test('should commit across multiple instances atomically', async () => {
-    const tx1 = db1.createTransaction()
-    const tx2 = db2.createTransaction()
+    const tx1 = (db1 as any).createTransaction()
+    const tx2 = (db2 as any).createTransaction()
 
     const globalTx = new GlobalTransaction()
     globalTx.add(tx1)
@@ -66,8 +66,8 @@ describe('GlobalTransaction', () => {
   })
 
   test('should rollback all instances if rollback is called', async () => {
-    const tx1 = db1.createTransaction()
-    const tx2 = db2.createTransaction()
+    const tx1 = (db1 as any).createTransaction()
+    const tx2 = (db2 as any).createTransaction()
 
     const globalTx = new GlobalTransaction()
     globalTx.add(tx1)
@@ -97,8 +97,8 @@ describe('GlobalTransaction', () => {
       db3 = new Dataply(db3Path) // No WAL
       await db3.init()
 
-      const tx1 = db1.createTransaction()
-      const tx3 = db3.createTransaction()
+      const tx1 = (db1 as any).createTransaction()
+      const tx3 = (db3 as any).createTransaction()
 
       const globalTx = new GlobalTransaction()
       globalTx.add(tx1)
