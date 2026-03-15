@@ -21,17 +21,6 @@ export class Dataply {
   }
 
   /**
-   * Creates a transaction.
-   * The created transaction object can be used to add or modify data.
-   * A transaction must be terminated by calling either `commit` or `rollback`.
-   * @returns Transaction object
-   */
-  protected createTransaction(): Transaction {
-    // Note: It's protected in DataplyAPI, so we cast it to any to access if needed, or we just rely on the exposed public methods.
-    return (this.api as any).createTransaction()
-  }
-
-  /**
    * Runs a write callback within a transaction context.
    */
   async withWriteTransaction<T>(callback: (tx: Transaction) => Promise<T>, tx?: Transaction): Promise<T> {
