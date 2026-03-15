@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1773575096026,
+  "lastUpdate": 1773613036145,
   "repoUrl": "https://github.com/izure1/dataply",
   "entries": {
     "Dataply Storage Benchmark": [
@@ -2409,6 +2409,55 @@ window.BENCHMARK_DATA = {
           {
             "name": "selectMany (500 PKs)",
             "value": 140.06,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "committer": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "distinct": true,
+          "id": "fd9cd7ee28dc9a4a51d79395940f45cfa966f1f6",
+          "message": "feat: GlobalTransaction 클래스 트랜잭션 방식 변경",
+          "timestamp": "2026-03-16T07:16:41+09:00",
+          "tree_id": "a512d838c2bb747e6665be2f822271d233b3b6bb",
+          "url": "https://github.com/izure1/dataply/commit/fd9cd7ee28dc9a4a51d79395940f45cfa966f1f6"
+        },
+        "date": 1773613035726,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Bulk Insert (Batch)",
+            "value": 448.27,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert (Individual)",
+            "value": 125.06,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert with WAL",
+            "value": 204.52,
+            "unit": "ms"
+          },
+          {
+            "name": "Medium Row Insert (1KB)",
+            "value": 271.21,
+            "unit": "ms"
+          },
+          {
+            "name": "selectMany (500 PKs)",
+            "value": 147.47,
             "unit": "ms"
           }
         ]
