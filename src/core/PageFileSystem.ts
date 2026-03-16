@@ -96,7 +96,7 @@ export class PageFileSystem {
    * @param tx Transaction
    */
   private async updateBitmap(pageId: number, isFree: boolean, tx: Transaction): Promise<void> {
-    const metadata = await this.getMetadata(tx)
+    const metadata = await this.getMetadata(false, tx)
     const metadataManager = this.pageFactory.getManager(metadata) as MetadataPageManager
     const bitmapPageId = metadataManager.getBitmapPageId(metadata)
 
@@ -110,7 +110,7 @@ export class PageFileSystem {
     // 타겟 비트 인덱스가 현재 페이지 용량을 초과하는 경우 다음 비트맵 페이지로 이동
     while (targetBitIndex >= capacityPerBitmapPage) {
       // 현재 비트맵 페이지 로드
-      const currentBitmapPage = await this.get(currentBitmapPageId, tx)
+      const currentBitmapPage = await this.get(currentBitmapPageId, true, tx)
       const manager = this.pageFactory.getManager(currentBitmapPage)
 
       targetBitIndex -= capacityPerBitmapPage
@@ -135,7 +135,7 @@ export class PageFileSystem {
 
     // 최종 타겟 비트맵 페이지 로드 및 업데이트
     await tx.__acquireWriteLock(currentBitmapPageId)
-    const targetBitmapPage = await this.get(currentBitmapPageId, tx)
+    const targetBitmapPage = await this.get(currentBitmapPageId, true, tx)
     const bitmapManager = this.pageFactory.getManager(targetBitmapPage) as BitmapPageManager
 
     bitmapManager.setBit(targetBitmapPage as BitmapPage, targetBitIndex, isFree)
@@ -158,21 +158,23 @@ export class PageFileSystem {
 
   /**
    * @param pageIndex 페이지 인덱스
+   * @param copy Copy-on-Read
    * @param tx 트랜잭션
    * @returns 페이지 버퍼
    */
-  async get(pageIndex: number, tx: Transaction): Promise<Uint8Array> {
-    return tx.__readPage(pageIndex)
+  async get(pageIndex: number, copy: boolean, tx: Transaction): Promise<Uint8Array> {
+    return tx.__readPage(pageIndex, copy)
   }
 
   /**
    * Reads the page header.
    * @param pageIndex Page index
+   * @param copy Copy-on-Read
    * @param tx Transaction
    * @returns Page header buffer
    */
-  async getHeader(pageIndex: number, tx: Transaction): Promise<Uint8Array> {
-    const page = await this.get(pageIndex, tx)
+  async getHeader(pageIndex: number, copy: boolean, tx: Transaction): Promise<Uint8Array> {
+    const page = await this.get(pageIndex, copy, tx)
     return page.subarray(0, PageManager.CONSTANT.SIZE_PAGE_HEADER)
   }
 
@@ -184,7 +186,7 @@ export class PageFileSystem {
    * @returns Page body buffer
    */
   async getBody(pageIndex: number, recursive = false, tx: Transaction): Promise<Uint8Array> {
-    const page = await this.get(pageIndex, tx)
+    const page = await this.get(pageIndex, false, tx)
     const manager = this.pageFactory.getManager(page)
     const fullBody = manager.getBody(page)
 
@@ -206,11 +208,12 @@ export class PageFileSystem {
 
   /**
    * Returns the metadata page.
+   * @param copy Copy-on-Read
    * @param tx Transaction
    * @returns Metadata page
    */
-  async getMetadata(tx: Transaction): Promise<MetadataPage> {
-    const page = await this.get(0, tx)
+  async getMetadata(copy: boolean, tx: Transaction): Promise<MetadataPage> {
+    const page = await this.get(0, copy, tx)
     if (!MetadataPageManager.IsMetadataPage(page)) {
       throw new Error('Invalid metadata page')
     }
@@ -223,21 +226,22 @@ export class PageFileSystem {
    * @returns Number of pages
    */
   async getPageCount(tx: Transaction): Promise<number> {
-    const metadata = await this.getMetadata(tx)
+    const metadata = await this.getMetadata(false, tx)
     const manager = this.pageFactory.getManager(metadata)
     return manager.getPageCount(metadata)
   }
 
   /**
    * Returns the root index page.
+   * @param copy Copy-on-Read
    * @param tx Transaction
    * @returns Root index page
    */
-  async getRootIndex(tx: Transaction): Promise<IndexPage> {
-    const metadata = await this.getMetadata(tx)
+  async getRootIndex(copy: boolean, tx: Transaction): Promise<IndexPage> {
+    const metadata = await this.getMetadata(false, tx)
     const manager = this.pageFactory.getManager(metadata)
     const rootIndexPageId = manager.getRootIndexPageId(metadata)
-    const rootIndexPage = await this.get(rootIndexPageId, tx)
+    const rootIndexPage = await this.get(rootIndexPageId, copy, tx)
     if (!IndexPageManager.IsIndexPage(rootIndexPage)) {
       throw new Error('Invalid root index page')
     }
@@ -276,7 +280,7 @@ export class PageFileSystem {
   async appendNewPage(pageType: number = PageManager.CONSTANT.PAGE_TYPE_EMPTY, tx: Transaction): Promise<number> {
     this.logger.debug(`Appending new page of type ${pageType}`)
     await tx.__acquireWriteLock(0)
-    const metadata = await this.getMetadata(tx)
+    const metadata = await this.getMetadata(true, tx)
     const metadataManager = this.pageFactory.getManager(metadata) as MetadataPageManager
 
     // 1. 재사용 가능한 페이지 확인
@@ -285,7 +289,7 @@ export class PageFileSystem {
     if (freePageId !== -1) {
       const reusedPageId = freePageId
 
-      const reusedPage = await this.get(reusedPageId, tx)
+      const reusedPage = await this.get(reusedPageId, false, tx)
       const reusedPageManager = this.pageFactory.getManager(reusedPage)
 
       const nextFreePageId = reusedPageManager.getNextPageId(reusedPage)
@@ -347,7 +351,7 @@ export class PageFileSystem {
     let dataOffset = 0
 
     while (dataOffset < data.length) {
-      const page = await this.get(currentPageId, tx)
+      const page = await this.get(currentPageId, true, tx)
       const manager = this.pageFactory.getManager(page)
       const bodyStart = PageManager.CONSTANT.SIZE_PAGE_HEADER
       const bodySize = this.pageSize - bodyStart
@@ -426,7 +430,7 @@ export class PageFileSystem {
         break // 순환 참조 방지
       }
       visited.add(currentPageId)
-      const page = await this.get(currentPageId, tx)
+      const page = await this.get(currentPageId, false, tx)
       const nextPageId = this.pageFactory.getManager(page).getNextPageId(page)
       await this.setFreePage(currentPageId, tx)
       currentPageId = nextPageId
@@ -447,7 +451,7 @@ export class PageFileSystem {
     await tx.__acquireWriteLock(pageId)
 
     // 2. 메타데이터 조회
-    const metadata = await this.getMetadata(tx)
+    const metadata = await this.getMetadata(true, tx)
     const metadataManager = this.pageFactory.getManager(metadata) as MetadataPageManager
     const currentHeadFreePageId = metadataManager.getFreePageId(metadata)
 

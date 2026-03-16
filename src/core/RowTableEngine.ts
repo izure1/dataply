@@ -120,7 +120,7 @@ export class RowTableEngine {
     if (!this.initialized) {
       throw new Error('RowTableEngine instance is not initialized')
     }
-    const metadataPage = await this.pfs.getMetadata(tx)
+    const metadataPage = await this.pfs.getMetadata(false, tx)
     const manager = this.factory.getManagerFromType(MetadataPageManager.CONSTANT.PAGE_TYPE_METADATA) as MetadataPageManager
 
     const pageSize = manager.getPageSize(metadataPage)
@@ -159,10 +159,10 @@ export class RowTableEngine {
     await tx.__acquireWriteLock(0)
 
     const pks: number[] = []
-    const metadataPage = await this.pfs.getMetadata(tx)
+    const metadataPage = await this.pfs.getMetadata(false, tx)
     let lastPk = this.metadataPageManager.getLastRowPk(metadataPage)
     let lastInsertDataPageId = this.metadataPageManager.getLastInsertPageId(metadataPage)
-    let lastInsertDataPage = await this.pfs.get(lastInsertDataPageId, tx)
+    let lastInsertDataPage = await this.pfs.get(lastInsertDataPageId, true, tx)
 
     if (!this.factory.isDataPage(lastInsertDataPage)) {
       throw new Error(`Last insert page is not data page`)
@@ -196,7 +196,7 @@ export class RowTableEngine {
         // 페이지에 삽입 불가능하다면 새로운 data page를 생성 후 삽입합니다.
         else {
           const newPageId = await this.pfs.appendNewPage(this.dataPageManager.pageType, tx)
-          const newPage = await this.pfs.get(newPageId, tx) as DataPage
+          const newPage = await this.pfs.get(newPageId, true, tx) as DataPage
           this.dataPageManager.insert(newPage, row)
           this.setRID(newPageId, 0)
           lastInsertDataPageId = newPageId
@@ -218,7 +218,7 @@ export class RowTableEngine {
         // 마지막 데이터 페이지의 크기가 부족하다면 새로운 데이터 페이지를 생성합니다.
         if (slotIndex === -1) {
           const newPageId = await this.pfs.appendNewPage(this.dataPageManager.pageType, tx)
-          const newPage = await this.pfs.get(newPageId, tx) as DataPage
+          const newPage = await this.pfs.get(newPageId, true, tx) as DataPage
           this.dataPageManager.insert(newPage, row)
           this.setRID(newPageId, 0)
           lastInsertDataPageId = newPageId
@@ -241,7 +241,7 @@ export class RowTableEngine {
     await this.bptree.batchInsert(batchInsertData)
 
     // 메타데이터를 한 번만 업데이트합니다.
-    const freshMetadataPage = await this.pfs.getMetadata(tx)
+    const freshMetadataPage = await this.pfs.getMetadata(true, tx)
     this.metadataPageManager.setLastInsertPageId(freshMetadataPage, lastInsertDataPageId)
     this.metadataPageManager.setLastRowPk(freshMetadataPage, lastPk)
 
@@ -297,7 +297,7 @@ export class RowTableEngine {
     const pageId = this.keyManager.getPageId(this.ridBuffer)
     const slotIndex = this.keyManager.getSlotIndex(this.ridBuffer)
 
-    const page = await this.pfs.get(pageId, tx)
+    const page = await this.pfs.get(pageId, true, tx)
     if (!this.factory.isDataPage(page)) {
       throw new Error(`RID not found for PK: ${pk}`)
     }
@@ -356,9 +356,9 @@ export class RowTableEngine {
     // 메타데이터 쓰기 락 획득
     await tx.__acquireWriteLock(0)
 
-    const metadataPage = await this.pfs.getMetadata(tx)
+    const metadataPage = await this.pfs.getMetadata(false, tx)
     let lastInsertDataPageId = this.metadataPageManager.getLastInsertPageId(metadataPage)
-    let lastInsertDataPage = await this.pfs.get(lastInsertDataPageId, tx) as DataPage
+    let lastInsertDataPage = await this.pfs.get(lastInsertDataPageId, true, tx) as DataPage
 
     if (!this.factory.isDataPage(lastInsertDataPage)) {
       throw new Error('Last insert page is not data page')
@@ -367,7 +367,7 @@ export class RowTableEngine {
     let newSlotIndex = this.dataPageManager.getNextSlotIndex(lastInsertDataPage, newRow)
     if (newSlotIndex === -1) {
       const newPageId = await this.pfs.appendNewPage(this.dataPageManager.pageType, tx)
-      lastInsertDataPage = await this.pfs.get(newPageId, tx) as DataPage
+      lastInsertDataPage = await this.pfs.get(newPageId, true, tx) as DataPage
       lastInsertDataPageId = newPageId
       newSlotIndex = 0
     }
@@ -379,7 +379,7 @@ export class RowTableEngine {
     // page 변수는 insert 이전의 상태(복사본)를 가지고 있습니다.
     // 따라서 page를 수정해서 저장하면 insert된 내용(슬롯 정보 등)이 유실될 수 있습니다.
     // 안전을 위해 항상 페이지를 다시 로드하여 작업을 수행합니다.
-    const targetPage = await this.pfs.get(pageId, tx)
+    const targetPage = await this.pfs.get(pageId, true, tx)
     if (!this.factory.isDataPage(targetPage)) {
       throw new Error('Target page is not data page')
     }
@@ -399,7 +399,7 @@ export class RowTableEngine {
     await this.bptree.delete(oldRidNumeric, pk)
     await this.bptree.insert(newRidNumeric, pk)
 
-    const freshMetadataPage = await this.pfs.getMetadata(tx)
+    const freshMetadataPage = await this.pfs.getMetadata(true, tx)
     this.metadataPageManager.setLastInsertPageId(freshMetadataPage, lastInsertDataPageId)
     await this.pfs.setMetadata(freshMetadataPage, tx)
   }
@@ -424,7 +424,7 @@ export class RowTableEngine {
     const pageId = this.keyManager.getPageId(this.ridBuffer)
     const slotIndex = this.keyManager.getSlotIndex(this.ridBuffer)
 
-    const page = await this.pfs.get(pageId, tx)
+    const page = await this.pfs.get(pageId, true, tx)
     if (!this.factory.isDataPage(page)) {
       throw new Error(`RID not found for PK: ${pk}`)
     }
@@ -448,7 +448,7 @@ export class RowTableEngine {
     await this.bptree.delete(rid, pk)
 
     if (decrementRowCount) {
-      const metadataPage = await this.pfs.getMetadata(tx)
+      const metadataPage = await this.pfs.getMetadata(true, tx)
       const currentRowCount = this.metadataPageManager.getRowCount(metadataPage)
       this.metadataPageManager.setRowCount(metadataPage, currentRowCount - 1)
       await this.pfs.setMetadata(metadataPage, tx)
@@ -459,7 +459,7 @@ export class RowTableEngine {
     let allDeleted = true
 
     // 마지막 삽입 페이지 ID 가져오기 (반복문 밖에서 한 번만 호출)
-    const metadataPage = await this.pfs.getMetadata(tx)
+    const metadataPage = await this.pfs.getMetadata(false, tx)
     const lastInsertPageId = this.metadataPageManager.getLastInsertPageId(metadataPage)
 
     // 마지막 삽입 페이지라면 해제하지 않음
@@ -593,7 +593,7 @@ export class RowTableEngine {
     const sortedPageIds = Array.from(collections.keys()).sort((a, b) => a - b)
     await Promise.all(sortedPageIds.map(async (pageId) => {
       const items = collections.get(pageId)!
-      const page = await this.pfs.get(pageId, tx)
+      const page = await this.pfs.get(pageId, false, tx)
       if (!this.factory.isDataPage(page)) {
         throw new Error(`Page ${pageId} is not a data page`)
       }
@@ -626,7 +626,7 @@ export class RowTableEngine {
     const pageId = this.keyManager.getPageId(this.ridBuffer)
     const slotIndex = this.keyManager.getSlotIndex(this.ridBuffer)
 
-    const page = await this.pfs.get(pageId, tx)
+    const page = await this.pfs.get(pageId, false, tx)
     if (!this.factory.isDataPage(page)) {
       throw new Error(`RID not found for PK: ${pk}`)
     }
@@ -639,7 +639,7 @@ export class RowTableEngine {
     }
     else if (this.rowManager.getOverflowFlag(row)) {
       const overflowPageId = bytesToNumber(this.rowManager.getBody(row))
-      const overflowPage = await this.pfs.get(overflowPageId, tx)
+      const overflowPage = await this.pfs.get(overflowPageId, false, tx)
       if (!this.factory.isOverflowPage(overflowPage)) {
         throw new Error(`Overflow page not found for RID: ${rid}`)
       }
@@ -655,7 +655,7 @@ export class RowTableEngine {
    * @returns Row count
    */
   async getRowCount(tx: Transaction): Promise<number> {
-    const metadataPage = await this.pfs.getMetadata(tx)
+    const metadataPage = await this.pfs.getMetadata(false, tx)
     return this.metadataPageManager.getRowCount(metadataPage)
   }
 }

@@ -70,9 +70,10 @@ export class Transaction {
   /**
    * Reads a page through the MVCC transaction.
    * @param pageId Page ID
+   * @param copy Copy-on-Read
    * @returns Page data
    */
-  async __readPage(pageId: number): Promise<Uint8Array> {
+  async __readPage(pageId: number, copy: boolean): Promise<Uint8Array> {
     const data = await this.mvccTx.read(pageId)
     if (data === null) {
       // 페이지가 없으면 빈 페이지 반환
@@ -81,9 +82,12 @@ export class Transaction {
     // Copy-on-Read: mvccTx.read()는 root diskCache의 참조를 반환할 수 있음.
     // 호출자가 페이지를 in-place로 변이하면 diskCache가 오염됨.
     // 복사본을 반환하여 방지.
-    const copy = new Uint8Array(data.length)
-    copy.set(data)
-    return copy
+    if (copy) {
+      const copy = new Uint8Array(data.length)
+      copy.set(data)
+      return copy
+    }
+    return data
   }
 
   /**
@@ -95,9 +99,7 @@ export class Transaction {
     // Copy-on-Write: mvcc-api에 참조 타입 전달 시 복사본 필요
     const exists = await this.mvccTx.exists(pageId)
     if (exists) {
-      const copy = new Uint8Array(data.length)
-      copy.set(data)
-      await this.mvccTx.write(pageId, copy)
+      await this.mvccTx.write(pageId, data)
     } else {
       await this.mvccTx.create(pageId, data)
     }

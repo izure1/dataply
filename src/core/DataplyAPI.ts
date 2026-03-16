@@ -287,7 +287,7 @@ export class DataplyAPI {
    * @returns The result of the callback.
    */
   async withWriteTransaction<T>(callback: (tx: Transaction) => Promise<T>, tx?: Transaction): Promise<T> {
-    this.logger.debug('Running with default write transaction')
+    this.logger.debug('Running with write transaction')
     if (!tx) {
       // Internal transaction: acquire lock, create tx, run, commit, release
       const release = await this.acquireWriteLock()
@@ -314,7 +314,7 @@ export class DataplyAPI {
   }
 
   async withReadTransaction<T>(callback: (tx: Transaction) => Promise<T>, tx?: Transaction): Promise<T> {
-    this.logger.debug('Running with default transaction')
+    this.logger.debug('Running with read transaction')
     const isInternalTx = !tx
     if (!tx) {
       tx = this.createTransaction()

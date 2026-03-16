@@ -95,7 +95,7 @@ describe('Recovery Checksum with Dataply API', () => {
     // 4. Assert
     // Verify using internal PFS to see if page content is overwritten by WAL
     const pfs = (dataply2 as any).api.pfs
-    const page = await pfs.get(pageId, (dataply2 as any).api.createTransaction())
+    const page = await pfs.get(pageId, false, (dataply2 as any).api.createTransaction())
 
     // Check a random byte in body
     const bodyStart = 24 // approximate header size
@@ -138,7 +138,7 @@ describe('Recovery Checksum with Dataply API', () => {
 
     // 3. Verify
     const pfs = (dataply as any).api.pfs
-    const page = await pfs.get(pageId, (dataply as any).api.createTransaction())
+    const page = await pfs.get(pageId, false, (dataply as any).api.createTransaction())
 
     expect(page[100]).toBe(77) // Should have recovered
 

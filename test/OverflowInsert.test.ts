@@ -55,7 +55,7 @@ describe('Overflow Insert Test', () => {
       const slotIndex = keyManager.getSlotIndex(ridBuffer)
 
       // Get Page
-      const page = await pfs.get(pageId, tx)
+      const page = await pfs.get(pageId, false, tx)
 
       // Get Row
       const dataPageManager = new DataPageManager()

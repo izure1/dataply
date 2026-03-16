@@ -54,7 +54,7 @@ describe('Page Deallocation', () => {
       const pfs = (db as any).pfs as PageFileSystem
       let pageType: number = PageManager.CONSTANT.PAGE_TYPE_EMPTY
       await db.withReadTransaction(async (tx) => {
-        const page = await pfs.get(pageId, tx)
+        const page = await pfs.get(pageId, false, tx)
         pageType = PageManager.GetPageType(page)
       })
 
@@ -86,7 +86,7 @@ describe('Page Deallocation', () => {
       await db.withReadTransaction(async (tx) => {
         // Find the overflow page dynamically starting from page 3
         for (let i = 3; i < 20; i++) {
-          const p = await pfs.get(i, tx)
+          const p = await pfs.get(i, false, tx)
           if (new PageManagerFactory().isOverflowPage(p)) {
             overflowPageId = i
             break
@@ -97,7 +97,7 @@ describe('Page Deallocation', () => {
           throw new Error('Could not find any overflow page')
         }
 
-        const overflowPage = await pfs.get(overflowPageId, tx)
+        const overflowPage = await pfs.get(overflowPageId, false, tx)
         const isOverflow = (new PageManagerFactory().isOverflowPage(overflowPage))
         expect(isOverflow).toBe(true)
       })
@@ -108,7 +108,7 @@ describe('Page Deallocation', () => {
       // 3. Verify overflow page is now EMPTY
       let finalPageType = -1
       await db.withReadTransaction(async (tx) => {
-        const freePage = await pfs.get(overflowPageId, tx)
+        const freePage = await pfs.get(overflowPageId, false, tx)
         finalPageType = PageManager.GetPageType(freePage)
       })
 

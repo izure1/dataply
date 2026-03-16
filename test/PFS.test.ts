@@ -62,10 +62,10 @@ describe('PageFileSystem', () => {
     // Use pfs.setPage instead of fs.writeSync to respect VFS cache
     await pfs.setPage(pageIndex, buffer, tx)
 
-    const header = await pfs.getHeader(pageIndex, tx)
+    const header = await pfs.getHeader(pageIndex, false, tx)
     expect(header.length).toBe(PageManager.CONSTANT.SIZE_PAGE_HEADER)
 
-    const page = await pfs.get(pageIndex, tx)
+    const page = await pfs.get(pageIndex, false, tx)
     const readString = Buffer.from(page.subarray(bodyOffset, bodyOffset + data.length)).toString()
     expect(readString).toBe(data)
   })
@@ -87,11 +87,11 @@ describe('PageFileSystem', () => {
     expect(newPageId).toBe(1)
 
     // 3. Verify Metadata update
-    const updatedMetadata = await pfs.getMetadata(tx)
+    const updatedMetadata = await pfs.getMetadata(false, tx)
     expect(mgr.getPageCount(updatedMetadata)).toBe(2)
 
     // 4. Verify New Page
-    const newPage = await pfs.get(newPageId, tx)
+    const newPage = await pfs.get(newPageId, false, tx)
     const pageManager = new PageManagerFactory().getManager(newPage)
     expect(pageManager.getPageId(newPage)).toBe(1)
     expect(pageManager.getPageType(newPage)).toBe(PageManager.CONSTANT.PAGE_TYPE_DATA)

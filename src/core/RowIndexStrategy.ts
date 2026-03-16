@@ -29,7 +29,7 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
     // Only reserve the page ID - don't create the page yet
     // The page will be created when BPTree calls write()
     await tx.__acquireWriteLock(0)
-    const metadata = await this.pfs.getMetadata(tx)
+    const metadata = await this.pfs.getMetadata(true, tx)
     const metadataManager = this.factory.getManager(metadata)
 
     // Check free list first
@@ -38,7 +38,7 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
 
     if (freePageId !== -1) {
       // Reuse a free page - just update the free list pointer
-      const freePage = await this.pfs.get(freePageId, tx)
+      const freePage = await this.pfs.get(freePageId, false, tx)
       const freePageManager = this.factory.getManager(freePage)
       const nextFreePageId = freePageManager.getNextPageId(freePage)
       metadataManager.setFreePageId(metadata, nextFreePageId)
@@ -57,7 +57,7 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
   async read(id: string): Promise<BPTreeNode<number, number>> {
     const tx = this.txContext.get()!
     const pageId = +(id)
-    const page = await this.pfs.get(pageId, tx)
+    const page = await this.pfs.get(pageId, false, tx)
 
     // Check if this is a valid index page - if not, throw to signal non-existence
     if (!IndexPageManager.IsIndexPage(page)) {
@@ -99,7 +99,7 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
     const pageId = +(id)
 
     // Get existing page or create new index page structure
-    let page = await this.pfs.get(pageId, tx)
+    let page = await this.pfs.get(pageId, true, tx)
     if (!IndexPageManager.IsIndexPage(page)) {
       // Create a new index page structure for this pageId
       page = this.indexPageManger.create(this.pfs.pageSize, pageId)
@@ -152,7 +152,7 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
 
   async readHead(): Promise<SerializeStrategyHead | null> {
     const tx = this.txContext.get()!
-    const metadataPage = await this.pfs.getMetadata(tx)
+    const metadataPage = await this.pfs.getMetadata(false, tx)
     const manager = this.factory.getManager(metadataPage)
     const rootIndexPageId = manager.getRootIndexPageId(metadataPage)
     if (rootIndexPageId === -1) {
@@ -174,7 +174,7 @@ export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number
     if (root === null) {
       throw new Error('')
     }
-    const metadataPage = await this.pfs.getMetadata(tx)
+    const metadataPage = await this.pfs.getMetadata(true, tx)
     const manager = this.factory.getManager(metadataPage)
     manager.setRootIndexPageId(metadataPage, +(root))
     manager.setRootIndexOrder(metadataPage, order)

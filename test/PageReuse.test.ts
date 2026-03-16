@@ -60,7 +60,7 @@ describe('Page Reuse', () => {
     // Verify Free List
     let freeHead = -1
     await db.withReadTransaction(async (tx) => {
-      const metadata = await pfs.getMetadata(tx)
+      const metadata = await pfs.getMetadata(false, tx)
       const metadataManager = new PageManagerFactory().getManager(metadata) as MetadataPageManager
       freeHead = metadataManager.getFreePageId(metadata)
     })
@@ -90,7 +90,7 @@ describe('Page Reuse', () => {
     // Verify
     await db.withReadTransaction(async (tx) => {
       // Check Metadata Last Insert Page ID
-      const metaReuse = await pfs.getMetadata(tx)
+      const metaReuse = await pfs.getMetadata(false, tx)
       const metadataManager = new PageManagerFactory().getManager(metaReuse) as MetadataPageManager
       const lastInsertPageId = metadataManager.getLastInsertPageId(metaReuse)
       console.log('New Last Insert Page ID (Should be Reused):', lastInsertPageId)
@@ -107,7 +107,7 @@ describe('Page Reuse', () => {
 
       // Check Bitmap
       const bitmapPageId = metadataManager.getBitmapPageId(metaReuse)
-      const bitmapPage = await pfs.get(bitmapPageId, tx) as BitmapPage
+      const bitmapPage = await pfs.get(bitmapPageId, false, tx) as BitmapPage
       const bitmapManager = new PageManagerFactory().getManager(bitmapPage) as BitmapPageManager
 
       // The reused page should be marked Used (0)
