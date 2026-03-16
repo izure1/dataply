@@ -59,27 +59,19 @@ describe('Dataply Delete Transaction Tests', () => {
     const data = 'shared data'
     const pk = await dataply.insert(data)
 
-    // Create two transactions via any cast to explicitly test interleaving engine isolation
-    const tx1 = (dataply as any).createTransaction()
-    const tx2 = (dataply as any).createTransaction()
+    const tx1 = dataply.withWriteTransaction(async (tx) => {
+      await dataply.delete(pk, tx)
+      expect(await dataply.select(pk, false, tx)).toBeNull()
+    })
 
-    // Tx1 deletes the row
-    await dataply.delete(pk, tx1)
+    const tx2 = dataply.withReadTransaction(async (tx) => {
+      expect(await dataply.select(pk, false, tx)).toBe(data)
+    })
 
-    // Tx1 should see it as deleted
-    expect(await dataply.select(pk, false, tx1)).toBeNull()
-
-    // Tx2 should STILL see the data (Isolation)
-    expect(await dataply.select(pk, false, tx2)).toBe(data)
-
-    // Global (no tx) interaction depends on isolation level, but usually new transactions 
-    // shouldn't see uncommitted changes or should block. 
-    // In this MVCC implementation, usually readers don't block.
-    // Let's assume snapshot isolation or read committed where uncommitted changes aren't visible.
     expect(await dataply.select(pk)).toBe(data)
 
     // Commit Tx1
-    await tx1.commit()
+    await tx1
 
     // Now global scope should see it deleted
     expect(await dataply.select(pk)).toBeNull()
@@ -93,7 +85,7 @@ describe('Dataply Delete Transaction Tests', () => {
     // Based on previous conversations about MVCC refactor, it seems to imply Snapshot/MVCC.
 
     // For now, let's just commit Tx2 and verify it sees deletion after starting new transaction or if it ends.
-    await tx2.commit()
+    await tx2
 
     // Verify final state
     expect(await dataply.select(pk)).toBeNull()
