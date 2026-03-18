@@ -484,6 +484,110 @@ export class RowTableEngine {
   }
 
   /**
+   * Deletes multiple data in batch.
+   * @param pks Array of PKs to delete
+   * @param decrementRowCount Whether to decrement the row count to metadata
+   * @param tx Transaction
+   */
+  async deleteBatch(pks: number[], decrementRowCount: boolean, tx: Transaction): Promise<void> {
+    this.logger.debug(`Batch deleting ${pks.length} rows`)
+    if (pks.length === 0) {
+      return
+    }
+
+    // 쓰기 작업 전 메타데이터 락을 획득하여 동시성 충돌을 방지합니다.
+    await tx.__acquireWriteLock(0)
+
+    // 페이지별로 PK-RID를 그룹화합니다.
+    const collections = await this.collectItemsByPage(pks, tx)
+    if (collections.size === 0) {
+      return
+    }
+
+    // 마지막 삽입 페이지 ID 가져오기
+    const metadataPage = await this.pfs.getMetadata(false, tx)
+    const lastInsertPageId = this.metadataPageManager.getLastInsertPageId(metadataPage)
+
+    const batchDeleteData: [number, number][] = []
+    const pagesToFree: number[] = []
+    let deletedCount = 0
+
+    // 페이지별로 삭제 처리
+    for (const [pageId, items] of collections) {
+      const page = await this.pfs.get(pageId, true, tx)
+      if (!this.factory.isDataPage(page)) {
+        continue
+      }
+
+      let pageModified = false
+      for (const item of items) {
+        const row = this.dataPageManager.getRow(page as DataPage, item.slotIndex)
+
+        // 이미 삭제된 행은 건너뜁니다.
+        if (this.rowManager.getDeletedFlag(row)) {
+          continue
+        }
+
+        // 오버플로우 페이지 해제
+        if (this.rowManager.getOverflowFlag(row)) {
+          const overflowPageId = bytesToNumber(this.rowManager.getBody(row))
+          await this.pfs.freeChain(overflowPageId, tx)
+        }
+
+        this.rowManager.setDeletedFlag(row, true)
+        pageModified = true
+
+        // B+ 트리 배치 삭제 데이터 수집 (rid를 복원)
+        this.setRID(pageId, item.slotIndex)
+        batchDeleteData.push([this.getRID(), item.pk])
+        deletedCount++
+      }
+
+      if (pageModified) {
+        await this.pfs.setPage(pageId, page, tx)
+      }
+
+      // 빈 데이터 페이지 확인
+      if (pageId !== lastInsertPageId) {
+        const insertedRowCount = this.dataPageManager.getInsertedRowCount(page)
+        let allDeleted = true
+        let i = 0
+        while (i < insertedRowCount) {
+          const slotRow = this.dataPageManager.getRow(page, i)
+          if (!this.rowManager.getDeletedFlag(slotRow)) {
+            allDeleted = false
+            break
+          }
+          i++
+        }
+        if (allDeleted) {
+          pagesToFree.push(pageId)
+        }
+      }
+    }
+
+    if (batchDeleteData.length === 0) {
+      return
+    }
+
+    // B+트리에서 일괄 삭제합니다.
+    await this.bptree.batchDelete(batchDeleteData)
+
+    // 메타데이터를 한 번만 업데이트합니다.
+    if (decrementRowCount) {
+      const freshMetadataPage = await this.pfs.getMetadata(true, tx)
+      const currentRowCount = this.metadataPageManager.getRowCount(freshMetadataPage)
+      this.metadataPageManager.setRowCount(freshMetadataPage, currentRowCount - deletedCount)
+      await this.pfs.setMetadata(freshMetadataPage, tx)
+    }
+
+    // 빈 페이지 해제
+    for (const pageId of pagesToFree) {
+      await this.pfs.freeChain(pageId, tx)
+    }
+  }
+
+  /**
    * Looks up the RID corresponding to the PK in the B+ Tree and returns the actual row.
    * @param pk Primary key of the row
    * @param tx Transaction

@@ -102,6 +102,16 @@ export class Dataply {
   }
 
   /**
+   * Deletes multiple data in batch.
+   * If a transaction is not provided, it internally creates a single transaction to process.
+   * @param pks Array of PKs to delete
+   * @param tx Transaction
+   */
+  async deleteBatch(pks: number[], tx?: Transaction): Promise<void> {
+    return this.api.deleteBatch(pks, true, tx)
+  }
+
+  /**
    * Selects data.
    * @param pk PK of the data to select
    * @param asRaw Whether to return the selected data as raw

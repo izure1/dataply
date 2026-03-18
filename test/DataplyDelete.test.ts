@@ -92,4 +92,81 @@ describe('Dataply Delete Transaction Tests', () => {
 
     await dataply.close()
   })
+
+  test('should successfully delete multiple items in batch', async () => {
+    const dataply = new Dataply(TEST_FILE, { pageSize: 8192 })
+    await dataply.init()
+
+    const pks = await dataply.insertBatch(['data 1', 'data 2', 'data 3', 'data 4', 'data 5'])
+    expect(pks.length).toBe(5)
+
+    // Verify all inserted
+    for (let i = 0; i < 5; i++) {
+      expect(await dataply.select(pks[i])).toBe(`data ${i + 1}`)
+    }
+
+    // Delete in batch
+    await dataply.deleteBatch([pks[0], pks[2], pks[4]])
+
+    // Verify
+    expect(await dataply.select(pks[0])).toBeNull()
+    expect(await dataply.select(pks[1])).toBe('data 2')
+    expect(await dataply.select(pks[2])).toBeNull()
+    expect(await dataply.select(pks[3])).toBe('data 4')
+    expect(await dataply.select(pks[4])).toBeNull()
+
+    // Verify metadata row count
+    const metadata = await dataply.getMetadata()
+    expect(metadata.rowCount).toBe(2)
+
+    await dataply.close()
+  })
+
+  test('should rollback a batch delete operation', async () => {
+    const dataply = new Dataply(TEST_FILE, { pageSize: 8192 })
+    await dataply.init()
+
+    const pks = await dataply.insertBatch(['data A', 'data B', 'data C'])
+
+    try {
+      await dataply.withWriteTransaction(async (tx) => {
+        await dataply.deleteBatch(pks, tx)
+
+        // Verify deleted within transaction
+        for (const pk of pks) {
+          expect(await dataply.select(pk, false, tx)).toBeNull()
+        }
+
+        throw new Error('Rollback Batch Delete')
+      })
+    } catch (e: any) {
+      if (e.message !== 'Rollback Batch Delete') throw e
+    }
+
+    // Verify data is restored
+    for (let i = 0; i < 3; i++) {
+      const char = String.fromCharCode(65 + i)
+      expect(await dataply.select(pks[i])).toBe(`data ${char}`)
+    }
+
+    const metadata = await dataply.getMetadata()
+    expect(metadata.rowCount).toBe(3)
+
+    await dataply.close()
+  })
+
+  test('should handle empty array in batch delete gracefully', async () => {
+    const dataply = new Dataply(TEST_FILE, { pageSize: 8192 })
+    await dataply.init()
+
+    const pks = await dataply.insertBatch(['data X'])
+
+    // Pass empty array
+    await dataply.deleteBatch([])
+
+    // Verify data remains and no errors thrown
+    expect(await dataply.select(pks[0])).toBe('data X')
+
+    await dataply.close()
+  })
 })

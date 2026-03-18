@@ -489,6 +489,24 @@ export class DataplyAPI {
   }
 
   /**
+   * Deletes multiple data in batch.
+   * If a transaction is not provided, it internally creates a single transaction to process.
+   * @param pks Array of PKs to delete
+   * @param decrementRowCount Whether to decrement the row count to metadata
+   * @param tx Transaction
+   */
+  async deleteBatch(pks: number[], decrementRowCount?: boolean, tx?: Transaction): Promise<void> {
+    this.logger.debug(`Deleting batch data: ${pks.length} items`)
+    if (!this.initialized) {
+      throw new Error('Dataply instance is not initialized')
+    }
+    return this.withWriteTransaction(async (tx) => {
+      decrementRowCount = decrementRowCount ?? true
+      await this.rowTableEngine.deleteBatch(pks, decrementRowCount, tx)
+    }, tx)
+  }
+
+  /**
    * Selects data.
    * @param pk PK of the data to select
    * @param asRaw Whether to return the selected data as raw
