@@ -1,5 +1,5 @@
 window.BENCHMARK_DATA = {
-  "lastUpdate": 1773835857609,
+  "lastUpdate": 1773845239942,
   "repoUrl": "https://github.com/izure1/dataply",
   "entries": {
     "Dataply Storage Benchmark": [
@@ -2752,6 +2752,55 @@ window.BENCHMARK_DATA = {
           {
             "name": "selectMany (500 PKs)",
             "value": 131.35,
+            "unit": "ms"
+          }
+        ]
+      },
+      {
+        "commit": {
+          "author": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "committer": {
+            "email": "izure@naver.com",
+            "name": "izure",
+            "username": "izure1"
+          },
+          "distinct": true,
+          "id": "f26b905db6b0ab7790001816540b0f8764c92107",
+          "message": "feat: AsyncLocalStorage 처리로 불필요한 마이크로테스크홉이 발생하여 성능에 악영향을 주던 부분을 수정합니다.",
+          "timestamp": "2026-03-18T23:46:31+09:00",
+          "tree_id": "796f1259f3e6fa7f7db9b82e1dc5a38db80696bf",
+          "url": "https://github.com/izure1/dataply/commit/f26b905db6b0ab7790001816540b0f8764c92107"
+        },
+        "date": 1773845239401,
+        "tool": "customSmallerIsBetter",
+        "benches": [
+          {
+            "name": "Bulk Insert (Batch)",
+            "value": 428.66,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert (Individual)",
+            "value": 119.12,
+            "unit": "ms"
+          },
+          {
+            "name": "Bulk Insert with WAL",
+            "value": 205.99,
+            "unit": "ms"
+          },
+          {
+            "name": "Medium Row Insert (1KB)",
+            "value": 270.11,
+            "unit": "ms"
+          },
+          {
+            "name": "selectMany (500 PKs)",
+            "value": 136.58,
             "unit": "ms"
           }
         ]
