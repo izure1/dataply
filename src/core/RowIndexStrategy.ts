@@ -4,7 +4,6 @@ import { PageFileSystem } from './PageFileSystem'
 import { IndexPageManager, PageManager, PageManagerFactory } from './Page'
 import { TextCodec } from '../utils/TextCodec'
 import { TransactionContext } from './transaction/TxContext'
-import { DataplyAPI } from './DataplyAPI'
 
 export class RowIdentifierStrategy extends SerializeStrategyAsync<number, number> {
   protected rootPageId = 0
