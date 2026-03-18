@@ -12,7 +12,6 @@ import { PageFileSystem } from './PageFileSystem'
 import { MetadataPageManager, DataPageManager, BitmapPageManager, IndexPageManager } from './Page'
 import { RowTableEngine } from './RowTableEngine'
 import { TextCodec } from '../utils/TextCodec'
-import { catchPromise } from '../utils/catchPromise'
 import { LockManager } from './transaction/LockManager'
 import { Transaction } from './transaction/Transaction'
 import { TransactionContext } from './transaction/TxContext'
@@ -293,43 +292,46 @@ export class DataplyAPI {
       const release = await this.acquireWriteLock()
       const internalTx = this.createTransaction()
       internalTx.__setWriteLockRelease(release)
-      const [error, result] = await catchPromise(this.txContext.run(internalTx, () => callback(internalTx)))
-      if (error) {
+      try {
+        const result = await this.txContext.run(internalTx, () => callback(internalTx))
+        await internalTx.commit()
+        return result
+      } catch (error) {
         await internalTx.rollback()
         throw error
       }
-      await internalTx.commit()
-      return result
     }
     // External transaction: acquire lock on first write, hold until commit/rollback
     if (!tx.__hasWriteLockRelease()) {
       const release = await this.acquireWriteLock()
       tx.__setWriteLockRelease(release)
     }
-    const [error, result] = await catchPromise(this.txContext.run(tx, () => callback(tx)))
-    if (error) {
-      throw error
+    // If this tx is already the active context (nested call), skip redundant txContext.run
+    if (this.txContext.get() === tx) {
+      return callback(tx)
     }
-    return result
+    return this.txContext.run(tx, () => callback(tx))
   }
 
   async withReadTransaction<T>(callback: (tx: Transaction) => Promise<T>, tx?: Transaction): Promise<T> {
     this.logger.debug('Running with read transaction')
-    const isInternalTx = !tx
     if (!tx) {
-      tx = this.createTransaction()
-    }
-    const [error, result] = await catchPromise(this.txContext.run(tx, () => callback(tx)))
-    if (error) {
-      if (isInternalTx) {
-        await tx.rollback()
+      // Internal transaction: create tx, run, commit/rollback
+      const internalTx = this.createTransaction()
+      try {
+        const result = await this.txContext.run(internalTx, () => callback(internalTx))
+        await internalTx.commit()
+        return result
+      } catch (error) {
+        await internalTx.rollback()
+        throw error
       }
-      throw error
     }
-    if (isInternalTx) {
-      await tx.commit()
+    // If this tx is already the active context (nested call), skip redundant txContext.run
+    if (this.txContext.get() === tx) {
+      return callback(tx)
     }
-    return result
+    return this.txContext.run(tx, () => callback(tx))
   }
 
   /**
@@ -342,7 +344,7 @@ export class DataplyAPI {
    * @param tx The transaction to use. If not provided, a new transaction is created.
    * @returns An AsyncGenerator that yields values from the callback.
    */
-  async *withReadStreamTransaction<T>(
+  async * withReadStreamTransaction<T>(
     callback: (tx: Transaction) => AsyncGenerator<T>,
     tx?: Transaction
   ): AsyncGenerator<T> {
