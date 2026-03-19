@@ -100,7 +100,7 @@ db.init().then(() => {
 ```
 
 > [!TIP]
-> For more advanced usage like search and optimization, check the [Technical Structure Guide](docs/structure.md).
+> For more advanced usage like search and optimization, check the [Technical Structure Guide](docs/structure.md) and [Performance Tuning Guide](docs/performance_tuning.md).
 
 ## Transaction Management
 
@@ -177,6 +177,9 @@ Updates existing data.
 
 #### `async delete(pk: number, tx?: Transaction): Promise<void>`
 Marks data as deleted.
+
+#### `async deleteBatch(pks: number[] | Float64Array, tx?: Transaction): Promise<void>`
+Deletes multiple rows at once. This is significantly faster than multiple individual deletions as it minimizes internal transaction overhead.
 
 #### `async getMetadata(tx?: Transaction): Promise<DataplyMetadata>`
 Returns the current metadata of the dataply, including `pageSize`, `pageCount`, and `rowCount`.

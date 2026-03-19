@@ -16,19 +16,19 @@ Individual operations in Dataply are ACID-compliant and involve transaction over
     - Perform range scans on the B+Tree instead of multiple point lookups.
     - Group physical reads by Page ID, minimizing the number of times the same page is loaded from disk.
 
+### `deleteBatch` vs `delete`
+- **`delete`**: Similar to `insert`, it performs deletion and metadata updates per PK.
+- **`deleteBatch`**: Deletes multiple records within a single unit of work. Efficiently cleans up rows and their associated index entries under one transaction, significantly reducing overhead.
+
 ## 2. Using Explicit Transactions
 
 When performing multiple related operations, always use an explicit transaction:
 
 ```typescript
-const tx = db.createTransaction();
-try {
+await db.withWriteTransaction(async (tx) => {
   await db.insert(data1, tx);
   await db.insert(data2, tx);
-  await tx.commit();
-} catch (e) {
-  await tx.rollback();
-}
+});
 ```
 
 This ensures that disk synchronization (fsync) and WAL checkpoints happen less frequently compared to auto-transactions.
